@@ -1,0 +1,2 @@
+import {decodeSession} from '../lib-threads-session.js';
+export default function handler(req,res){const s=decodeSession(req);res.setHeader('Cache-Control','no-store');res.status(200).json({threads:Boolean(s?.accessToken&&s?.userId),threadsAppConfigured:Boolean(process.env.THREADS_APP_ID&&process.env.THREADS_APP_SECRET),threadsUserId:s?.userId||null,gemini:Boolean(process.env.GEMINI_API_KEY),database:false,mode:'approval-first',backgroundAutomation:false,timezone:'Asia/Seoul'})}

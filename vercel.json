@@ -1,0 +1,1 @@
+{"$schema":"https://openapi.vercel.sh/vercel.json","cleanUrls":true,"rewrites":[{"source":"/api/system-status","destination":"/api/system-status.js"},{"source":"/api/threads/sync-debug","destination":"/api/threads/sync-debug.js"},{"source":"/api/threads/my-posts","destination":"/api/threads/my-posts.js"}]}

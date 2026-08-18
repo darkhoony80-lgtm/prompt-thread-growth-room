@@ -1,0 +1,4 @@
+import crypto from 'node:crypto';
+function dec(s=''){s=s.replace(/-/g,'+').replace(/_/g,'/');s+='='.repeat((4-s.length%4)%4);return Buffer.from(s,'base64')}
+function verify(sr,secret){if(!sr||!secret)return null;const p=String(sr).split('.');if(p.length!==2)return null;const sig=dec(p[0]),exp=crypto.createHmac('sha256',secret).update(p[1]).digest();if(sig.length!==exp.length||!crypto.timingSafeEqual(sig,exp))return null;try{return JSON.parse(dec(p[1]).toString())}catch{return null}}
+export default function handler(req,res){res.setHeader('Cache-Control','no-store');const sr=req.body?.signed_request||req.query?.signed_request||'';if(sr&&!verify(sr,process.env.THREADS_APP_SECRET))return res.status(400).json({error:'INVALID_SIGNED_REQUEST'});const code=crypto.randomBytes(12).toString('hex');res.status(200).json({url:`https://prompt-thread-growth-room.vercel.app/api/threads/data-deletion-status?code=${code}`,confirmation_code:code})}
