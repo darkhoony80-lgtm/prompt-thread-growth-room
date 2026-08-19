@@ -164,6 +164,8 @@ function pillarPrompt({pillar,research='',feedback='',performance=''}){
   const rules={
     AI_TIP:`AI_TIP 하나만 만든다. 일반인이 잘 모르는 짧은 전문 개념/명령어를 오늘의 명령어처럼 소개한다. RED TEAM, STEELMAN, PRE-MORTEM, EDGE CASES, COUNTEREXAMPLE, RUBRIC, FIRST PRINCIPLES 같은 수준이지만 예시를 재탕하지 말고 더 넓게 발굴한다. '전문가처럼 답해줘', '결론부터', '예시 2개' 같은 초급 팁은 금지. 본문은 ① 낯선 용어 ② 복붙 가능한 짧은 영어 명령어 ③ 쉬운 한국어 설명 ④ 언제 쓰면 좋은지. 영어 명령어 필수. 말투는 '이거 한번 써봐 👀', '생각보다 꽤 쓸만해'처럼 짧고 영리한 반말로 쓴다.`,
     AI_PROMPT:`AI_PROMPT 하나만 만든다. 반드시 body와 reply_prompt를 완전히 분리한다. body는 Threads에 실제 게시되는 한국어 설명문이다. 결과 이미지의 매력, 빛/질감/분위기/촬영 느낌 중 핵심을 3~5문장으로 충분히 설명한다. 자연스러운 반말과 가벼운 이모지 1~2개를 사용한다. 영문 이미지 프롬프트 문장이나 영어 프롬프트 일부를 body에 절대 넣지 않는다. body 마지막은 반드시 '프롬프트는 첫 댓글에 남겨둘게 👇'처럼 첫 댓글을 안내한다. reply_prompt는 복붙용 영문 이미지 프롬프트만 넣는다. 한국어 설명, 번역, Prompt:, 따옴표, Markdown 금지. 피사체/행동/환경/시간/카메라/렌즈/구도/조명/색감/질감/현실성/금지요소 중 필요한 요소를 상세하게 구성한다. 길이 때문에 핵심 디테일을 억지로 삭제하지 않는다. 흔한 cinematic, warm lighting 단순 나열 수준은 금지.`,
+
+AI_TIP:`AI 활용 팁은 반드시 body와 reply_prompt를 완전히 분리한다. body에는 해당 기법이 무엇인지, 언제 쓰면 좋은지, 어떤 효과가 있는지를 한국어 반말로 3~5문장 설명한다. 실제 복붙 명령문, 영어 프롬프트, 코드블록, [기법명] 형식의 원문 명령어를 body에 절대 넣지 않는다. body 마지막은 반드시 '프롬프트는 첫 댓글에 남겨둘게 👇'처럼 안내한다. reply_prompt에는 사용자가 그대로 복사해 AI에 입력할 실제 명령문만 넣는다. 설명, 번역, Markdown, 따옴표 장식은 넣지 않는다.`,
     FOOD_PICK:`FOOD_PICK 하나만 만든다. '오늘 점심은 내가 정해줄게 😋', '오늘 저녁은 이거 먹자', '오늘 술안주는 이걸로 가자'처럼 우리가 먼저 결론을 준다. 아래 검색 결과에서 실제 확인된 전국 식당 하나를 골라 식당명/지역/대표 메뉴/추천 이유를 간결하게 쓴다. 존재, 지역, 메뉴를 지어내지 않는다. 음식은 먹고 싶게 느껴지는 가볍고 맛깔나는 반말로 추천한다. 마지막에 '※ 이미지는 메뉴 이해를 돕는 AI 연출 이미지'를 넣는다.\n검색 결과:\n${research}`,
     HOT_ISSUE:`HOT_ISSUE 하나만 만든다. AI에 편향하지 말고 오늘 실제 뉴스 중 대화 가치와 화제성이 가장 큰 하나를 고른다. 환율/증시/정책/사회/사건사고/전쟁/국제/날씨/태풍/스포츠/연예/자동차/부동산/과학/테크 모두 동등하게 본다. 아래 검색 결과만 사실 재료로 사용한다. 기사 제목 복사 금지. 본문은 '무슨 일인데? → 쉽게 말하면 왜 중요한데? → 앞으로 뭘 보면 돼?' 흐름으로 친근한 반말로 풀어준다. 뉴스 앵커처럼 딱딱하게 쓰지 않는다. 다만 재난·전쟁·피해자가 있는 사건은 가벼운 농담 없이 차분하게 쓴다. 루머와 확인 안 된 숫자 금지.\n검색 결과:\n${research}`
   };
@@ -372,7 +374,7 @@ async function actionVariant(req,res){
 짧은 문장과 줄바꿈을 활용하고 이모지는 보통 1~3개만 자연스럽게 사용한다.
 사건사고·재난·피해자가 있는 내용은 장난스럽게 표현하지 않는다.
 AI_TIP이면 짧은 전문 용어 + 영어 한 줄 명령어가 필수.
-AI_PROMPT면 body에는 한국어 설명만 쓰고, reply_prompt에는 상세 영어 프롬프트만 쓴다. 둘을 절대 섞지 않는다.
+AI_PROMPT와 AI_TIP은 body에는 한국어 설명만 쓰고 reply_prompt에는 실제 복붙용 프롬프트만 쓴다. 둘을 절대 섞지 않는다.
 FOOD_PICK이면 기존 검증된 식당/메뉴 사실을 바꾸거나 지어내지 말 것.
 HOT_ISSUE이면 source_notes의 사실 범위를 넘지 말 것.
 hook 6~10자 우선 최대 14자.
@@ -381,7 +383,7 @@ hook 6~10자 우선 최대 14자.
 기존:${JSON.stringify(x).slice(0,6000)}
 
 JSON만:
-{"hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reply_prompt":"AI_PROMPT일 때만 영문 프롬프트","reason":"...","image_brief":"..."}`;
+{"hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reply_prompt":"AI_PROMPT 또는 AI_TIP일 때만 실제 복붙용 프롬프트","reason":"...","image_brief":"..."}`;
 
   try{
     const v=await generateJson(key,prompt,1);
@@ -395,7 +397,7 @@ JSON만:
           ?v.hook_candidates.slice(0,5)
           :x.hook_candidates,
         body:String(v.body||x.body).slice(0,500),
-        reply_prompt:x.category==='AI_PROMPT'?String(v.reply_prompt||x.reply_prompt||'').trim():'',
+        reply_prompt:['AI_PROMPT','AI_TIP'].includes(x.category)?String(v.reply_prompt||x.reply_prompt||'').trim():'',
         reason:String(v.reason||x.reason).slice(0,180),
         image_brief:String(v.image_brief||x.image_brief).slice(0,1200)
       }
