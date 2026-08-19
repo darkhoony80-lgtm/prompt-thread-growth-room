@@ -28,7 +28,7 @@ function restoreDrafts(){
 function syncDraft(i){
  const x=candidates[i];if(!x)return;
  const oldHook=x.hook||'';
- x.hook=hook(i);x.body=body(i);if(isAiPromptCandidate(x,x.pillar))x.reply_prompt=replyPrompt(i);
+ x.hook=hook(i);x.body=body(i);if(x.category==='AI_PROMPT')x.reply_prompt=replyPrompt(i);
  if(oldHook!==x.hook&&x.final_image)x.thumbnail_dirty=true;
  saveDrafts();
 }
@@ -36,11 +36,6 @@ function esc(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt
 function fb(x,kind){const a=read(F);a.unshift({kind,category:x.category,topic:x.topic,hook:x.hook,at:Date.now()});write(F,a.slice(0,80))}
 function body(i){return document.getElementById(`v3body-${i}`)?.value.trim()||candidates[i]?.body||''}
 function replyPrompt(i){return document.getElementById(`v3reply-${i}`)?.value.trim()||candidates[i]?.reply_prompt||''}
-function isAiPromptCandidate(x,pillar){
- const vals=[x?.category,x?.pillar,x?.type,pillar].filter(Boolean).map(v=>String(v).trim().toUpperCase().replace(/[\s-]+/g,'_'));
- return vals.some(v=>v==='AI_PROMPT'||v==='AI프롬프트'||v.includes('AI_PROMPT')||v.includes('PROMPT'));
-}
-
 function hook(i){return [...(document.getElementById(`v3hook-${i}`)?.value.trim()||candidates[i]?.hook||'')].slice(0,14).join('')}
 async function perf(){try{const r=await fetch('/api/threads/my-posts',{cache:'no-store'}),j=await r.json();if(!r.ok)return '';const meta=new Map(read(P).map(x=>[String(x.thread_id),x]));return (j.items||[]).map(p=>{const m=meta.get(String(p.id));if(!m)return null;const s=p.insights||{};return `${m.category}/${m.hook}:views=${s.views??'-'},likes=${s.likes??'-'},replies=${s.replies??'-'},reposts=${s.reposts??'-'},quotes=${s.quotes??'-'},shares=${s.shares??'-'}`}).filter(Boolean).slice(0,10).join(' | ')}catch{return ''}}
 
@@ -74,7 +69,7 @@ function emptyCard(pillar,i){
 }
 function render(){
  const box=document.getElementById('v3list');if(!box)return;
- box.innerHTML=PILLARS.map((pillar,i)=>{const x=candidates[i];if(!x)return emptyCard(pillar,i);return `<article class="card" id="v3card-${i}"><div class="post-meta"><span class="badge">${esc(x.category_label||CATS[pillar])}</span><span class="badge">4:5 이미지 검수</span><span class="mut">총점 ${x.score?.total||0}</span></div><div class="v3grid" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,380px);gap:18px;align-items:start"><div><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><label class="mut">후킹 · 최대 14자</label><button class="btn" id="v3gen-${i}" onclick="PostAuto.generate(${i})">🔄 다시 생성</button></div><input id="v3hook-${i}" maxlength="14" oninput="PostAuto.save(${i})" value="${esc(x.hook)}" style="width:100%;margin:5px 0 10px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:11px;font-size:18px;font-weight:800"><label class="mut">본문</label><textarea id="v3body-${i}" maxlength="500" oninput="PostAuto.save(${i})" style="width:100%;min-height:190px;margin-top:5px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:12px;line-height:1.55">${esc(x.body)}</textarea>${isAiPromptCandidate(x,pillar)?`<label class="mut" style="display:block;margin-top:10px">첫 댓글 · 복붙용 영문 프롬프트</label><textarea id="v3reply-${i}" oninput="PostAuto.save(${i})" style="width:100%;min-height:150px;margin-top:5px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:12px;line-height:1.55">${esc(x.reply_prompt||'')}</textarea><p class="mut">AI 프롬프트 게시물은 본문 게시 성공 후 이 내용만 첫 댓글로 자동 게시합니다.</p>`:''}<p class="mut">소재 · ${esc(x.topic)}</p><p class="mut">추천 이유 · ${esc(x.reason)}</p>${x.source_notes?.length?`<p class="mut">검증 메모 · ${esc(x.source_notes.join(' / '))}</p>`:''}<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" onclick="PostAuto.image(${i})">🖼 이미지 생성</button><button class="btn" onclick="PostAuto.reimage(${i})">🔄 이미지 다시 생성</button><button class="btn" onclick="PostAuto.applyHook(${i})">후킹 적용</button><button class="btn" onclick="PostAuto.variant(${i})">다른 버전</button><button class="btn" onclick="PostAuto.keep(${i})">👍 발행 대기</button><button class="btn p" onclick="PostAuto.now(${i})">🚀 즉시 게시</button><button class="btn" onclick="PostAuto.no(${i})">👎 비우기</button></div></div><div id="v3img-${i}" class="card" style="padding:10px;min-height:270px;display:grid;place-items:center"><span class="mut">이미지를 생성한 뒤 직접 확인하세요.</span></div></div></article>`}).join('');
+ box.innerHTML=PILLARS.map((pillar,i)=>{const x=candidates[i];if(!x)return emptyCard(pillar,i);return `<article class="card" id="v3card-${i}"><div class="post-meta"><span class="badge">${esc(x.category_label||CATS[pillar])}</span><span class="badge">4:5 이미지 검수</span><span class="mut">총점 ${x.score?.total||0}</span></div><div class="v3grid" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,380px);gap:18px;align-items:start"><div><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><label class="mut">후킹 · 최대 14자</label><button class="btn" id="v3gen-${i}" onclick="PostAuto.generate(${i})">🔄 다시 생성</button></div><input id="v3hook-${i}" maxlength="14" oninput="PostAuto.save(${i})" value="${esc(x.hook)}" style="width:100%;margin:5px 0 10px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:11px;font-size:18px;font-weight:800"><label class="mut">본문</label><textarea id="v3body-${i}" maxlength="500" oninput="PostAuto.save(${i})" style="width:100%;min-height:190px;margin-top:5px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:12px;line-height:1.55">${esc(x.body)}</textarea>${pillar==='AI_PROMPT'?`<label class="mut" style="display:block;margin-top:10px">첫 댓글 · 복붙용 영문 프롬프트</label><textarea id="v3reply-${i}" oninput="PostAuto.save(${i})" style="width:100%;min-height:150px;margin-top:5px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:12px;line-height:1.55">${esc(x.reply_prompt||'')}</textarea><p class="mut">AI 프롬프트 게시물은 본문 게시 성공 후 이 내용만 첫 댓글로 자동 게시합니다.</p>`:''}<p class="mut">소재 · ${esc(x.topic)}</p><p class="mut">추천 이유 · ${esc(x.reason)}</p>${x.source_notes?.length?`<p class="mut">검증 메모 · ${esc(x.source_notes.join(' / '))}</p>`:''}<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" onclick="PostAuto.image(${i})">🖼 이미지 생성</button><button class="btn" onclick="PostAuto.reimage(${i})">🔄 이미지 다시 생성</button><button class="btn" onclick="PostAuto.applyHook(${i})">후킹 적용</button><button class="btn" onclick="PostAuto.variant(${i})">다른 버전</button><button class="btn" onclick="PostAuto.keep(${i})">👍 발행 대기</button><button class="btn p" onclick="PostAuto.now(${i})">🚀 즉시 게시</button><button class="btn" onclick="PostAuto.no(${i})">👎 비우기</button></div></div><div id="v3img-${i}" class="card" style="padding:10px;min-height:270px;display:grid;place-items:center"><span class="mut">이미지를 생성한 뒤 직접 확인하세요.</span></div></div></article>`}).join('');
  if(!document.getElementById('v3css'))document.head.insertAdjacentHTML('beforeend','<style id="v3css">@media(max-width:900px){.v3grid{grid-template-columns:1fr!important}}</style>');
  candidates.forEach((x,i)=>{if(x?.image_url||x?.final_image)preview(i)});
 }
@@ -114,7 +109,7 @@ async function ensureReplyPrompt(i){
  if(value)return value;
 
  // Only AI prompt content needs the automatic prompt attachment.
- if(!isAiPromptCandidate(x,x.pillar))return '';
+ if(PILLARS[i]!=='AI_PROMPT')return '';
 
  console.info('[REPLY_PROMPT_RECOVERY_START]',{candidate_id:x.id,topic:x.topic});
  const r=await fetch('/api/content-router?action=reply-prompt',{
@@ -156,7 +151,7 @@ async function now(i){
   if(text.length>500)return alert(`본문이 ${text.length}자예요. Threads 게시용 본문은 500자 이하로 줄여 주세요.`);
 
   // For AI_PROMPT, guarantee that the attachment exists before the parent post is published.
-  const preparedReply=isAiPromptCandidate(x,x.pillar)?await ensureReplyPrompt(i):'';
+  const preparedReply=PILLARS[i]==='AI_PROMPT'?await ensureReplyPrompt(i):'';
 
   const r=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,image_url:url})});
   const j=await r.json().catch(()=>({}));
@@ -175,7 +170,7 @@ async function now(i){
     }
   }else{
     console.info('[FIRST_REPLY_SKIPPED]',{reason:'EMPTY_REPLY_PROMPT',category:x.category});
-    if(isAiPromptCandidate(x,x.pillar))replyState='\n첫 댓글용 프롬프트가 없어 댓글은 게시되지 않았어.';
+    if(PILLARS[i]==='AI_PROMPT')replyState='\n첫 댓글용 프롬프트가 없어 댓글은 게시되지 않았어.';
   }
   const p=read(P);p.unshift({thread_id:j.id,category:x.category,topic:x.topic,hook:x.hook,at:Date.now()});write(P,p.slice(0,120));
   fb(x,'published');candidates[i]=null;saveDrafts();render();alert('게시 완료!'+replyState);
