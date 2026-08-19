@@ -362,6 +362,60 @@ async function actionStoreImage(req,res){
   }
 }
 
+async function actionReplyPrompt(req,res){
+  const key=process.env.GEMINI_API_KEY;
+  const x=req.body?.candidate;
+
+  if(!key)return send(res,503,{ok:false,error:'GEMINI_NOT_CONFIGURED'});
+  if(!x)return send(res,400,{ok:false,error:'CANDIDATE_REQUIRED'});
+
+  const existing=String(x?.reply_prompt||'').trim();
+  if(existing)return send(res,200,{ok:true,reply_prompt:existing,recovered:false});
+
+  const prompt=`너는 AI 이미지 프롬프트 전문 편집자다.
+다음 Threads AI 프롬프트 게시물과 이미지 브리프를 바탕으로 사용자가 그대로 복사해서 이미지 생성기에 넣을 수 있는 상세 영어 프롬프트 하나를 복원해.
+
+주제: ${String(x?.topic||'').slice(0,500)}
+본문: ${String(x?.body||'').slice(0,1500)}
+이미지 브리프: ${String(x?.image_brief||'').slice(0,2500)}
+후킹: ${String(x?.hook||'').slice(0,100)}
+
+규칙:
+- 영어 프롬프트만 출력.
+- Prompt:, 설명, Markdown, 따옴표, 한국어 번역 금지.
+- 피사체, 환경, 시간, 카메라/렌즈 또는 촬영 방식, 구도, 조명, 색감, 질감, 현실성, 시대감 등 필요한 디테일을 충분히 포함.
+- 결과 이미지와 동떨어진 새로운 소재를 만들지 않는다.
+- 짧게 줄이려고 핵심 디테일을 삭제하지 않는다.
+- 이미지 생성 모델에 바로 복사할 수 있는 한 덩어리의 완성 프롬프트로 작성.`;
+
+  try{
+    const j=await geminiGenerate(key,{model:TEXT_MODEL,prompt,temperature:.65});
+    const value=textFromGemini(j)
+      .replace(/^```(?:text)?\s*/i,'')
+      .replace(/\s*```$/,'')
+      .trim();
+
+    if(!value)throw new Error('REPLY_PROMPT_EMPTY');
+
+    console.info('[REPLY_PROMPT_RECOVERED]',JSON.stringify({
+      candidate_id:x?.id||null,
+      length:value.length
+    }));
+
+    return send(res,200,{ok:true,reply_prompt:value,recovered:true});
+  }catch(e){
+    console.error('[REPLY_PROMPT_RECOVERY_FAILED]',JSON.stringify({
+      candidate_id:x?.id||null,
+      message:e?.message||String(e)
+    }));
+    return send(res,502,{
+      ok:false,
+      error:'REPLY_PROMPT_RECOVERY_FAILED',
+      detail:e?.message||String(e)
+    });
+  }
+}
+
 async function actionVariant(req,res){
   const key=process.env.GEMINI_API_KEY;
   const x=req.body?.candidate;
@@ -426,6 +480,7 @@ export default async function handler(req,res){
   if(action==='generate')return actionGenerate(req,res);
   if(action==='image')return actionImage(req,res);
   if(action==='store-image')return actionStoreImage(req,res);
+  if(action==='reply-prompt')return actionReplyPrompt(req,res);
   if(action==='variant')return actionVariant(req,res);
 
   return send(res,400,{
