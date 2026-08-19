@@ -157,4 +157,7 @@ batchReply.onclick=async()=>{
 async function syncReplies(postIds){if(!postIds?.length)return;const r=await fetch('/api/threads/comments?post_ids='+encodeURIComponent(postIds.join(',')),{cache:'no-store'});const j=await r.json();if(!r.ok)throw new Error(j.error||'COMMENTS_FAILED');renderReplies(j);return j}
 document.getElementById('syncNow').onclick=async()=>{const b=document.getElementById('syncNow');b.disabled=true;b.textContent='확인 중…';try{const j=await syncPosts();b.textContent=`원본 확인 (${j.summary.my_posts})`;setTimeout(()=>{b.textContent='새로 확인';b.disabled=false},1800)}catch(e){b.textContent='확인 실패';setTimeout(()=>{b.textContent='새로 확인';b.disabled=false},1800)}};
 fetch('/api/system-status',{cache:'no-store'}).then(r=>r.json()).then(s=>{td.className='dot'+(s.threads?' ok':'');ts.textContent=s.threads?'연결됨':'연결 안 됨';tb.textContent=s.threads?'연결됨':(s.threadsAppConfigured?'연결 준비됨':'App 설정 필요');gd.className='dot'+(s.gemini?' ok':'');gs.textContent=s.gemini?'연결됨':'연결 안 됨';gb.textContent=s.gemini?'연결됨':'연결 안 됨';connect.disabled=!s.threadsAppConfigured;connect.textContent=s.threads?'Threads 다시 연결':'Threads 계정 연결';connect.onclick=()=>location.href='/api/threads/oauth/start';if(s.threadsUserId) account.textContent='@voara0616 · ID '+s.threadsUserId;if(s.threads)syncPosts().catch(()=>{})}).catch(()=>{ts.textContent='상태 확인 실패'})
-</script></body></html>
+</script>
+<script src="/post-auto-v1.js"></script>
+</body>
+</html>
