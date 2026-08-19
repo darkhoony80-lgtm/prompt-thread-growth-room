@@ -19,7 +19,15 @@ async function generate(){
  try{
   const fb=feedback().slice(0,15).map(x=>`${x.kind}:${x.category}:${x.hook}`).join(' | ');
   const r=await fetch('/api/content/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({feedback:fb})});
-  const j=await r.json();if(!r.ok)throw new Error(j.error||'GENERATE_FAILED');candidates=j.items;renderCandidates();
+  const j=await r.json();if(!r.ok){
+  const detail =
+    j?.detail?.message ||
+    j?.detail?.error?.message ||
+    j?.error ||
+    'GENERATE_FAILED';
+
+  throw new Error(detail);
+};candidates=j.items;renderCandidates();
  }catch(err){alert('후보 생성 실패: '+err.message)}finally{b.disabled=false;b.textContent='후보 5개 생성'}
 }
 function renderCandidates(){
