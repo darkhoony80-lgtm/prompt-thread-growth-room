@@ -28,7 +28,7 @@ function restoreDrafts(){
 function syncDraft(i){
  const x=candidates[i];if(!x)return;
  const oldHook=x.hook||'';
- x.hook=hook(i);x.body=body(i);if(PILLARS[i]==='AI_PROMPT')x.reply_prompt=replyPrompt(i);
+ x.hook=hook(i);x.body=body(i);if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))x.reply_prompt=replyPrompt(i);
  if(oldHook!==x.hook&&x.final_image)x.thumbnail_dirty=true;
  saveDrafts();
 }
@@ -69,7 +69,7 @@ function emptyCard(pillar,i){
 }
 function render(){
  const box=document.getElementById('v3list');if(!box)return;
- box.innerHTML=PILLARS.map((pillar,i)=>{const x=candidates[i];if(!x)return emptyCard(pillar,i);return `<article class="card" id="v3card-${i}"><div class="post-meta"><span class="badge">${esc(x.category_label||CATS[pillar])}</span><span class="badge">4:5 이미지 검수</span><span class="mut">총점 ${x.score?.total||0}</span></div><div class="v3grid" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,380px);gap:18px;align-items:start"><div><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><label class="mut">후킹 · 최대 14자</label><button class="btn" id="v3gen-${i}" onclick="PostAuto.generate(${i})">🔄 다시 생성</button></div><input id="v3hook-${i}" maxlength="14" oninput="PostAuto.save(${i})" value="${esc(x.hook)}" style="width:100%;margin:5px 0 10px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:11px;font-size:18px;font-weight:800"><label class="mut">본문</label><textarea id="v3body-${i}" maxlength="500" oninput="PostAuto.save(${i})" style="width:100%;min-height:190px;margin-top:5px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:12px;line-height:1.55">${esc(x.body)}</textarea>${pillar==='AI_PROMPT'?`<label class="mut" style="display:block;margin-top:10px">첫 댓글 · 복붙용 영문 프롬프트</label><textarea id="v3reply-${i}" oninput="PostAuto.save(${i})" style="width:100%;min-height:150px;margin-top:5px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:12px;line-height:1.55">${esc(x.reply_prompt||'')}</textarea><p class="mut">본문에는 설명만, 영문 프롬프트는 이 칸에만 저장됩니다.</p>`:'' }<p class="mut">소재 · ${esc(x.topic)}</p><p class="mut">추천 이유 · ${esc(x.reason)}</p>${x.source_notes?.length?`<p class="mut">검증 메모 · ${esc(x.source_notes.join(' / '))}</p>`:''}<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" onclick="PostAuto.image(${i})">🖼 이미지 생성</button><button class="btn" onclick="PostAuto.reimage(${i})">🔄 이미지 다시 생성</button><button class="btn" onclick="PostAuto.applyHook(${i})">후킹 적용</button><button class="btn" onclick="PostAuto.variant(${i})">다른 버전</button><button class="btn" onclick="PostAuto.keep(${i})">👍 발행 대기</button><button class="btn p" onclick="PostAuto.now(${i})">🚀 즉시 게시</button><button class="btn" onclick="PostAuto.no(${i})">👎 비우기</button></div></div><div id="v3img-${i}" class="card" style="padding:10px;min-height:270px;display:grid;place-items:center"><span class="mut">이미지를 생성한 뒤 직접 확인하세요.</span></div></div></article>`}).join('');
+ box.innerHTML=PILLARS.map((pillar,i)=>{const x=candidates[i];if(!x)return emptyCard(pillar,i);return `<article class="card" id="v3card-${i}"><div class="post-meta"><span class="badge">${esc(x.category_label||CATS[pillar])}</span><span class="badge">4:5 이미지 검수</span><span class="mut">총점 ${x.score?.total||0}</span></div><div class="v3grid" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,380px);gap:18px;align-items:start"><div><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><label class="mut">후킹 · 최대 14자</label><button class="btn" id="v3gen-${i}" onclick="PostAuto.generate(${i})">🔄 다시 생성</button></div><input id="v3hook-${i}" maxlength="14" oninput="PostAuto.save(${i})" value="${esc(x.hook)}" style="width:100%;margin:5px 0 10px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:11px;font-size:18px;font-weight:800"><label class="mut">본문</label><textarea id="v3body-${i}" maxlength="500" oninput="PostAuto.save(${i})" style="width:100%;min-height:190px;margin-top:5px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:12px;line-height:1.55">${esc(x.body)}</textarea>${['AI_PROMPT','AI_TIP'].includes(pillar)?`<label class="mut" style="display:block;margin-top:10px">첫 댓글 · 복붙용 프롬프트</label><textarea id="v3reply-${i}" oninput="PostAuto.save(${i})" style="width:100%;min-height:150px;margin-top:5px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:12px;line-height:1.55">${esc(x.reply_prompt||'')}</textarea><p class="mut">본문에는 설명만, 실제 복붙용 프롬프트는 이 칸에만 저장됩니다.</p>`:'' }<p class="mut">소재 · ${esc(x.topic)}</p><p class="mut">추천 이유 · ${esc(x.reason)}</p>${x.source_notes?.length?`<p class="mut">검증 메모 · ${esc(x.source_notes.join(' / '))}</p>`:''}<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" onclick="PostAuto.image(${i})">🖼 이미지 생성</button><button class="btn" onclick="PostAuto.reimage(${i})">🔄 이미지 다시 생성</button><button class="btn" onclick="PostAuto.applyHook(${i})">후킹 적용</button><button class="btn" onclick="PostAuto.variant(${i})">다른 버전</button><button class="btn" onclick="PostAuto.keep(${i})">👍 발행 대기</button><button class="btn p" onclick="PostAuto.now(${i})">🚀 즉시 게시</button><button class="btn" onclick="PostAuto.no(${i})">👎 비우기</button></div></div><div id="v3img-${i}" class="card" style="padding:10px;min-height:270px;display:grid;place-items:center"><span class="mut">이미지를 생성한 뒤 직접 확인하세요.</span></div></div></article>`}).join('');
  if(!document.getElementById('v3css'))document.head.insertAdjacentHTML('beforeend','<style id="v3css">@media(max-width:900px){.v3grid{grid-template-columns:1fr!important}}</style>');
  candidates.forEach((x,i)=>{if(x?.image_url||x?.final_image)preview(i)});
 }
@@ -127,7 +127,7 @@ async function now(i){
   const url=await upload(i);
   const text=body(i);
   if(text.length>500)return alert(`본문이 ${text.length}자예요. Threads 본문은 500자 이하로 줄여 주세요.`);
-  if(PILLARS[i]==='AI_PROMPT'&&!replyPrompt(i))return alert('첫 댓글용 영문 프롬프트가 비어 있어요. AI 프롬프트를 다시 생성해 주세요.');
+  if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i])&&!replyPrompt(i))return alert('첫 댓글용 영문 프롬프트가 비어 있어요. AI 프롬프트를 다시 생성해 주세요.');
 
   const r=await fetch('/api/threads/publish',{
    method:'POST',
@@ -138,7 +138,7 @@ async function now(i){
   if(!r.ok)throw new Error(apiError(j,'PUBLISH_FAILED'));
 
   let replyMessage='';
-  if(PILLARS[i]==='AI_PROMPT'){
+  if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i])){
    try{
     await publishFirstReply(j.id,replyPrompt(i));
     replyMessage='\n프롬프트도 첫 댓글 텍스트 첨부로 게시 완료 ✅';
@@ -152,7 +152,7 @@ async function now(i){
   alert('Threads 게시 완료 ✅'+replyMessage);
  }catch(e){alert('게시 실패: '+e.message)}
 }
-async function variant(i){const x=candidates[i];try{x.body=body(i);x.hook=hook(i);if(PILLARS[i]==='AI_PROMPT')x.reply_prompt=replyPrompt(i);const r=await fetch('/api/content-router?action=variant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate:x})}),j=await r.json();if(!r.ok)throw new Error(j.detail||j.error);candidates[i]=j.item;candidates[i].variation=1;fb(x,'VARIANT');saveDrafts();render()}catch(e){alert('다른 버전 실패: '+e.message)}}
+async function variant(i){const x=candidates[i];try{x.body=body(i);x.hook=hook(i);if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))x.reply_prompt=replyPrompt(i);const r=await fetch('/api/content-router?action=variant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate:x})}),j=await r.json();if(!r.ok)throw new Error(j.detail||j.error);candidates[i]=j.item;candidates[i].variation=1;fb(x,'VARIANT');saveDrafts();render()}catch(e){alert('다른 버전 실패: '+e.message)}}
 function no(i){if(candidates[i])fb(candidates[i],'DISLIKE');candidates[i]=null;saveDrafts();render()}
 async function applyHook(i){try{await compose(i);await upload(i);saveDrafts();preview(i)}catch(e){alert(e.message)}}
 function renderQueue(){const a=read(Q),n=document.getElementById('v3qcount'),b=document.getElementById('v3queue');if(n)n.textContent=a.length;if(!b)return;b.innerHTML=a.length?a.map((x,i)=>`<article class="card"><div style="display:grid;grid-template-columns:150px 1fr;gap:14px"><img src="${esc(x.image_url)}" style="width:150px;aspect-ratio:4/5;object-fit:cover;border-radius:10px"><div><span class="badge">${esc(x.category_label||CATS[x.category])}</span><h3>${esc(x.hook)}</h3><div class="post-text">${esc(x.body)}</div><div style="margin-top:10px;display:flex;gap:8px"><button class="btn p" onclick="PostAuto.publishQueue(${i})">🚀 지금 게시</button><button class="btn" onclick="PostAuto.drop(${i})">제거</button></div></div></div></article>`).join(''):'<div class="card empty"><div><b>발행 대기 없음</b>이미지를 확인하고 👍한 게시물이 여기에 쌓입니다.</div></div>'}
