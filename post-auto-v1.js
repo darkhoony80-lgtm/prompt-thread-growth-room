@@ -81,13 +81,19 @@ async function compose(i){
  const x=candidates[i];if(!x?.base_image)throw new Error('이미지를 먼저 생성해 주세요.');x.hook=hook(i);x.body=body(i);
  const im=await load(x.base_image),cv=document.createElement('canvas');cv.width=1080;cv.height=1350;const c=cv.getContext('2d'),scale=Math.max(cv.width/im.width,cv.height/im.height),sw=cv.width/scale,sh=cv.height/scale;
  c.drawImage(im,(im.width-sw)/2,(im.height-sh)/2,sw,sh,0,0,cv.width,cv.height);
- const g=c.createLinearGradient(0,0,0,520);g.addColorStop(0,'rgba(0,0,0,.80)');g.addColorStop(.58,'rgba(0,0,0,.38)');g.addColorStop(1,'rgba(0,0,0,0)');c.fillStyle=g;c.fillRect(0,0,1080,530);
- let size=92,lines;while(size>=58){lines=split(c,x.hook,936,size);c.font=`900 ${size}px "Pretendard","Noto Sans KR","Malgun Gothic",sans-serif`;if(lines.length<=2&&lines.every(t=>c.measureText(t).width<=936))break;size-=4}
- c.textBaseline='top';c.fillStyle='#fff';c.strokeStyle='rgba(0,0,0,.34)';c.lineWidth=3;c.shadowColor='rgba(0,0,0,.62)';c.shadowBlur=12;c.shadowOffsetY=4;
- // Small accent bar makes the headline read like an editorial thumbnail, not plain overlaid text.
- c.save();c.shadowColor='transparent';c.fillStyle='rgba(190,255,45,.96)';c.fillRect(72,64,86,9);c.restore();
- lines.slice(0,2).forEach((t,n)=>{const y=88+n*Math.round(size*1.1);c.strokeText(t,72,y);c.fillText(t,72,y)});
- // Brand watermark: bottom only, subtle (~15%) so it protects reuse without cluttering the artwork.
+ // Full-bleed artwork: never cover the top with a solid or obvious dark panel.
+ // Only use text stroke/shadow so the generated scene remains visible behind the hook.
+ let size=96,lines;while(size>=58){lines=split(c,x.hook,936,size);c.font=`900 ${size}px "Pretendard","Noto Sans KR","Malgun Gothic",sans-serif`;if(lines.length<=2&&lines.every(t=>c.measureText(t).width<=936))break;size-=4}
+ c.textBaseline='top';c.strokeStyle='rgba(0,0,0,.72)';c.lineWidth=5;c.shadowColor='rgba(0,0,0,.78)';c.shadowBlur=14;c.shadowOffsetY=3;
+ // Minimal brand accent only. No CTA bars, no extra labels.
+ c.save();c.shadowColor='transparent';c.fillStyle='#baff2d';c.fillRect(72,62,82,8);c.restore();
+ const visible=lines.slice(0,2);
+ visible.forEach((t,n)=>{
+   const y=86+n*Math.round(size*1.08);
+   c.fillStyle=n===visible.length-1&&visible.length===2?'#baff2d':'#fff';
+   c.strokeText(t,72,y);c.fillText(t,72,y);
+ });
+ // Bottom ownership mark only.
  c.save();c.shadowColor='transparent';c.globalAlpha=.15;c.fillStyle='#fff';c.font='800 34px Arial,sans-serif';c.textAlign='right';c.textBaseline='bottom';c.fillText('VOA PROMPT',1018,1302);c.restore();
  x.final_image=cv.toDataURL('image/jpeg',.92);x.image_url=null;x.thumbnail_dirty=false;preview(i);
 }
