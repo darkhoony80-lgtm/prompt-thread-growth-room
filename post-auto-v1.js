@@ -6,6 +6,12 @@ const PILLARS=['AI_TIP','AI_PROMPT','FOOD_PICK','HOT_ISSUE'];
 let candidates=[null,null,null,null];
 function read(k,d=[]){try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}}
 function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
+function apiError(j,fallback='REQUEST_FAILED'){
+ const d=j?.detail;
+ if(typeof d==='string'&&d)return d;
+ if(d&&typeof d==='object')return [d.stage,d.message,d.status?`HTTP ${d.status}`:''].filter(Boolean).join(' · ');
+ return j?.message||j?.error||fallback;
+}
 function draftSafe(x){
  if(!x)return null;
  const v={...x};
@@ -81,20 +87,18 @@ async function compose(i){
  // Small accent bar makes the headline read like an editorial thumbnail, not plain overlaid text.
  c.save();c.shadowColor='transparent';c.fillStyle='rgba(190,255,45,.96)';c.fillRect(72,64,86,9);c.restore();
  lines.slice(0,2).forEach((t,n)=>{const y=88+n*Math.round(size*1.1);c.strokeText(t,72,y);c.fillText(t,72,y)});
- // VOA ownership mark: intentionally subtle so it discourages casual reuse without ruining the artwork.
- c.save();c.shadowColor='transparent';c.globalAlpha=.105;c.fillStyle='#fff';c.font='900 92px Arial,sans-serif';c.textAlign='center';c.textBaseline='middle';
- c.translate(540,735);c.rotate(-Math.PI/9);c.fillText('VOA',0,0);c.restore();
- c.save();c.shadowColor='transparent';c.globalAlpha=.42;c.fillStyle='#fff';c.font='800 25px Arial,sans-serif';c.textAlign='right';c.textBaseline='bottom';c.fillText('VOA',1022,1300);c.restore();
+ // Brand watermark: bottom only, subtle (~15%) so it protects reuse without cluttering the artwork.
+ c.save();c.shadowColor='transparent';c.globalAlpha=.15;c.fillStyle='#fff';c.font='800 34px Arial,sans-serif';c.textAlign='right';c.textBaseline='bottom';c.fillText('VOA PROMPT',1018,1302);c.restore();
  x.final_image=cv.toDataURL('image/jpeg',.92);x.image_url=null;x.thumbnail_dirty=false;preview(i);
 }
 function preview(i){const x=candidates[i],b=document.getElementById(`v3img-${i}`),src=x?.final_image||x?.image_url;if(!src){b.innerHTML='<span class="mut">이미지를 생성한 뒤 직접 확인하세요.</span>';return}b.innerHTML=`<div><img src="${src}" style="width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:11px;display:block"><p class="mut" style="margin:8px 2px 0">최종 썸네일 미리보기 · 확인 후 채택/게시</p></div>`}
 async function makeImage(i,redo=false){
  const x=candidates[i],box=document.getElementById(`v3img-${i}`);if(!x)return;box.innerHTML='<span class="mut">Gemini 이미지 생성 중…</span>';x.variation=redo?(x.variation||1)+1:(x.variation||1);x.body=body(i);x.hook=hook(i);
- try{const r=await fetch('/api/content-router?action=image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate:x,variation:x.variation})}),j=await r.json();if(!r.ok)throw new Error(j.detail||j.error||'IMAGE_FAILED');x.base_image=`data:${j.mime_type};base64,${j.data}`;await compose(i);await upload(i);saveDrafts();preview(i)}catch(e){box.innerHTML='<span class="mut">이미지 생성 실패</span>';alert('이미지 생성 실패: '+e.message)}
+ try{const r=await fetch('/api/content-router?action=image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate:x,variation:x.variation})}),j=await r.json();if(!r.ok)throw new Error(apiError(j,'IMAGE_FAILED'));x.base_image=`data:${j.mime_type};base64,${j.data}`;await compose(i);await upload(i);saveDrafts();preview(i)}catch(e){box.innerHTML='<span class="mut">이미지 생성 실패</span>';alert('이미지 생성 실패: '+e.message)}
 }
-async function upload(i){const x=candidates[i];if(x.image_url&&!x.final_image)return x.image_url;if(!x.final_image)throw new Error('최종 이미지를 먼저 확인해 주세요.');const r=await fetch('/api/content-router?action=store-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate_id:x.id,data_url:x.final_image})}),j=await r.json();if(!r.ok)throw new Error(j.detail||j.error||'IMAGE_UPLOAD_FAILED');x.image_url=j.url;return j.url}
+async function upload(i){const x=candidates[i];if(x.image_url&&!x.final_image)return x.image_url;if(!x.final_image)throw new Error('최종 이미지를 먼저 확인해 주세요.');const r=await fetch('/api/content-router?action=store-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate_id:x.id,data_url:x.final_image})}),j=await r.json();if(!r.ok)throw new Error(apiError(j,'IMAGE_UPLOAD_FAILED'));x.image_url=j.url;return j.url}
 async function keep(i){const x=candidates[i];if(!x?.final_image&&!x?.image_url)return alert('먼저 이미지를 생성해서 최종 썸네일을 확인해 주세요.');try{syncDraft(i);if(x.thumbnail_dirty&&!x.base_image)return alert('제목을 수정했어요. 이미지 다시 생성을 눌러 새 제목이 들어간 썸네일을 확인해 주세요.');if(x.base_image)await compose(i);const url=await upload(i),v={...x,image_url:url,kept_at:Date.now()};delete v.base_image;delete v.final_image;const a=read(Q);a.unshift(v);write(Q,a);fb(x,'LIKE');renderQueue();alert('이미지 포함 발행 대기 저장 완료 ✅')}catch(e){alert('저장 실패: '+e.message)}}
-async function now(i){const x=candidates[i];if(!x?.final_image&&!x?.image_url)return alert('즉시 게시 전에 이미지를 생성해서 직접 확인해 주세요.');try{syncDraft(i);if(x.thumbnail_dirty&&!x.base_image)return alert('제목을 수정했어요. 이미지 다시 생성을 눌러 새 제목이 들어간 썸네일을 확인해 주세요.');if(x.base_image)await compose(i);if(!confirm(`지금 보이는 이미지와 본문 그대로 게시할까요?\n\n${x.hook}`))return;const url=await upload(i),r=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:x.body,image_url:url})}),j=await r.json();if(!r.ok)throw new Error(j.detail||j.error||'PUBLISH_FAILED');fb(x,'PUBLISHED');const a=read(P);a.unshift({thread_id:j.id,category:x.category,topic:x.topic,hook:x.hook,published_at:Date.now(),image_url:url});write(P,a.slice(0,100));alert('Threads 게시 완료 ✅')}catch(e){alert('게시 실패: '+e.message)}}
+async function now(i){const x=candidates[i];if(!x?.final_image&&!x?.image_url)return alert('즉시 게시 전에 이미지를 생성해서 직접 확인해 주세요.');try{syncDraft(i);if(x.thumbnail_dirty&&!x.base_image)return alert('제목을 수정했어요. 이미지 다시 생성을 눌러 새 제목이 들어간 썸네일을 확인해 주세요.');if(x.base_image)await compose(i);if(!confirm(`지금 보이는 이미지와 본문 그대로 게시할까요?\n\n${x.hook}`))return;const url=await upload(i),r=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:x.body,image_url:url})}),j=await r.json();if(!r.ok)throw new Error(apiError(j,'PUBLISH_FAILED'));fb(x,'PUBLISHED');const a=read(P);a.unshift({thread_id:j.id,category:x.category,topic:x.topic,hook:x.hook,published_at:Date.now(),image_url:url});write(P,a.slice(0,100));alert('Threads 게시 완료 ✅')}catch(e){alert('게시 실패: '+e.message)}}
 async function variant(i){const x=candidates[i];try{x.body=body(i);x.hook=hook(i);const r=await fetch('/api/content-router?action=variant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate:x})}),j=await r.json();if(!r.ok)throw new Error(j.detail||j.error);candidates[i]=j.item;candidates[i].variation=1;fb(x,'VARIANT');saveDrafts();render()}catch(e){alert('다른 버전 실패: '+e.message)}}
 function no(i){if(candidates[i])fb(candidates[i],'DISLIKE');candidates[i]=null;saveDrafts();render()}
 async function applyHook(i){try{await compose(i);await upload(i);saveDrafts();preview(i)}catch(e){alert(e.message)}}
