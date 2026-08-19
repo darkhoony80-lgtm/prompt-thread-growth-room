@@ -4,7 +4,7 @@ const TEXT_MODEL='gemini-3.6-flash';
 const IMAGE_MODEL='gemini-3.1-flash-image';
 
 const TEXT_URL=`https://generativelanguage.googleapis.com/v1beta/models/${TEXT_MODEL}:generateContent`;
-const IMAGE_URL=`https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:generateContent`;
+const IMAGE_URL=`https://generativelanguage.googleapis.com/v1/models/${IMAGE_MODEL}:generateContent`;
 
 const LABELS={
   AI_PROMPT:'AI 프롬프트',
@@ -88,11 +88,9 @@ async function geminiGenerate(key,{
   if(image){
     body.generationConfig={
       responseModalities:['TEXT','IMAGE'],
-      responseFormat:{
-        image:{
-          aspectRatio:'4:5',
-          imageSize:'1K'
-        }
+      imageConfig:{
+        aspectRatio:'4:5',
+        imageSize:'1K'
       }
     };
   }
