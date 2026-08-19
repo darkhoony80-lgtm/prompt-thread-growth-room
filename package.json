@@ -1,1 +1,9 @@
-{"name":"prompt-thread-growth-room","version":"2.0.0","private":true,"dependencies":{"@vercel/blob":"latest"}}
+{
+  "name": "prompt-thread-growth-room",
+  "version": "3.0.0",
+  "private": true,
+  "dependencies": {
+    "@google/genai": "latest",
+    "@vercel/blob": "latest"
+  }
+}

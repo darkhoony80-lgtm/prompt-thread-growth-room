@@ -1,15 +1,219 @@
+import {GoogleGenAI} from '@google/genai';
+
 const TEXT_MODEL='gemini-3.6-flash';
-const INTERACTIONS='https://generativelanguage.googleapis.com/v1beta/interactions';
 const GENERATE=`https://generativelanguage.googleapis.com/v1beta/models/${TEXT_MODEL}:generateContent`;
-const CATEGORY_LABELS={AI_PROMPT:'AI 프롬프트',AI_TIP:'AI 활용 팁',HOT_ISSUE:'🔥 오늘의 핫이슈',FUN_RELATABLE:'재미·공감형',EXPERIMENT:'실험적인 콘텐츠'};
-function lastModelText(j){const steps=Array.isArray(j?.steps)?j.steps:[];for(let i=steps.length-1;i>=0;i--){if(steps[i]?.type!=='model_output')continue;const text=(steps[i]?.content||[]).filter(x=>x?.type==='text').map(x=>x.text||'').join('\n').trim();if(text)return text}return String(j?.output_text||'').trim()}
-function generatedText(j){return (j?.candidates?.[0]?.content?.parts||[]).map(p=>p?.text||'').join('').trim()}
-function parseJson(s=''){s=String(s).replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();try{return JSON.parse(s)}catch{}const a=s.indexOf('{'),b=s.lastIndexOf('}');if(a>=0&&b>a)return JSON.parse(s.slice(a,b+1));throw new Error('INVALID_JSON')}
-function clampHook(v=''){return [...String(v).replace(/\s+/g,' ').trim()].slice(0,14).join('')}
-function cleanCandidate(x,i){const allowed=Object.keys(CATEGORY_LABELS),category=allowed.includes(x?.category)?x.category:'EXPERIMENT';const hooks=(Array.isArray(x?.hook_candidates)?x.hook_candidates:[]).map(clampHook).filter(Boolean).slice(0,5);const hook=clampHook(x?.hook||hooks[0]||'오늘 이거 보자');if(!hooks.includes(hook))hooks.unshift(hook);const s=x?.score||{};return {id:`candidate-${Date.now()}-${i}-${Math.random().toString(36).slice(2,7)}`,category,category_label:CATEGORY_LABELS[category],topic:String(x?.topic||'').trim().slice(0,100),hook,hook_candidates:hooks.slice(0,5),body:String(x?.body||'').trim().slice(0,500),reason:String(x?.reason||'').trim().slice(0,180),image_required:true,image_brief:String(x?.image_brief||'').trim().slice(0,900),source_notes:Array.isArray(x?.source_notes)?x.source_notes.map(v=>String(v).slice(0,180)).slice(0,4):[],score:{stop:Number(s.stop)||0,save:Number(s.save)||0,share:Number(s.share)||0,comment:Number(s.comment)||0,follow:Number(s.follow)||0,novelty:Number(s.novelty)||0,visual:Number(s.visual)||0,total:Number(s.total)||0}}}
-async function interaction(key,payload){const r=await fetch(INTERACTIONS,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify(payload)});const j=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(j?.error?.message||'INTERACTION_FAILED'),{status:r.status,detail:j?.error||j});return j}
-async function generateJson(key,prompt,temperature=.9){const r=await fetch(`${GENERATE}?key=${encodeURIComponent(key)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature,responseMimeType:'application/json'}})});const j=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(j?.error?.message||'GENERATE_FAILED'),{status:r.status,detail:j?.error||j});return parseJson(generatedText(j))}
-async function getGroundedHotIssues(key){const prompt=`현재 시각 기준으로 한국 Threads 이용자가 실제로 대화할 가능성이 높은 오늘의 핫이슈를 조사해. AI 뉴스에 편향하지 마. 경제/환율/물가/사건사고/사회/정책/생활/날씨/스포츠/연예/국제/자동차/부동산/과학/테크 전체를 살펴봐. 최근 24시간 우선, 필요하면 48시간까지. 단순 보도량보다 사람들이 놀라거나 궁금해하거나 의견을 나눌 가능성을 중요하게 봐. 확인되지 않은 루머, 피해자를 자극적으로 소비하는 사건, 출처가 약한 내용은 제외해. 최대 10건을 뽑고 각 항목에 사실 핵심, 왜 지금 화제인지, 게시 시 주의점을 짧게 써. 이 자료는 다음 편집 단계의 팩트 기반 재료다.`;const j=await interaction(key,{model:TEXT_MODEL,input:prompt,tools:[{type:'google_search'}]});return lastModelText(j).slice(0,12000)}
-function ideationPrompt({hotResearch,feedback,performance}){return `너는 팔로워 성장을 최우선으로 하는 한국 Threads 콘텐츠 편집장이다. AI는 주제가 아니라 제작 도구다. AI라는 단어를 억지로 모든 소재에 붙이지 마.\n\n목표: 스크롤 정지, 저장, 리포스트/전송, 댓글, 팔로우 전환. 직접 판매 CTA 금지.\n내부 후보를 18개 만든다. 5축을 기계적으로 1개씩 배정하지 않는다.\n\nAI_PROMPT: 단순 cinematic/warm light 수준 금지. 사람들이 이런 프롬프트도 있었어?라고 느낄 정도로 구체적이고 결과가 선명해야 한다. 인물 동일성/구도/렌즈/조명/질감/환경/행동/금지사항을 500자 안에서 압축. 프롬프트 자체가 상품이다.\nAI_TIP: 전문가처럼 답해줘/결론부터/예시 2개 같은 흔한 문구 금지. 영어 원문 명령어를 핵심 자산으로 제공. GPT 명령어 100가지 시리즈처럼 영어 명령어 + 짧은 한국어 뜻 + 실제 쓸 상황.\nHOT_ISSUE: AI만 고르지 않는다. 아래 Google Search grounding 결과만 팩트 재료로 사용. 기사 제목 복사 금지. 경제/사회/생활/스포츠/연예/국제 등 그날 강한 이슈 우선.\nGROUNDING:\n${hotResearch}\nFUN_RELATABLE: 질문만 던지지 않는다. 우리가 먼저 재미있는 결과/추천/선택을 준다. 오늘 점심은 제육볶음, 오늘 저녁은 김치찌개처럼 음식/직장/소비/관계/일상/날씨/주말 전반. AI는 특별한 이유가 있을 때만.\nEXPERIMENT: 선택 게임, 세대 테스트, 짧은 진단, 관찰 놀이, 이미지 대결, 예상 밖 규칙 등 새로운 포맷. 뻔한 AI 질문 금지.\n\n후킹: 각 아이디어마다 5개. 6~10자 우선, 최대14자. 호기심/반전/의문/놀라움/단정형 중 소재에 맞게. 기사 제목 복사와 거짓 낚시 금지.\n이미지: 모든 최종 후보는 이미지 검수 대상. 4:5, 상단 28% 후킹 여백, 중앙/하단 핵심 비주얼. 이미지 자체 글자/로고/워터마크 금지. HOT_ISSUE는 실제 보도사진으로 오해할 특정 피해자/현장 재현 금지. FUN은 음식/생활이면 즉시 욕망/공감이 오는 실사적 비주얼. AI_PROMPT는 결과물 자체가 욕망을 만드는 작품형. AI_TIP은 가짜 UI 대신 개념 시각화. EXPERIMENT는 신선한 포맷.\n\n사용자 피드백:${feedback||'없음'}\n실제 게시 성과:${performance||'없음'}\nJSON만:{"ideas":[{"category":"AI_PROMPT","topic":"...","hook_candidates":["..."],"body":"500자 이내","reason":"...","image_brief":"...","source_notes":[]}]}`}
-function selectionPrompt({ideas,feedback,performance}){return `너는 Threads 성장 콘텐츠의 냉정한 편집국장이다. 아래 후보들을 평가해 최종 5개만 남겨라. 약한 글은 같은 소재를 더 강하게 재작성해서 통과시켜라.\n평가 각 0~10: stop 스크롤 정지, save 저장, share 리포스트/전송, comment 댓글, follow 팔로우 전환, novelty 신선도, visual 이미지 결합력. total은 100점 환산. 같은 카테고리 최대2개 원칙.\nAI_PROMPT가 초급이면 탈락. AI_TIP이 흔하면 탈락. HOT_ISSUE가 제공 팩트 넘어 꾸미면 탈락. FUN은 우리가 먼저 결과/추천을 줘야 한다. EXPERIMENT가 AI 억지거나 뻔하면 탈락. 모든 후보는 이미지 가치가 있어야 한다. 후킹 5개 중 최강 1개를 hook으로 선택, 6~10자 우선 최대14자.\n피드백:${feedback||'없음'}\n성과:${performance||'없음'}\n후보:${JSON.stringify(ideas).slice(0,30000)}\nJSON만:{"candidates":[{"category":"AI_PROMPT","topic":"...","hook":"...","hook_candidates":["..."],"body":"...","reason":"...","image_brief":"...","source_notes":[],"score":{"stop":0,"save":0,"share":0,"comment":0,"follow":0,"novelty":0,"visual":0,"total":0}}]}`}
-export default async function handler(req,res){res.setHeader('Cache-Control','no-store');if(req.method!=='POST')return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});const key=process.env.GEMINI_API_KEY;if(!key)return res.status(503).json({ok:false,error:'GEMINI_NOT_CONFIGURED'});const feedback=String(req.body?.feedback||'').slice(0,4000),performance=String(req.body?.performance||'').slice(0,5000);try{const hotResearch=await getGroundedHotIssues(key);const draft=await generateJson(key,ideationPrompt({hotResearch,feedback,performance}),1.05);const ideas=Array.isArray(draft?.ideas)?draft.ideas.slice(0,24):[];if(ideas.length<10)throw new Error('IDEA_POOL_TOO_SMALL');const selected=await generateJson(key,selectionPrompt({ideas,feedback,performance}),.75);let items=(Array.isArray(selected?.candidates)?selected.candidates:[]).map(cleanCandidate).filter(x=>x.body&&x.hook).sort((a,b)=>b.score.total-a.score.total).slice(0,5);if(items.length!==5)throw new Error('FINAL_CANDIDATE_COUNT_INVALID');return res.status(200).json({ok:true,engine:'growth-v2',grounded_hot_issues:true,internal_idea_count:ideas.length,items})}catch(e){console.error('[CONTENT_V2_FAILED]',JSON.stringify({message:e.message,status:e.status||null,detail:e.detail||null}));return res.status(502).json({ok:false,error:'CONTENT_V2_FAILED',detail:e.message})}}
+const LABELS={
+  AI_PROMPT:'AI 프롬프트',
+  AI_TIP:'AI 활용 팁',
+  FOOD_PICK:'오늘 뭐 먹지?',
+  HOT_ISSUE:'🔥 오늘의 핫이슈'
+};
+
+function stripFence(s=''){
+  return String(s).replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
+}
+function parseJson(s=''){
+  const raw=stripFence(s);
+  try{return JSON.parse(raw)}catch{}
+  const a=raw.indexOf('{'),b=raw.lastIndexOf('}');
+  if(a>=0&&b>a)return JSON.parse(raw.slice(a,b+1));
+  throw new Error('INVALID_JSON');
+}
+function clampHook(v=''){
+  return [...String(v).replace(/\s+/g,' ').trim()].slice(0,14).join('');
+}
+function clean(x,i){
+  const allowed=Object.keys(LABELS);
+  const category=allowed.includes(x?.category)?x.category:'AI_PROMPT';
+  const hooks=(Array.isArray(x?.hook_candidates)?x.hook_candidates:[])
+    .map(clampHook).filter(Boolean).slice(0,5);
+  const hook=clampHook(x?.hook||hooks[0]||'오늘 이거 봐');
+  if(!hooks.includes(hook))hooks.unshift(hook);
+  const s=x?.score||{};
+  return {
+    id:`c-${Date.now()}-${i}-${Math.random().toString(36).slice(2,7)}`,
+    category,
+    category_label:LABELS[category],
+    topic:String(x?.topic||'').trim().slice(0,100),
+    hook,
+    hook_candidates:hooks.slice(0,5),
+    body:String(x?.body||'').trim().slice(0,500),
+    reason:String(x?.reason||'').trim().slice(0,180),
+    image_brief:String(x?.image_brief||'').trim().slice(0,1200),
+    source_notes:Array.isArray(x?.source_notes)?x.source_notes.map(v=>String(v).slice(0,220)).slice(0,5):[],
+    score:{
+      stop:Number(s.stop)||0,save:Number(s.save)||0,share:Number(s.share)||0,
+      comment:Number(s.comment)||0,follow:Number(s.follow)||0,novelty:Number(s.novelty)||0,
+      visual:Number(s.visual)||0,total:Number(s.total)||0
+    }
+  };
+}
+async function generateJson(key,prompt,temp=.9){
+  const r=await fetch(`${GENERATE}?key=${encodeURIComponent(key)}`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      contents:[{parts:[{text:prompt}]}],
+      generationConfig:{temperature:temp,responseMimeType:'application/json'}
+    })
+  });
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(j?.error?.message||'GEMINI_GENERATE_FAILED');
+  const text=(j?.candidates?.[0]?.content?.parts||[]).map(p=>p?.text||'').join('');
+  return parseJson(text);
+}
+async function groundedResearch(ai,input){
+  const interaction=await ai.interactions.create({
+    model:TEXT_MODEL,
+    input,
+    tools:[{type:'google_search'}]
+  });
+  return String(interaction.output_text||'').slice(0,14000);
+}
+async function researchHotIssues(ai){
+  return groundedResearch(ai,`현재 한국 시간 기준으로 오늘 가장 화제가 큰 이슈를 조사해.
+AI 뉴스에 편향하지 말고 환율/증시/물가/정책/사회/사건사고/전쟁/국제/날씨/태풍/폭우/폭염/지진/스포츠/연예/자동차/부동산/과학/테크 전체를 살펴봐.
+최근 24시간을 최우선, 필요하면 48시간까지만.
+여러 출처로 교차 확인되는 사실만 사용하고 루머는 제외.
+오늘 Threads에서 사람들이 가장 많이 궁금해하거나 대화할 가치가 큰 것 위주로 최대 8개.
+각 이슈마다 핵심 사실, 왜 오늘 중요한지, 숫자/시간 등 주의할 팩트를 짧게 정리해.
+피해자가 있는 사건은 선정적 묘사를 피하고 공익적 정보 중심으로.`);
+}
+async function researchFood(ai){
+  return groundedResearch(ai,`한국 전국에서 실제 영업 중인 것으로 확인되는 식당/맛집 후보를 조사해.
+서울에 편향하지 말고 부산/대구/대전/광주/인천/울산/제주/강릉/전주/수원 등 전국을 넓게 고려해.
+점심, 저녁, 혼밥, 해장, 회식, 술자리 안주, 여행 한 끼 같은 상황별로 추천할 만한 곳을 최대 12곳.
+각 항목은 정확한 식당명, 지역, 대표적으로 알려진 메뉴, 왜 추천할 만한지까지만.
+검색으로 실제 존재와 현재 정보를 확인하기 어려운 곳은 제외.
+가격/영업시간은 변동 가능성이 크므로 확실하지 않으면 쓰지 마.`);
+}
+
+function ideationPrompt({hot,food,feedback,performance}){
+  return `너는 한국 Threads 계정을 팔로워 성장시키는 콘텐츠 편집장이다.
+AI는 제작 도구일 뿐 모든 게시물의 주제가 아니다.
+내부 아이디어를 16개 만든 뒤 JSON으로 반환한다. 최종 선정은 다음 단계가 한다.
+
+콘텐츠 축은 정확히 네 종류뿐이다.
+
+1) AI_PROMPT
+목표: "이 프롬프트로 이런 결과가 나온다고?"라는 저장 욕구.
+본문의 핵심 자산은 상세한 영어 프롬프트다.
+짧고 흔한 "cinematic, warm lighting" 수준 금지.
+피사체/행동/환경/시간/카메라/렌즈/구도/조명/색감/질감/현실성/금지요소 중 필요한 것을 구체적으로 설계.
+500자 제한 안에서 복사해서 바로 써볼 수 있을 만큼 정교하게 압축.
+한국어 소개 1~2문장 + 영어 프롬프트가 중심.
+특정 서비스 이름은 그 서비스 전용 기능을 실제 사용하는 경우가 아니면 억지로 붙이지 않는다.
+
+2) AI_TIP
+목표: "이런 짧은 명령어가 있었어?"라는 발견감.
+일반인은 잘 모르지만 AI 설계자/고급 사용자가 쓰는 짧은 개념·명령어를 하나씩 소개한다.
+예시 방향: RED TEAM, STEELMAN, PRE-MORTEM, EDGE CASES, COUNTEREXAMPLE, RUBRIC, DEVIL'S ADVOCATE, FIRST PRINCIPLES.
+단, 예시만 매번 재탕하지 말고 새로운 전문 용어도 발굴.
+"전문가처럼 답해줘", "결론부터 말해줘", "예시 2개" 같은 초급 팁은 절대 금지.
+본문 형식: 낯선 용어 → 한 줄짜리 영어 명령어 → 아주 쉬운 한국어 설명 → 언제 쓰면 좋은지.
+영어 명령어가 반드시 포함되어야 한다.
+
+3) FOOD_PICK
+목표: "오늘 뭐 먹지?"를 우리가 먼저 해결.
+사용자에게 추천해달라고 묻지 않는다. 우리가 "오늘 점심은 내가 정해줄게", "오늘 저녁은 여기", "오늘 술안주는 이거"처럼 먼저 결론을 준다.
+아래 Google Search 조사에서 실제 확인된 전국 식당만 사용한다.
+식당명/지역/메뉴를 지어내지 않는다.
+음식 이미지가 실제 해당 식당 사진이라고 오해되지 않도록 본문 끝에 짧게 "※ 이미지는 메뉴 이해를 돕는 AI 연출 이미지"를 넣는다.
+전국 맛집 조사:
+${food}
+
+4) HOT_ISSUE
+목표: 오늘 실제 세상에서 가장 중요한 한두 이슈를 쉽고 빠르게 전달.
+AI 이슈를 우선하지 않는다.
+아래 Google Search 조사 내용만 사실 재료로 사용하고 기사 제목을 복사하지 않는다.
+환율/전쟁/사건사고/날씨/태풍 등 그날 가장 강한 이슈가 무엇이든 선택 가능.
+본문: 무슨 일 → 왜 중요한지 → 우리가 알아둘 핵심. 선정적 표현과 확인되지 않은 숫자 금지.
+오늘의 조사:
+${hot}
+
+[후킹]
+각 아이디어마다 hook_candidates 5개.
+6~10자 우선, 최대 14자. 기사 제목 복사 금지.
+호기심/단정/반전/의문/놀라움 중 소재에 맞는 방식.
+이미지 상단에서 1초 안에 읽혀야 한다.
+
+[이미지 브리프]
+모든 아이디어에 image_brief 작성.
+4:5 세로형. 이미지 자체에는 글자/로고/워터마크/가짜 UI 금지.
+상단 30%는 후킹을 나중에 정확한 한글로 합성할 여백.
+중앙/하단은 핵심 비주얼.
+AI_PROMPT는 그 프롬프트의 매력적인 결과물 자체를 보여준다.
+AI_TIP은 뻔한 로봇/AI 뇌 대신 해당 개념을 시각적으로 상징화.
+FOOD_PICK은 실제로 먹고 싶어지는 음식 중심. 특정 식당 실제 사진처럼 오인시키지 않는다.
+HOT_ISSUE는 뉴스 편집 비주얼이되 실제 현장/피해자 사진처럼 오인시키는 재현 금지.
+
+최근 취향 피드백:
+${feedback||'없음'}
+
+실제 게시 성과:
+${performance||'없음'}
+
+JSON만:
+{"ideas":[{"category":"AI_TIP","topic":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reason":"...","image_brief":"...","source_notes":[]}]}`;
+}
+function selectionPrompt(ideas){
+  return `너는 냉정한 Threads 편집국장이다. 아래 ${ideas.length}개 후보에서 강한 최종 5개를 선정하거나 약한 후보는 같은 소재를 개선해라.
+
+각 항목 0~10:
+stop 스크롤 정지
+save 저장
+share 리포스트/전송
+comment 댓글
+follow 팔로우 전환
+novelty 신선도
+visual 이미지 파워
+total 100점 환산.
+
+중요한 강제 규칙:
+- 콘텐츠 축은 AI_PROMPT / AI_TIP / FOOD_PICK / HOT_ISSUE 네 개뿐.
+- 같은 날 비슷한 효용의 AI_TIP 2개 금지. 예: 답변 품질 개선 + 환각 줄이기처럼 비슷하면 하나만.
+- AI_TIP은 짧은 전문 용어와 영어 명령어가 없으면 탈락.
+- AI_PROMPT는 영어 프롬프트가 충분히 세부적이지 않으면 탈락.
+- FOOD_PICK은 조사된 실제 식당/메뉴 정보가 있어야 통과.
+- HOT_ISSUE는 팩트 메모 범위를 넘겨 지어내면 탈락.
+- 4개 축 중 최소 3개 축은 최종 5개에 포함. 한 축이 3개 이상 차지하지 못함.
+- 이미지가 뻔하면 탈락 또는 image_brief 재작성.
+- hook은 6~10자 우선, 최대 14자.
+
+후보:
+${JSON.stringify(ideas).slice(0,32000)}
+
+JSON만:
+{"candidates":[{"category":"AI_TIP","topic":"...","hook":"...","hook_candidates":["..."],"body":"...","reason":"...","image_brief":"...","source_notes":[],"score":{"stop":0,"save":0,"share":0,"comment":0,"follow":0,"novelty":0,"visual":0,"total":0}}]}`;
+}
+
+export default async function handler(req,res){
+  res.setHeader('Cache-Control','no-store');
+  if(req.method!=='POST')return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});
+  const key=process.env.GEMINI_API_KEY;
+  if(!key)return res.status(503).json({ok:false,error:'GEMINI_NOT_CONFIGURED'});
+  const feedback=String(req.body?.feedback||'').slice(0,4000);
+  const performance=String(req.body?.performance||'').slice(0,5000);
+
+  try{
+    const ai=new GoogleGenAI({apiKey:key});
+    const [hot,food]=await Promise.all([researchHotIssues(ai),researchFood(ai)]);
+    const draft=await generateJson(key,ideationPrompt({hot,food,feedback,performance}),1.0);
+    const ideas=(Array.isArray(draft?.ideas)?draft.ideas:[]).slice(0,20);
+    if(ideas.length<10)throw new Error('IDEA_POOL_TOO_SMALL');
+
+    const chosen=await generateJson(key,selectionPrompt(ideas),.72);
+    let items=(Array.isArray(chosen?.candidates)?chosen.candidates:[]).map(clean)
+      .filter(x=>x.body&&x.hook).sort((a,b)=>b.score.total-a.score.total).slice(0,5);
+    if(items.length!==5)throw new Error('FINAL_CANDIDATE_COUNT_INVALID');
+
+    return res.status(200).json({
+      ok:true,engine:'growth-v3-four-pillars',
+      grounded_hot_issues:true,grounded_food:true,
+      internal_idea_count:ideas.length,items
+    });
+  }catch(e){
+    console.error('[CONTENT_V3_FAILED]',JSON.stringify({message:e.message,stack:e.stack?.split('\n').slice(0,3)}));
+    return res.status(502).json({ok:false,error:'CONTENT_V3_FAILED',detail:e.message});
+  }
+}
