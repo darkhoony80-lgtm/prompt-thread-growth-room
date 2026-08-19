@@ -3,10 +3,15 @@ import {GoogleGenAI} from '@google/genai';
 const TEXT_MODEL='gemini-3.6-flash';
 const IMAGE_MODEL='gemini-3.1-flash-image';
 
+function textFromResponse(response){
+  return (response?.candidates?.[0]?.content?.parts||[])
+    .map(part=>part?.text||'')
+    .join('')
+    .trim();
+}
+
 async function director(ai,candidate,variation){
-  const r=await ai.interactions.create({
-    model:TEXT_MODEL,
-    input:`너는 세계적 소셜미디어 아트디렉터다.
+  const instruction=`너는 세계적 소셜미디어 아트디렉터다.
 다음 Threads 후보에 맞는 Gemini 이미지 생성용 영어 프롬프트 하나만 작성해.
 
 카테고리: ${candidate.category}
@@ -27,9 +32,15 @@ AI_PROMPT: 제공 프롬프트의 결과물이 욕망을 만들 정도로 완성
 AI_TIP: 개념을 상징적으로 보여주되 실제 읽을 수 있는 UI나 텍스트는 만들지 않는다.
 FOOD_PICK: 실제 특정 식당 사진을 복제하지 말고 해당 메뉴를 매우 먹음직스럽게 연출한 일반적 음식 비주얼.
 HOT_ISSUE: 실제 보도사진/피해자/특정 현장으로 오인되지 않는 프리미엄 편집기사형 상징 비주얼.
-영어 이미지 프롬프트만 출력.`
+영어 이미지 프롬프트만 출력.`;
+
+  const response=await ai.models.generateContent({
+    model:TEXT_MODEL,
+    contents:instruction,
+    config:{temperature:0.8}
   });
-  return String(r.output_text||'').trim().slice(0,3000);
+
+  return textFromResponse(response).slice(0,3000);
 }
 
 function extractInlineImage(response){
@@ -61,8 +72,6 @@ export default async function handler(req,res){
     const prompt=await director(ai,candidate,variation);
     if(!prompt)throw new Error('IMAGE_DIRECTOR_EMPTY');
 
-    // GenerateContent 경로 사용:
-    // candidates[0].content.parts[].inlineData 에서 실제 이미지 바이트를 읽는다.
     const response=await ai.models.generateContent({
       model:IMAGE_MODEL,
       contents:prompt,
@@ -78,13 +87,14 @@ export default async function handler(req,res){
     });
 
     const img=extractInlineImage(response);
+
     if(!img){
+      const parts=response?.candidates?.[0]?.content?.parts||[];
       console.error('[GEMINI_IMAGE_MISSING]',JSON.stringify({
         model:IMAGE_MODEL,
         candidate_count:response?.candidates?.length||0,
-        part_types:(response?.candidates?.[0]?.content?.parts||[]).map(p=>
-          p?.inlineData?'inlineData':p?.text?'text':'unknown'
-        ),
+        parts_count:parts.length,
+        part_types:parts.map(p=>p?.inlineData?'inlineData':p?.text?'text':'unknown'),
         finish_reason:response?.candidates?.[0]?.finishReason||null
       }));
       throw new Error('GEMINI_IMAGE_MISSING');
