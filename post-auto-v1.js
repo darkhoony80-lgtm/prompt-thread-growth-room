@@ -109,7 +109,7 @@ async function ensureReplyPrompt(i){
  if(value)return value;
 
  // Only AI prompt content needs the automatic prompt attachment.
- if(PILLARS[i]!=='AI_PROMPT')return '';
+ if(x.category!=='AI_PROMPT')return '';
 
  console.info('[REPLY_PROMPT_RECOVERY_START]',{candidate_id:x.id,topic:x.topic});
  const r=await fetch('/api/content-router?action=reply-prompt',{
@@ -151,7 +151,7 @@ async function now(i){
   if(text.length>500)return alert(`본문이 ${text.length}자예요. Threads 게시용 본문은 500자 이하로 줄여 주세요.`);
 
   // For AI_PROMPT, guarantee that the attachment exists before the parent post is published.
-  const preparedReply=PILLARS[i]==='AI_PROMPT'?await ensureReplyPrompt(i):'';
+  const preparedReply=x.category==='AI_PROMPT'?await ensureReplyPrompt(i):'';
 
   const r=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,image_url:url})});
   const j=await r.json().catch(()=>({}));
@@ -170,7 +170,7 @@ async function now(i){
     }
   }else{
     console.info('[FIRST_REPLY_SKIPPED]',{reason:'EMPTY_REPLY_PROMPT',category:x.category});
-    if(PILLARS[i]==='AI_PROMPT')replyState='\n첫 댓글용 프롬프트가 없어 댓글은 게시되지 않았어.';
+    if(x.category==='AI_PROMPT')replyState='\n첫 댓글용 프롬프트가 없어 댓글은 게시되지 않았어.';
   }
   const p=read(P);p.unshift({thread_id:j.id,category:x.category,topic:x.topic,hook:x.hook,at:Date.now()});write(P,p.slice(0,120));
   fb(x,'published');candidates[i]=null;saveDrafts();render();alert('게시 완료!'+replyState);
