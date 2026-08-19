@@ -97,22 +97,20 @@ async function geminiGenerate(key,{
     };
   }
 
-  const r=await fetch(url,{
-    method:'POST',
-    headers:{
-      'Content-Type':'application/json',
-      'x-goog-api-key':key
-    },
-    body:JSON.stringify(body)
-  });
-
-  const j=await r.json().catch(()=>({}));
-
-  if(!r.ok){
-    throw new Error(j?.error?.message||`GEMINI_HTTP_${r.status}`);
+  let lastError=null;
+  for(let attempt=0;attempt<3;attempt++){
+    const r=await fetch(url,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-goog-api-key':key},
+      body:JSON.stringify(body)
+    });
+    const j=await r.json().catch(()=>({}));
+    if(r.ok)return j;
+    lastError=new Error(j?.error?.message||`GEMINI_HTTP_${r.status}`);
+    if(![429,500,502,503,504].includes(r.status)||attempt===2)break;
+    await new Promise(resolve=>setTimeout(resolve,1200*Math.pow(2,attempt)));
   }
-
-  return j;
+  throw lastError||new Error('GEMINI_REQUEST_FAILED');
 }
 
 function textFromGemini(j){
@@ -161,156 +159,50 @@ async function researchFood(key){
 가격/영업시간은 변동 가능성이 크므로 확실하지 않으면 쓰지 마.`);
 }
 
-function ideationPrompt({hot,food,feedback,performance}){
-  return `너는 한국 Threads 계정을 팔로워 성장시키는 콘텐츠 편집장이다.
-AI는 제작 도구일 뿐 모든 게시물의 주제가 아니다.
-내부 아이디어를 16개 만든 뒤 JSON으로 반환한다. 최종 선정은 다음 단계가 한다.
+function pillarPrompt({pillar,research='',feedback='',performance=''}){
+  const common=`너는 한국 Threads 계정을 팔로워 성장시키는 콘텐츠 편집장이다.\n목표는 광고가 아니라 저장, 공유, 댓글, 팔로우를 부르는 원본 콘텐츠다.\n후킹은 6~10자 우선, 최대 14자. 기사 제목이나 흔한 문구를 복사하지 않는다.\n이미지는 4:5 세로형이며 글자/로고/워터마크 없이 상단 30%를 후킹 합성 여백으로 둔다.\n최근 피드백: ${feedback||'없음'}\n실제 성과: ${performance||'없음'}`;
 
-콘텐츠 축은 정확히 네 종류뿐이다.
+  const rules={
+    AI_TIP:`AI_TIP 하나만 만든다. 일반인이 잘 모르는 짧은 전문 개념/명령어를 오늘의 명령어처럼 소개한다. RED TEAM, STEELMAN, PRE-MORTEM, EDGE CASES, COUNTEREXAMPLE, RUBRIC, FIRST PRINCIPLES 같은 수준이지만 예시를 재탕하지 말고 더 넓게 발굴한다. '전문가처럼 답해줘', '결론부터', '예시 2개' 같은 초급 팁은 금지. 본문은 ① 낯선 용어 ② 복붙 가능한 짧은 영어 명령어 ③ 쉬운 한국어 설명 ④ 언제 쓰면 좋은지. 영어 명령어 필수.`,
+    AI_PROMPT:`AI_PROMPT 하나만 만든다. 사람들이 '이 프롬프트로 이런 결과가?'라고 저장하고 싶은 상세 영문 프롬프트를 제공한다. 한국어 소개 1~2문장 뒤에 복붙 가능한 영어 프롬프트를 핵심 자산으로 둔다. 피사체/행동/환경/시간/카메라/렌즈/구도/조명/색감/질감/현실성/금지요소 중 필요한 요소를 구체화한다. 흔한 cinematic, warm lighting 나열 수준은 금지.`,
+    FOOD_PICK:`FOOD_PICK 하나만 만든다. '오늘 점심은 내가 정해줄게', '오늘 저녁은 여기', '오늘 술안주는 이거'처럼 우리가 먼저 결론을 준다. 아래 검색 결과에서 실제 확인된 전국 식당 하나를 골라 식당명/지역/대표 메뉴/추천 이유를 간결하게 쓴다. 존재, 지역, 메뉴를 지어내지 않는다. 마지막에 '※ 이미지는 메뉴 이해를 돕는 AI 연출 이미지'를 넣는다.\n검색 결과:\n${research}`,
+    HOT_ISSUE:`HOT_ISSUE 하나만 만든다. AI에 편향하지 말고 오늘 실제 뉴스 중 대화 가치와 화제성이 가장 큰 하나를 고른다. 환율/증시/정책/사회/사건사고/전쟁/국제/날씨/태풍/스포츠/연예/자동차/부동산/과학/테크 모두 동등하게 본다. 아래 검색 결과만 사실 재료로 사용한다. 기사 제목 복사 금지. 본문은 무슨 일 → 왜 중요한지 → 우리가 알아둘 핵심. 루머와 확인 안 된 숫자 금지.\n검색 결과:\n${research}`
+  };
 
-1) AI_PROMPT
-목표: "이 프롬프트로 이런 결과가 나온다고?"라는 저장 욕구.
-본문의 핵심 자산은 상세한 영어 프롬프트다.
-짧고 흔한 "cinematic, warm lighting" 수준 금지.
-피사체/행동/환경/시간/카메라/렌즈/구도/조명/색감/질감/현실성/금지요소 중 필요한 것을 구체적으로 설계.
-500자 제한 안에서 복사해서 바로 써볼 수 있을 만큼 정교하게 압축.
-한국어 소개 1~2문장 + 영어 프롬프트가 중심.
-
-2) AI_TIP
-목표: "이런 짧은 명령어가 있었어?"라는 발견감.
-일반인은 잘 모르지만 AI 설계자/고급 사용자가 쓰는 짧은 개념·명령어를 하나씩 소개한다.
-예시 방향: RED TEAM, STEELMAN, PRE-MORTEM, EDGE CASES, COUNTEREXAMPLE, RUBRIC, DEVIL'S ADVOCATE, FIRST PRINCIPLES.
-단, 예시만 매번 재탕하지 말고 새로운 전문 개념도 발굴.
-"전문가처럼 답해줘", "결론부터 말해줘", "예시 2개" 같은 초급 팁은 절대 금지.
-본문 형식: 낯선 용어 → 한 줄짜리 영어 명령어 → 아주 쉬운 한국어 설명 → 언제 쓰면 좋은지.
-영어 명령어가 반드시 포함되어야 한다.
-
-3) FOOD_PICK
-목표: "오늘 뭐 먹지?"를 우리가 먼저 해결.
-사용자에게 추천해달라고 묻지 않는다.
-"오늘 점심은 내가 정해줄게", "오늘 저녁은 여기", "오늘 술안주는 이거"처럼 먼저 결론을 준다.
-아래 Google Search 조사에서 실제 확인된 전국 식당만 사용한다.
-식당명/지역/메뉴를 지어내지 않는다.
-음식 이미지가 실제 해당 식당 사진이라고 오해되지 않도록 본문 끝에
-"※ 이미지는 메뉴 이해를 돕는 AI 연출 이미지"를 넣는다.
-전국 맛집 조사:
-${food}
-
-4) HOT_ISSUE
-목표: 오늘 실제 세상에서 가장 중요한 이슈를 쉽고 빠르게 전달.
-AI 이슈를 우선하지 않는다.
-아래 Google Search 조사 내용만 사실 재료로 사용하고 기사 제목을 복사하지 않는다.
-환율/전쟁/사건사고/날씨/태풍 등 그날 가장 강한 이슈가 무엇이든 선택 가능.
-본문: 무슨 일 → 왜 중요한지 → 우리가 알아둘 핵심.
-확인되지 않은 숫자와 루머 금지.
-오늘의 조사:
-${hot}
-
-[후킹]
-각 아이디어마다 hook_candidates 5개.
-6~10자 우선, 최대 14자.
-기사 제목 복사 금지.
-호기심/단정/반전/의문/놀라움 중 소재에 맞는 방식.
-
-[이미지 브리프]
-모든 아이디어에 image_brief 작성.
-4:5 세로형.
-이미지 자체에는 글자/로고/워터마크/가짜 UI 금지.
-상단 30%는 후킹을 나중에 정확한 한글로 합성할 여백.
-중앙/하단은 핵심 비주얼.
-
-최근 취향 피드백:
-${feedback||'없음'}
-
-실제 게시 성과:
-${performance||'없음'}
-
-JSON만:
-{"ideas":[{"category":"AI_TIP","topic":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reason":"...","image_brief":"...","source_notes":[]}]}`;
-}
-
-function selectionPrompt(ideas){
-  return `너는 냉정한 Threads 편집국장이다.
-아래 ${ideas.length}개 후보에서 최종 4개를 선정하거나 약한 후보는 같은 소재를 개선해라.
-
-중요한 강제 규칙:
-- 콘텐츠 축은 AI_PROMPT / AI_TIP / FOOD_PICK / HOT_ISSUE 네 개뿐.
-- 최종 4개는 네 축에서 정확히 하나씩 선정한다.
-- AI_TIP은 짧은 전문 용어와 영어 명령어가 없으면 탈락.
-- AI_PROMPT는 영어 프롬프트가 충분히 세부적이지 않으면 탈락.
-- FOOD_PICK은 조사된 실제 식당/메뉴 정보가 있어야 통과.
-- HOT_ISSUE는 팩트 메모 범위를 넘겨 지어내면 탈락.
-- 이미지가 뻔하면 탈락 또는 image_brief 재작성.
-- hook은 6~10자 우선, 최대 14자.
-
-각 항목 score:
-stop/save/share/comment/follow/novelty/visual은 0~10.
-total은 0~100.
-
-후보:
-${JSON.stringify(ideas).slice(0,32000)}
-
-JSON만:
-{"candidates":[{"category":"AI_TIP","topic":"...","hook":"...","hook_candidates":["..."],"body":"...","reason":"...","image_brief":"...","source_notes":[],"score":{"stop":0,"save":0,"share":0,"comment":0,"follow":0,"novelty":0,"visual":0,"total":0}}]}`;
+  return `${common}\n\n${rules[pillar]}\n\nJSON만 반환:\n{"candidate":{"category":"${pillar}","topic":"...","hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reason":"...","image_brief":"...","source_notes":[],"score":{"stop":0,"save":0,"share":0,"comment":0,"follow":0,"novelty":0,"visual":0,"total":0}}}`;
 }
 
 async function actionGenerate(req,res){
   const key=process.env.GEMINI_API_KEY;
   if(!key)return send(res,503,{ok:false,error:'GEMINI_NOT_CONFIGURED'});
 
+  const pillar=String(req.body?.pillar||'').trim();
+  const allowed=['AI_TIP','AI_PROMPT','FOOD_PICK','HOT_ISSUE'];
+  if(!allowed.includes(pillar))return send(res,400,{ok:false,error:'PILLAR_REQUIRED',allowed});
+
   const feedback=String(req.body?.feedback||'').slice(0,4000);
   const performance=String(req.body?.performance||'').slice(0,5000);
 
   try{
-    const [hot,food]=await Promise.all([
-      researchHotIssues(key),
-      researchFood(key)
-    ]);
+    let research='';
+    if(pillar==='HOT_ISSUE')research=await researchHotIssues(key);
+    if(pillar==='FOOD_PICK')research=await researchFood(key);
 
-    const draft=await generateJson(
-      key,
-      ideationPrompt({hot,food,feedback,performance}),
-      1
-    );
-
-    const ideas=(Array.isArray(draft?.ideas)?draft.ideas:[]).slice(0,20);
-    if(ideas.length<10)throw new Error('IDEA_POOL_TOO_SMALL');
-
-    const chosen=await generateJson(key,selectionPrompt(ideas),.72);
-
-    const raw=(Array.isArray(chosen?.candidates)?chosen.candidates:[])
-      .map(cleanCandidate)
-      .filter(x=>x.body&&x.hook);
-
-    const order=['AI_PROMPT','AI_TIP','FOOD_PICK','HOT_ISSUE'];
-
-    const items=order.map(category=>
-      raw
-        .filter(x=>x.category===category)
-        .sort((a,b)=>b.score.total-a.score.total)[0]
-    ).filter(Boolean);
-
-    if(items.length!==4){
-      throw new Error('FINAL_FOUR_PILLARS_INVALID');
-    }
+    const out=await generateJson(key,pillarPrompt({pillar,research,feedback,performance}),.88);
+    const raw=out?.candidate||out?.item||out;
+    const item=cleanCandidate({...raw,category:pillar},0);
+    if(!item.body||!item.hook)throw new Error('PILLAR_CONTENT_INVALID');
 
     return send(res,200,{
       ok:true,
-      engine:'growth-v4-four-pillars-rest',
-      grounded_hot_issues:true,
-      grounded_food:true,
-      internal_idea_count:ideas.length,
-      items
+      engine:'growth-v5-independent-pillars',
+      pillar,
+      grounded:pillar==='HOT_ISSUE'||pillar==='FOOD_PICK',
+      item
     });
   }catch(e){
-    console.error('[CONTENT_GENERATE_FAILED]',JSON.stringify({
-      message:e?.message||String(e)
-    }));
-    return send(res,502,{
-      ok:false,
-      error:'CONTENT_GENERATE_FAILED',
-      detail:e?.message||String(e)
-    });
+    console.error('[PILLAR_GENERATE_FAILED]',JSON.stringify({pillar,message:e?.message||String(e)}));
+    return send(res,502,{ok:false,error:'PILLAR_GENERATE_FAILED',detail:e?.message||String(e)});
   }
 }
 
