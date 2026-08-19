@@ -45,6 +45,7 @@ function cleanCandidate(x,i){
     hook,
     hook_candidates:hooks.slice(0,5),
     body:String(x?.body||'').trim().slice(0,500),
+    reply_prompt:String(x?.reply_prompt||'').trim().slice(0,500),
     reason:String(x?.reason||'').trim().slice(0,180),
     image_brief:String(x?.image_brief||'').trim().slice(0,1200),
     source_notes:Array.isArray(x?.source_notes)
@@ -162,12 +163,14 @@ function pillarPrompt({pillar,research='',feedback='',performance=''}){
 
   const rules={
     AI_TIP:`AI_TIP 하나만 만든다. 일반인이 잘 모르는 짧은 전문 개념/명령어를 오늘의 명령어처럼 소개한다. RED TEAM, STEELMAN, PRE-MORTEM, EDGE CASES, COUNTEREXAMPLE, RUBRIC, FIRST PRINCIPLES 같은 수준이지만 예시를 재탕하지 말고 더 넓게 발굴한다. '전문가처럼 답해줘', '결론부터', '예시 2개' 같은 초급 팁은 금지. 본문은 ① 낯선 용어 ② 복붙 가능한 짧은 영어 명령어 ③ 쉬운 한국어 설명 ④ 언제 쓰면 좋은지. 영어 명령어 필수. 말투는 '이거 한번 써봐 👀', '생각보다 꽤 쓸만해'처럼 짧고 영리한 반말로 쓴다.`,
-    AI_PROMPT:`AI_PROMPT 하나만 만든다. 사람들이 '이 프롬프트로 이런 결과가?'라고 저장하고 싶은 상세 영문 프롬프트를 제공한다. 한국어 소개 1~2문장은 친근한 반말로 쓰고, 복붙용 영어 프롬프트는 전문적인 영어 문장으로 유지한다. 피사체/행동/환경/시간/카메라/렌즈/구도/조명/색감/질감/현실성/금지요소 중 필요한 요소를 구체화한다. 흔한 cinematic, warm lighting 나열 수준은 금지. 영어 프롬프트 자체에는 귀여운 말투나 이모지를 넣지 않는다.`,
+    AI_PROMPT:`AI_PROMPT 하나만 만든다. 본문(body)과 복붙용 영문 프롬프트(reply_prompt)를 반드시 분리한다.
+body는 Threads 본문이다. 결과 이미지에서 무엇이 특별한지 2~4문장으로 조금 더 충실하게 설명하고, 어떤 질감/구도/빛/분위기가 포인트인지 일반인도 이해할 수 있게 말한다. 자연스러운 반말과 가벼운 이모지 1~2개를 사용한다. 영문 프롬프트 전문을 body에 절대 넣지 않는다. 마지막은 반드시 '프롬프트는 첫 댓글에 남겨둘게 👇'처럼 첫 댓글을 안내한다. 광고 문구처럼 과장하거나 같은 감탄사를 반복하지 않는다.
+reply_prompt에는 사용자가 그대로 복사할 수 있는 '영문 프롬프트만' 넣는다. 설명, 제목, 따옴표, Markdown, 'Prompt:' 같은 접두어, 한국어 번역은 넣지 않는다. 피사체/행동/환경/시간/카메라/렌즈/구도/조명/색감/질감/현실성/금지요소 중 필요한 요소를 구체화해 전문적인 영어로 작성한다. 흔한 cinematic, warm lighting 단순 나열은 금지. 500자 안에서 밀도 높게 만든다.`,
     FOOD_PICK:`FOOD_PICK 하나만 만든다. '오늘 점심은 내가 정해줄게 😋', '오늘 저녁은 이거 먹자', '오늘 술안주는 이걸로 가자'처럼 우리가 먼저 결론을 준다. 아래 검색 결과에서 실제 확인된 전국 식당 하나를 골라 식당명/지역/대표 메뉴/추천 이유를 간결하게 쓴다. 존재, 지역, 메뉴를 지어내지 않는다. 음식은 먹고 싶게 느껴지는 가볍고 맛깔나는 반말로 추천한다. 마지막에 '※ 이미지는 메뉴 이해를 돕는 AI 연출 이미지'를 넣는다.\n검색 결과:\n${research}`,
     HOT_ISSUE:`HOT_ISSUE 하나만 만든다. AI에 편향하지 말고 오늘 실제 뉴스 중 대화 가치와 화제성이 가장 큰 하나를 고른다. 환율/증시/정책/사회/사건사고/전쟁/국제/날씨/태풍/스포츠/연예/자동차/부동산/과학/테크 모두 동등하게 본다. 아래 검색 결과만 사실 재료로 사용한다. 기사 제목 복사 금지. 본문은 '무슨 일인데? → 쉽게 말하면 왜 중요한데? → 앞으로 뭘 보면 돼?' 흐름으로 친근한 반말로 풀어준다. 뉴스 앵커처럼 딱딱하게 쓰지 않는다. 다만 재난·전쟁·피해자가 있는 사건은 가벼운 농담 없이 차분하게 쓴다. 루머와 확인 안 된 숫자 금지.\n검색 결과:\n${research}`
   };
 
-  return `${common}\n\n${rules[pillar]}\n\nJSON만 반환:\n{"candidate":{"category":"${pillar}","topic":"...","hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reason":"...","image_brief":"...","source_notes":[],"score":{"stop":0,"save":0,"share":0,"comment":0,"follow":0,"novelty":0,"visual":0,"total":0}}}`;
+  return `${common}\n\n${rules[pillar]}\n\nJSON만 반환:\n{"candidate":{"category":"${pillar}","topic":"...","hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reply_prompt":"AI_PROMPT일 때만 영문 프롬프트, 나머지는 빈 문자열","reason":"...","image_brief":"...","source_notes":[],"score":{"stop":0,"save":0,"share":0,"comment":0,"follow":0,"novelty":0,"visual":0,"total":0}}}`;
 }
 
 async function actionGenerate(req,res){
