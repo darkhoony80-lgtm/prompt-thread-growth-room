@@ -1,0 +1,35 @@
+INDEX.HTML 수정 안내
+
+현재 main/index.html에서 아래 3곳만 교체하세요.
+
+1) 댓글 관리 안내 문구
+기존:
+최근 원본 10개의 댓글만 확인합니다. 답장은 짧고 자연스럽게, 이모지 2개 이상을 사용합니다.
+
+변경:
+최근 2일 댓글만 표시합니다. 답장은 짧고 자연스럽게, 이모지 2개 이상을 사용합니다.
+
+2) updateBatchButton() 함수 전체 교체
+
+function updateBatchButton(){
+  const items=Array.isArray(window._replyItems)?window._replyItems:[];
+  const eligible=items.filter(x=>!x.review_required&&!x.already_replied);
+  const n=eligible.length;
+  batchReply.disabled=!n||window._replyHistoryAvailable===false||window._batchRunning;
+  batchReply.textContent=window._batchRunning?'일괄 답장 처리 중…':(n?`일괄 승인 후 답장 (${n})`:'일괄 승인 후 답장');
+  batchNote.textContent=window._replyHistoryAvailable===false
+    ?'답장 이력을 확인하지 못해 일괄 답장을 비활성화했습니다.'
+    :`최근 2일 미응답 ${eligible.length}개 · API 보호를 위해 한 개씩 순차 처리합니다.`;
+}
+
+3) batchReply.onclick 내부 targets 수집 조건 한 줄 교체
+기존:
+if(item.review_required||item.already_replied||targets.length>=20)return;
+
+변경:
+if(item.review_required||item.already_replied)return;
+
+주의:
+- setTimeout(r,350)은 그대로 둡니다.
+- 기존 답장 완료 판별/스팸·욕설 제외 로직은 건드리지 않습니다.
+- 이번 파일은 댓글 기능만 수정합니다. 게시물 자동생성 V1은 별도 작업으로 분리합니다.
