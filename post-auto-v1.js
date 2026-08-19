@@ -103,34 +103,6 @@ async function makeImage(i,redo=false){
  const x=candidates[i],box=document.getElementById(`v3img-${i}`);if(!x)return;box.innerHTML='<span class="mut">Gemini 이미지 생성 중…</span>';x.variation=redo?(x.variation||1)+1:(x.variation||1);x.body=body(i);x.hook=hook(i);
  try{const r=await fetch('/api/content-router?action=image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate:x,variation:x.variation})}),j=await r.json();if(!r.ok)throw new Error(apiError(j,'IMAGE_FAILED'));x.base_image=`data:${j.mime_type};base64,${j.data}`;await compose(i);await upload(i);saveDrafts();preview(i)}catch(e){box.innerHTML='<span class="mut">이미지 생성 실패</span>';alert('이미지 생성 실패: '+e.message)}
 }
-async function ensureReplyPrompt(i){
- const x=candidates[i];if(!x)return '';
- let value=replyPrompt(i)||String(x.reply_prompt||'').trim();
- if(value)return value;
-
- // Only AI prompt content needs the automatic prompt attachment.
- if(x.category!=='AI_PROMPT')return '';
-
- console.info('[REPLY_PROMPT_RECOVERY_START]',{candidate_id:x.id,topic:x.topic});
- const r=await fetch('/api/content-router?action=reply-prompt',{
-   method:'POST',
-   headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({candidate:{...x,body:body(i),hook:hook(i)}})
- });
- const j=await r.json().catch(()=>({}));
- if(!r.ok)throw new Error(apiError(j,'REPLY_PROMPT_RECOVERY_FAILED'));
-
- value=String(j.reply_prompt||'').trim();
- if(!value)throw new Error('REPLY_PROMPT_EMPTY');
-
- x.reply_prompt=value;
- const el=document.getElementById(`v3reply-${i}`);
- if(el)el.value=value;
- saveDrafts();
- console.info('[REPLY_PROMPT_RECOVERY_OK]',{candidate_id:x.id,length:value.length});
- return value;
-}
-
 async function publishFirstReply(parentId,text){
  if(!parentId||!text?.trim())return {ok:true,skipped:true};
  const r=await fetch('/api/threads/reply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reply_to_id:String(parentId),attachment_text:text.trim()})});
@@ -149,15 +121,11 @@ async function now(i){
   const url=await upload(i);
   const text=body(i);
   if(text.length>500)return alert(`본문이 ${text.length}자예요. Threads 게시용 본문은 500자 이하로 줄여 주세요.`);
-
-  // For AI_PROMPT, guarantee that the attachment exists before the parent post is published.
-  const preparedReply=x.category==='AI_PROMPT'?await ensureReplyPrompt(i):'';
-
   const r=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,image_url:url})});
   const j=await r.json().catch(()=>({}));
   if(!r.ok)throw new Error(apiError(j,'PUBLISH_FAILED'));
   let replyState='';
-  const firstReply=preparedReply||replyPrompt(i)||String(x.reply_prompt||'').trim();
+  const firstReply=replyPrompt(i)||String(x.reply_prompt||'').trim();
   if(firstReply){
     console.info('[FIRST_REPLY_CALL]',{parent_id:j.id,length:firstReply.length});
     try{
@@ -170,7 +138,6 @@ async function now(i){
     }
   }else{
     console.info('[FIRST_REPLY_SKIPPED]',{reason:'EMPTY_REPLY_PROMPT',category:x.category});
-    if(x.category==='AI_PROMPT')replyState='\n첫 댓글용 프롬프트가 없어 댓글은 게시되지 않았어.';
   }
   const p=read(P);p.unshift({thread_id:j.id,category:x.category,topic:x.topic,hook:x.hook,at:Date.now()});write(P,p.slice(0,120));
   fb(x,'published');candidates[i]=null;saveDrafts();render();alert('게시 완료!'+replyState);
