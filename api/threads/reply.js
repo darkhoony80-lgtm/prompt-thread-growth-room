@@ -1,139 +1,44 @@
-import {decodeSession} from '../../lib-threads-session.js';
+import {getValidSession} from '../../lib-threads-session.js';
 
 const API='https://graph.threads.net/v1.0';
 
-async function call(path,token,method='GET',params=null){
-  let url=`${API}${path}`;
-  const init={
-    method,
-    headers:{Accept:'application/json'}
-  };
-
-  if(method==='GET'){
-    const u=new URL(url);
-    u.searchParams.set('access_token',token);
-    url=u.toString();
-  }else{
-    const body=new URLSearchParams({
-      ...params,
-      access_token:token
-    });
-
-    init.headers['Content-Type']='application/x-www-form-urlencoded';
-    init.body=body.toString();
-  }
-
-  const r=await fetch(url,init);
-  const body=await r.json().catch(()=>({}));
-
-  return {
-    ok:r.ok,
-    status:r.status,
-    body
-  };
-}
-
-function err(body){
+function detail(body,stage,status){
   const e=body?.error||body||{};
-
-  return {
-    message:e.message||'unknown',
-    type:e.type||null,
-    code:e.code??null,
-    subcode:e.error_subcode??null
-  };
+  return {stage,status,message:e?.message||e?.error_message||'unknown',type:e?.type||null,code:e?.code??null,subcode:e?.error_subcode??null};
 }
-
-function emojiCount(s=''){
-  return (String(s).match(/\p{Extended_Pictographic}/gu)||[]).length;
+async function post(path,token,params){
+  const body=new URLSearchParams({...params,access_token:token});
+  const r=await fetch(`${API}${path}`,{method:'POST',headers:{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded'},body:body.toString()});
+  const j=await r.json().catch(()=>({}));
+  return {ok:r.ok,status:r.status,body:j};
 }
 
 export default async function handler(req,res){
   res.setHeader('Cache-Control','no-store');
+  if(req.method!=='POST')return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});
+  const s=await getValidSession(req,res);
+  if(!s?.accessToken)return res.status(401).json({ok:false,error:'THREADS_NOT_CONNECTED'});
 
-  if(req.method!=='POST'){
-    return res.status(405).json({
-      ok:false,
-      error:'METHOD_NOT_ALLOWED'
-    });
-  }
-
-  const s=decodeSession(req);
-
-  if(!s?.accessToken||!s?.userId){
-    return res.status(401).json({
-      ok:false,
-      error:'THREADS_NOT_CONNECTED'
-    });
-  }
-
-  const replyToId=String(req.body?.reply_to_id||'').trim();
+  const replyTo=String(req.body?.reply_to_id||'').trim();
   const text=String(req.body?.text||'').trim();
+  if(!replyTo)return res.status(400).json({ok:false,error:'REPLY_TO_ID_REQUIRED'});
+  if(!text)return res.status(400).json({ok:false,error:'TEXT_REQUIRED'});
+  if(text.length>500)return res.status(400).json({ok:false,error:'TEXT_TOO_LONG',detail:{stage:'VALIDATION',message:`첫 댓글 프롬프트가 ${text.length}자입니다. 500자 이하로 줄여 주세요.`}});
 
-  if(!replyToId||!text){
-    return res.status(400).json({
-      ok:false,
-      error:'REPLY_AND_TEXT_REQUIRED'
-    });
-  }
-
-  if(text.length>500){
-    return res.status(400).json({
-      ok:false,
-      error:'REPLY_TOO_LONG'
-    });
-  }
-
-  if(emojiCount(text)<2){
-    return res.status(400).json({
-      ok:false,
-      error:'AT_LEAST_TWO_EMOJIS_REQUIRED'
-    });
-  }
-
-  const create=await call(
-    '/me/threads',
-    s.accessToken,
-    'POST',
-    {
-      media_type:'TEXT',
-      text,
-      reply_to_id:replyToId,
-      auto_publish_text:'true'
-    }
-  );
-
+  const create=await post('/me/threads',s.accessToken,{media_type:'TEXT',text,reply_to_id:replyTo});
   if(!create.ok){
-    const detail=err(create.body);
-
-    console.log(
-      '[THREADS_REPLY_CREATE_FAILED]',
-      JSON.stringify({
-        reply_to_id:replyToId,
-        status:create.status,
-        ...detail
-      })
-    );
-
-    return res.status(502).json({
-      ok:false,
-      error:'THREADS_REPLY_CREATE_FAILED',
-      detail
-    });
+    const d=detail(create.body,'CREATE_REPLY',create.status);
+    console.error('[THREADS_REPLY_CREATE_FAILED]',JSON.stringify({...d,reply_to_id:replyTo,text_length:text.length}));
+    return res.status(502).json({ok:false,error:'THREADS_REPLY_CREATE_FAILED',detail:d});
   }
+  const creationId=create.body?.id;
+  if(!creationId)return res.status(502).json({ok:false,error:'THREADS_REPLY_CREATION_ID_MISSING'});
 
-  const publishedId=create.body?.id||null;
-
-  console.log(
-    '[THREADS_REPLY_PUBLISHED]',
-    JSON.stringify({
-      reply_to_id:replyToId,
-      published_id:publishedId
-    })
-  );
-
-  return res.status(200).json({
-    ok:true,
-    id:publishedId
-  });
+  const pub=await post('/me/threads_publish',s.accessToken,{creation_id:String(creationId)});
+  if(!pub.ok){
+    const d=detail(pub.body,'PUBLISH_REPLY',pub.status);
+    console.error('[THREADS_REPLY_PUBLISH_FAILED]',JSON.stringify({creation_id:String(creationId),...d}));
+    return res.status(502).json({ok:false,error:'THREADS_REPLY_PUBLISH_FAILED',detail:d});
+  }
+  return res.status(200).json({ok:true,id:pub.body?.id||null,reply_to_id:replyTo});
 }
