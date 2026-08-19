@@ -53,7 +53,21 @@ JSON만 반환:
     body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:1,responseMimeType:'application/json'}})
   });
   const j=await r.json().catch(()=>({}));
-  if(!r.ok)return res.status(502).json({ok:false,error:'GEMINI_GENERATE_FAILED',detail:j?.error||j});
+  if(!r.ok){
+  console.error(
+    '[GEMINI_GENERATE_FAILED]',
+    JSON.stringify({
+      status:r.status,
+      detail:j?.error||j
+    })
+  );
+
+  return res.status(502).json({
+    ok:false,
+    error:'GEMINI_GENERATE_FAILED',
+    detail:j?.error||j
+  });
+}
   const text=j?.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('')||'';
   let parsed;try{parsed=JSON.parse(stripFence(text))}catch{return res.status(502).json({ok:false,error:'GEMINI_INVALID_JSON'})}
   const items=(Array.isArray(parsed?.candidates)?parsed.candidates:[]).slice(0,5).map(cleanCandidate);
