@@ -47,14 +47,11 @@ export default async function handler(req,res){
   if(!replyTo)return res.status(400).json({ok:false,error:'REPLY_TO_ID_REQUIRED'});
   if(!attachmentText)return res.status(400).json({ok:false,error:'ATTACHMENT_TEXT_REQUIRED'});
 
-  let create=await createAttachment(s.accessToken,replyTo,attachmentText,'');
-  let fallback=false;
-
-  if(!create.ok){
-    console.warn('[THREADS_ATTACHMENT_ONLY_REJECTED]',JSON.stringify(detail(create.body,'CREATE_ATTACHMENT_ONLY',create.status)));
-    create=await createAttachment(s.accessToken,replyTo,attachmentText,'Prompt');
-    fallback=true;
-  }
+  // Threads rejected attachment-only replies with TEXT_REQUIRED in live testing.
+  // Always include a minimal visible reply text and attach the full prompt separately.
+  const visibleText='📋 프롬프트';
+  const create=await createAttachment(s.accessToken,replyTo,attachmentText,visibleText);
+  const fallback=false;
 
   if(!create.ok){
     const d=detail(create.body,'CREATE_TEXT_ATTACHMENT_REPLY',create.status);
@@ -77,6 +74,7 @@ export default async function handler(req,res){
     id:pub.body?.id||null,
     reply_to_id:replyTo,
     attachment_length:attachmentText.length,
+    visible_text:'📋 프롬프트',
     fallback_label_used:fallback
   });
 }
