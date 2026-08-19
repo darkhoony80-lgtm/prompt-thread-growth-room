@@ -2,7 +2,8 @@
 (function(){
 const CATS={AI_PROMPT:'AI 프롬프트',AI_TIP:'AI 활용 팁',FOOD_PICK:'오늘 뭐 먹지?',HOT_ISSUE:'🔥 오늘의 핫이슈'};
 const Q='pt_queue_v3',F='pt_feedback_v3',P='pt_published_v3';
-let candidates=[];
+const PILLARS=['AI_TIP','AI_PROMPT','FOOD_PICK','HOT_ISSUE'];
+let candidates=[null,null,null,null];
 function read(k,d=[]){try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}}
 function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
 function esc(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -13,27 +14,33 @@ async function perf(){try{const r=await fetch('/api/threads/my-posts',{cache:'no
 
 function ensure(){
  const old=document.getElementById('autoV1');if(old)old.remove();
- const dash=document.getElementById('dashboard');if(!dash||document.getElementById('autoV3'))return;
- dash.insertAdjacentHTML('afterbegin',`<div class="card" id="autoV3" style="margin-bottom:12px"><div class="section"><div><b>✨ 게시물 성장 엔진</b><p class="mut">AI 프롬프트 · AI 팁 · 전국 맛집 · 오늘의 핫이슈. 조사와 내부 경쟁 후 강한 후보만 보여줍니다.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" id="v3gen">후보 4개 생성</button><button class="btn" id="v3all" disabled>🖼 이미지 4개 생성</button></div></div><div id="v3status" class="mut" style="margin-bottom:10px"></div><div id="v3list" class="post-list"></div></div>`);
+ const old3=document.getElementById('autoV3');if(old3)old3.remove();
+ const dash=document.getElementById('dashboard');if(!dash||document.getElementById('autoV5'))return;
+ dash.insertAdjacentHTML('afterbegin',`<div class="card" id="autoV5" style="margin-bottom:12px"><div class="section"><div><b>✨ 게시물 성장 엔진</b><p class="mut">필요한 콘텐츠만 독립 호출합니다. 생성 → 검토/수정 → 이미지 생성 → 최종 확인 → 게시 순서입니다.</p></div></div><div id="v3status" class="mut" style="margin-bottom:10px"></div><div id="v3list" class="post-list"></div></div>`);
  const cal=document.getElementById('calendar');if(cal)cal.innerHTML=`<div class="section"><div><b>발행 대기함</b><p class="mut">이미지를 직접 확인하고 👍한 게시물만 저장됩니다.</p></div><span class="badge" id="v3qcount">0</span></div><div id="v3queue" class="post-list"></div>`;
- document.getElementById('v3gen').onclick=generate;document.getElementById('v3all').onclick=allImages;
- patchReplies();renderQueue();
+ patchReplies();render();renderQueue();
 }
-async function generate(){
- const b=document.getElementById('v3gen'),s=document.getElementById('v3status');b.disabled=true;b.textContent='검색·편집 중…';s.textContent='오늘 뉴스와 전국 맛집을 검색하고 내부 후보를 경쟁시키는 중입니다.';
+async function generatePillar(i){
+ const pillar=PILLARS[i],b=document.getElementById(`v3gen-${i}`),s=document.getElementById('v3status');
+ if(!b)return;b.disabled=true;const old=b.textContent;b.textContent='생성 중…';
+ s.textContent=pillar==='HOT_ISSUE'?'오늘 뉴스를 검색하고 핫이슈를 고르는 중입니다.':pillar==='FOOD_PICK'?'전국 실제 맛집을 검색하고 오늘의 메뉴를 고르는 중입니다.':'이 섹션만 집중해서 콘텐츠를 만드는 중입니다.';
  try{
-  const feedback=read(F).slice(0,30).map(x=>`${x.kind}:${x.category}:${x.topic}:${x.hook}`).join(' | ');
+  const feedback=read(F).filter(x=>x.category===pillar).slice(0,20).map(x=>`${x.kind}:${x.topic}:${x.hook}`).join(' | ');
   const performance=await perf();
-  const r=await fetch('/api/content-router?action=generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({feedback,performance})});
-  const j=await r.json();if(!r.ok)throw new Error(j.detail||j.error||'GENERATE_FAILED');
-  candidates=j.items||[];render();document.getElementById('v3all').disabled=!candidates.length;
-  s.textContent=`내부 후보 ${j.internal_idea_count||'-'}개 → 최종 ${candidates.length}개 · 뉴스/맛집 Google Search 확인`;
- }catch(e){s.textContent='';alert('후보 생성 실패: '+e.message)}
- finally{b.disabled=false;b.textContent='후보 4개 생성'}
+  const r=await fetch('/api/content-router?action=generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pillar,feedback,performance})});
+  const text=await r.text();let j;try{j=JSON.parse(text)}catch{throw new Error(text.slice(0,180)||`HTTP ${r.status}`)}
+  if(!r.ok)throw new Error(j.detail||j.error||'GENERATE_FAILED');
+  candidates[i]=j.item;render();s.textContent=`${CATS[pillar]} 생성 완료 · 다른 섹션은 호출하지 않았습니다.`;
+ }catch(e){s.textContent='';alert(`${CATS[pillar]} 생성 실패: `+e.message)}
+ finally{const nb=document.getElementById(`v3gen-${i}`);if(nb){nb.disabled=false;nb.textContent=candidates[i]?'🔄 다시 생성':'✨ 생성'}}
+}
+function emptyCard(pillar,i){
+ const desc={AI_TIP:'짧고 낯선 전문 명령어 + 영어 사용 예시',AI_PROMPT:'저장하고 싶은 상세 영문 프롬프트',FOOD_PICK:'점심·저녁·술안주를 실제 전국 맛집으로 추천',HOT_ISSUE:'오늘 실제 뉴스에서 가장 강한 이슈 하나'}[pillar];
+ return `<article class="card" id="v3card-${i}"><div class="post-meta"><span class="badge">${esc(CATS[pillar])}</span></div><h3 style="margin:10px 0 6px">${esc(CATS[pillar])}</h3><p class="mut">${esc(desc)}</p><button class="btn p" id="v3gen-${i}" onclick="PostAuto.generate(${i})">✨ 생성</button></article>`;
 }
 function render(){
  const box=document.getElementById('v3list');if(!box)return;
- box.innerHTML=candidates.map((x,i)=>`<article class="card" id="v3card-${i}"><div class="post-meta"><span class="badge">${esc(x.category_label||CATS[x.category])}</span><span class="badge">4:5 이미지 검수</span><span class="mut">총점 ${x.score?.total||0}</span></div><div class="v3grid" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,380px);gap:18px;align-items:start"><div><label class="mut">후킹 · 최대 14자</label><input id="v3hook-${i}" maxlength="14" value="${esc(x.hook)}" style="width:100%;margin:5px 0 10px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:11px;font-size:18px;font-weight:800"><label class="mut">본문</label><textarea id="v3body-${i}" maxlength="500" style="width:100%;min-height:190px;margin-top:5px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:12px;line-height:1.55">${esc(x.body)}</textarea><p class="mut">소재 · ${esc(x.topic)}</p><p class="mut">추천 이유 · ${esc(x.reason)}</p>${x.source_notes?.length?`<p class="mut">검증 메모 · ${esc(x.source_notes.join(' / '))}</p>`:''}<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" onclick="PostAuto.image(${i})">🖼 이미지 생성</button><button class="btn" onclick="PostAuto.reimage(${i})">🔄 이미지 다시 생성</button><button class="btn" onclick="PostAuto.applyHook(${i})">후킹 적용</button><button class="btn" onclick="PostAuto.variant(${i})">다른 버전</button><button class="btn" onclick="PostAuto.keep(${i})">👍 발행 대기</button><button class="btn p" onclick="PostAuto.now(${i})">🚀 즉시 게시</button><button class="btn" onclick="PostAuto.no(${i})">👎 별로예요</button></div></div><div id="v3img-${i}" class="card" style="padding:10px;min-height:270px;display:grid;place-items:center"><span class="mut">이미지를 생성한 뒤 직접 확인하세요.</span></div></div></article>`).join('');
+ box.innerHTML=PILLARS.map((pillar,i)=>{const x=candidates[i];if(!x)return emptyCard(pillar,i);return `<article class="card" id="v3card-${i}"><div class="post-meta"><span class="badge">${esc(x.category_label||CATS[pillar])}</span><span class="badge">4:5 이미지 검수</span><span class="mut">총점 ${x.score?.total||0}</span></div><div class="v3grid" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,380px);gap:18px;align-items:start"><div><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><label class="mut">후킹 · 최대 14자</label><button class="btn" id="v3gen-${i}" onclick="PostAuto.generate(${i})">🔄 다시 생성</button></div><input id="v3hook-${i}" maxlength="14" value="${esc(x.hook)}" style="width:100%;margin:5px 0 10px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:11px;font-size:18px;font-weight:800"><label class="mut">본문</label><textarea id="v3body-${i}" maxlength="500" style="width:100%;min-height:190px;margin-top:5px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:12px;line-height:1.55">${esc(x.body)}</textarea><p class="mut">소재 · ${esc(x.topic)}</p><p class="mut">추천 이유 · ${esc(x.reason)}</p>${x.source_notes?.length?`<p class="mut">검증 메모 · ${esc(x.source_notes.join(' / '))}</p>`:''}<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" onclick="PostAuto.image(${i})">🖼 이미지 생성</button><button class="btn" onclick="PostAuto.reimage(${i})">🔄 이미지 다시 생성</button><button class="btn" onclick="PostAuto.applyHook(${i})">후킹 적용</button><button class="btn" onclick="PostAuto.variant(${i})">다른 버전</button><button class="btn" onclick="PostAuto.keep(${i})">👍 발행 대기</button><button class="btn p" onclick="PostAuto.now(${i})">🚀 즉시 게시</button><button class="btn" onclick="PostAuto.no(${i})">👎 비우기</button></div></div><div id="v3img-${i}" class="card" style="padding:10px;min-height:270px;display:grid;place-items:center"><span class="mut">이미지를 생성한 뒤 직접 확인하세요.</span></div></div></article>`}).join('');
  if(!document.getElementById('v3css'))document.head.insertAdjacentHTML('beforeend','<style id="v3css">@media(max-width:900px){.v3grid{grid-template-columns:1fr!important}}</style>');
 }
 function load(src){return new Promise((ok,no)=>{const im=new Image();im.onload=()=>ok(im);im.onerror=no;im.src=src})}
@@ -56,12 +63,11 @@ async function makeImage(i,redo=false){
  const x=candidates[i],box=document.getElementById(`v3img-${i}`);if(!x)return;box.innerHTML='<span class="mut">Gemini 이미지 생성 중…</span>';x.variation=redo?(x.variation||1)+1:(x.variation||1);x.body=body(i);x.hook=hook(i);
  try{const r=await fetch('/api/content-router?action=image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate:x,variation:x.variation})}),j=await r.json();if(!r.ok)throw new Error(j.detail||j.error||'IMAGE_FAILED');x.base_image=`data:${j.mime_type};base64,${j.data}`;await compose(i)}catch(e){box.innerHTML='<span class="mut">이미지 생성 실패</span>';alert('이미지 생성 실패: '+e.message)}
 }
-async function allImages(){const b=document.getElementById('v3all');b.disabled=true;for(let i=0;i<candidates.length;i++){b.textContent=`이미지 ${i+1}/${candidates.length}`;await makeImage(i,false)}b.textContent='🖼 이미지 4개 생성';b.disabled=false}
 async function upload(i){const x=candidates[i];if(x.image_url)return x.image_url;if(!x.final_image)throw new Error('최종 이미지를 먼저 확인해 주세요.');const r=await fetch('/api/content-router?action=store-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate_id:x.id,data_url:x.final_image})}),j=await r.json();if(!r.ok)throw new Error(j.detail||j.error||'IMAGE_UPLOAD_FAILED');x.image_url=j.url;return j.url}
 async function keep(i){const x=candidates[i];if(!x?.final_image)return alert('먼저 이미지를 생성해서 최종 썸네일을 확인해 주세요.');try{await compose(i);const url=await upload(i),v={...x,image_url:url,kept_at:Date.now()};delete v.base_image;delete v.final_image;const a=read(Q);a.unshift(v);write(Q,a);fb(x,'LIKE');renderQueue();alert('이미지 포함 발행 대기 저장 완료 ✅')}catch(e){alert('저장 실패: '+e.message)}}
 async function now(i){const x=candidates[i];if(!x?.final_image)return alert('즉시 게시 전에 이미지를 생성해서 직접 확인해 주세요.');try{await compose(i);if(!confirm(`지금 보이는 이미지와 본문 그대로 게시할까요?\n\n${x.hook}`))return;const url=await upload(i),r=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:x.body,image_url:url})}),j=await r.json();if(!r.ok)throw new Error(j.detail||j.error||'PUBLISH_FAILED');fb(x,'PUBLISHED');const a=read(P);a.unshift({thread_id:j.id,category:x.category,topic:x.topic,hook:x.hook,published_at:Date.now(),image_url:url});write(P,a.slice(0,100));alert('Threads 게시 완료 ✅')}catch(e){alert('게시 실패: '+e.message)}}
 async function variant(i){const x=candidates[i];try{x.body=body(i);x.hook=hook(i);const r=await fetch('/api/content-router?action=variant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate:x})}),j=await r.json();if(!r.ok)throw new Error(j.detail||j.error);candidates[i]=j.item;candidates[i].variation=1;fb(x,'VARIANT');render()}catch(e){alert('다른 버전 실패: '+e.message)}}
-function no(i){fb(candidates[i],'DISLIKE');candidates.splice(i,1);render();document.getElementById('v3all').disabled=!candidates.length}
+function no(i){if(candidates[i])fb(candidates[i],'DISLIKE');candidates[i]=null;render()}
 async function applyHook(i){try{await compose(i)}catch(e){alert(e.message)}}
 function renderQueue(){const a=read(Q),n=document.getElementById('v3qcount'),b=document.getElementById('v3queue');if(n)n.textContent=a.length;if(!b)return;b.innerHTML=a.length?a.map((x,i)=>`<article class="card"><div style="display:grid;grid-template-columns:150px 1fr;gap:14px"><img src="${esc(x.image_url)}" style="width:150px;aspect-ratio:4/5;object-fit:cover;border-radius:10px"><div><span class="badge">${esc(x.category_label||CATS[x.category])}</span><h3>${esc(x.hook)}</h3><div class="post-text">${esc(x.body)}</div><div style="margin-top:10px;display:flex;gap:8px"><button class="btn p" onclick="PostAuto.publishQueue(${i})">🚀 지금 게시</button><button class="btn" onclick="PostAuto.drop(${i})">제거</button></div></div></div></article>`).join(''):'<div class="card empty"><div><b>발행 대기 없음</b>이미지를 확인하고 👍한 게시물이 여기에 쌓입니다.</div></div>'}
 async function publishQueue(i){const a=read(Q),x=a[i];if(!x||!confirm(`"${x.hook}" 지금 게시할까요?`))return;const r=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:x.body,image_url:x.image_url})}),j=await r.json();if(!r.ok)return alert('게시 실패: '+(j.detail||j.error));const p=read(P);p.unshift({thread_id:j.id,category:x.category,topic:x.topic,hook:x.hook,published_at:Date.now(),image_url:x.image_url});write(P,p.slice(0,100));fb(x,'PUBLISHED');a.splice(i,1);write(Q,a);renderQueue();alert('게시 완료 ✅')}
@@ -72,6 +78,6 @@ function patchReplies(){
  const b=document.getElementById('batchReply');if(!b)return;b.onclick=async()=>{if(window._batchRunning||window._replyHistoryAvailable===false)return;const all=window._replyItems||[],targets=[];all.forEach((x,i)=>{if(x.review_required||x.already_replied)return;const text=document.getElementById(`replyText-${i}`)?.value.trim();if(text)targets.push({i,id:x.id,text})});if(!targets.length||!confirm(`${targets.length}개 미응답 댓글을 순차 답장할까요?`))return;window._batchRunning=true;updateBatchButton();let ok=0,fail=0;for(let n=0;n<targets.length;n++){const t=targets[n];b.textContent=`일괄 답장 ${n+1}/${targets.length}`;try{await postReply(t.id,t.text);markReplyDone(t.i,t.id,t.text);ok++}catch{fail++}if(n<targets.length-1)await new Promise(r=>setTimeout(r,500))}window._batchRunning=false;updateBatchButton();alert(`완료 · 성공 ${ok} / 실패 ${fail}`);await syncReplies(currentPostIds).catch(()=>{})};
  setTimeout(()=>{try{updateBatchButton()}catch{}},100);
 }
-window.PostAuto={image:i=>makeImage(i,false),reimage:i=>makeImage(i,true),applyHook,keep,now,variant,no,drop,publishQueue};
+window.PostAuto={generate:generatePillar,image:i=>makeImage(i,false),reimage:i=>makeImage(i,true),applyHook,keep,now,variant,no,drop,publishQueue};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ensure);else ensure();
 })();
