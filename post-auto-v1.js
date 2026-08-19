@@ -14,7 +14,7 @@ async function perf(){try{const r=await fetch('/api/threads/my-posts',{cache:'no
 function ensure(){
  const old=document.getElementById('autoV1');if(old)old.remove();
  const dash=document.getElementById('dashboard');if(!dash||document.getElementById('autoV3'))return;
- dash.insertAdjacentHTML('afterbegin',`<div class="card" id="autoV3" style="margin-bottom:12px"><div class="section"><div><b>✨ 게시물 성장 엔진</b><p class="mut">AI 프롬프트 · AI 팁 · 전국 맛집 · 오늘의 핫이슈. 조사와 내부 경쟁 후 강한 후보만 보여줍니다.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" id="v3gen">강한 후보 5개 생성</button><button class="btn" id="v3all" disabled>🖼 이미지 5개 생성</button></div></div><div id="v3status" class="mut" style="margin-bottom:10px"></div><div id="v3list" class="post-list"></div></div>`);
+ dash.insertAdjacentHTML('afterbegin',`<div class="card" id="autoV3" style="margin-bottom:12px"><div class="section"><div><b>✨ 게시물 성장 엔진</b><p class="mut">AI 프롬프트 · AI 팁 · 전국 맛집 · 오늘의 핫이슈. 조사와 내부 경쟁 후 강한 후보만 보여줍니다.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" id="v3gen">후보 4개 생성</button><button class="btn" id="v3all" disabled>🖼 이미지 4개 생성</button></div></div><div id="v3status" class="mut" style="margin-bottom:10px"></div><div id="v3list" class="post-list"></div></div>`);
  const cal=document.getElementById('calendar');if(cal)cal.innerHTML=`<div class="section"><div><b>발행 대기함</b><p class="mut">이미지를 직접 확인하고 👍한 게시물만 저장됩니다.</p></div><span class="badge" id="v3qcount">0</span></div><div id="v3queue" class="post-list"></div>`;
  document.getElementById('v3gen').onclick=generate;document.getElementById('v3all').onclick=allImages;
  patchReplies();renderQueue();
@@ -29,7 +29,7 @@ async function generate(){
   candidates=j.items||[];render();document.getElementById('v3all').disabled=!candidates.length;
   s.textContent=`내부 후보 ${j.internal_idea_count||'-'}개 → 최종 ${candidates.length}개 · 뉴스/맛집 Google Search 확인`;
  }catch(e){s.textContent='';alert('후보 생성 실패: '+e.message)}
- finally{b.disabled=false;b.textContent='강한 후보 5개 생성'}
+ finally{b.disabled=false;b.textContent='후보 4개 생성'}
 }
 function render(){
  const box=document.getElementById('v3list');if(!box)return;
@@ -56,7 +56,7 @@ async function makeImage(i,redo=false){
  const x=candidates[i],box=document.getElementById(`v3img-${i}`);if(!x)return;box.innerHTML='<span class="mut">Gemini 이미지 생성 중…</span>';x.variation=redo?(x.variation||1)+1:(x.variation||1);x.body=body(i);x.hook=hook(i);
  try{const r=await fetch('/api/content/image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate:x,variation:x.variation})}),j=await r.json();if(!r.ok)throw new Error(j.detail||j.error||'IMAGE_FAILED');x.base_image=`data:${j.mime_type};base64,${j.data}`;await compose(i)}catch(e){box.innerHTML='<span class="mut">이미지 생성 실패</span>';alert('이미지 생성 실패: '+e.message)}
 }
-async function allImages(){const b=document.getElementById('v3all');b.disabled=true;for(let i=0;i<candidates.length;i++){b.textContent=`이미지 ${i+1}/${candidates.length}`;await makeImage(i,false)}b.textContent='🖼 이미지 5개 생성';b.disabled=false}
+async function allImages(){const b=document.getElementById('v3all');b.disabled=true;for(let i=0;i<candidates.length;i++){b.textContent=`이미지 ${i+1}/${candidates.length}`;await makeImage(i,false)}b.textContent='🖼 이미지 4개 생성';b.disabled=false}
 async function upload(i){const x=candidates[i];if(x.image_url)return x.image_url;if(!x.final_image)throw new Error('최종 이미지를 먼저 확인해 주세요.');const r=await fetch('/api/content/store-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate_id:x.id,data_url:x.final_image})}),j=await r.json();if(!r.ok)throw new Error(j.detail||j.error||'IMAGE_UPLOAD_FAILED');x.image_url=j.url;return j.url}
 async function keep(i){const x=candidates[i];if(!x?.final_image)return alert('먼저 이미지를 생성해서 최종 썸네일을 확인해 주세요.');try{await compose(i);const url=await upload(i),v={...x,image_url:url,kept_at:Date.now()};delete v.base_image;delete v.final_image;const a=read(Q);a.unshift(v);write(Q,a);fb(x,'LIKE');renderQueue();alert('이미지 포함 발행 대기 저장 완료 ✅')}catch(e){alert('저장 실패: '+e.message)}}
 async function now(i){const x=candidates[i];if(!x?.final_image)return alert('즉시 게시 전에 이미지를 생성해서 직접 확인해 주세요.');try{await compose(i);if(!confirm(`지금 보이는 이미지와 본문 그대로 게시할까요?\n\n${x.hook}`))return;const url=await upload(i),r=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:x.body,image_url:url})}),j=await r.json();if(!r.ok)throw new Error(j.detail||j.error||'PUBLISH_FAILED');fb(x,'PUBLISHED');const a=read(P);a.unshift({thread_id:j.id,category:x.category,topic:x.topic,hook:x.hook,published_at:Date.now(),image_url:url});write(P,a.slice(0,100));alert('Threads 게시 완료 ✅')}catch(e){alert('게시 실패: '+e.message)}}
