@@ -1,21 +1,8 @@
-const MODEL='gemini-3.1-flash-image';
-export default async function handler(req,res){
-  res.setHeader('Cache-Control','no-store');
-  if(req.method!=='POST')return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});
-  const key=process.env.GEMINI_API_KEY;
-  if(!key)return res.status(503).json({ok:false,error:'GEMINI_NOT_CONFIGURED'});
-  const prompt=String(req.body?.prompt||'').trim();
-  if(!prompt)return res.status(400).json({ok:false,error:'PROMPT_REQUIRED'});
-  const input=`${prompt}
-STRICT DESIGN RULES: portrait 4:5 composition. Do not draw any words, letters, captions, logos, watermarks, UI or fake headlines. Reserve calm negative space across the upper 28% for a Korean headline that will be overlaid later. Put the strongest visual subject in the center/lower area. Editorial, premium, mobile-feed readable.`;
-  const r=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{
-    method:'POST',
-    headers:{'Content-Type':'application/json','x-goog-api-key':key},
-    body:JSON.stringify({model:MODEL,input,response_format:{type:'image',mime_type:'image/jpeg',aspect_ratio:'4:5',image_size:'1K'}})
-  });
-  const j=await r.json().catch(()=>({}));
-  if(!r.ok)return res.status(502).json({ok:false,error:'GEMINI_IMAGE_FAILED',detail:j?.error||j});
-  const data=j?.output_image?.data;
-  if(!data)return res.status(502).json({ok:false,error:'GEMINI_IMAGE_MISSING'});
-  return res.status(200).json({ok:true,mime_type:j?.output_image?.mime_type||'image/jpeg',data});
-}
+const TEXT_MODEL='gemini-3.6-flash';
+const IMAGE_MODEL='gemini-3.1-flash-image';
+const TEXT_URL=`https://generativelanguage.googleapis.com/v1beta/models/${TEXT_MODEL}:generateContent`;
+const INTERACTIONS='https://generativelanguage.googleapis.com/v1beta/interactions';
+function text(j){return (j?.candidates?.[0]?.content?.parts||[]).map(p=>p?.text||'').join('').trim()}
+function imageFromInteraction(j){if(j?.output_image?.data)return {data:j.output_image.data,mime_type:j.output_image.mime_type||'image/jpeg'};const steps=Array.isArray(j?.steps)?j.steps:[];for(let i=steps.length-1;i>=0;i--){if(steps[i]?.type!=='model_output')continue;for(const c of (steps[i]?.content||[])){if(c?.type==='image'&&c?.data)return {data:c.data,mime_type:c.mime_type||'image/jpeg'}}}return null}
+async function directPrompt(key,candidate,variation){const prompt=`너는 소셜 미디어 아트디렉터다. 다음 Threads 콘텐츠를 보고 이미지 생성 모델에 넣을 영어 프롬프트 1개만 작성해. 목표는 예쁜 그림이 아니라 모바일 피드에서 스크롤을 멈추게 하는 4:5 썸네일 기반 이미지다.\n카테고리:${candidate.category}\n소재:${candidate.topic}\n본문:${candidate.body}\n후킹(이미지에는 직접 쓰지 말 것):${candidate.hook}\n이미지 브리프:${candidate.image_brief}\n변형 번호:${variation}\n절대 규칙: 이미지 안에 글자/숫자/로고/워터마크/가짜 UI 금지. 상단 28~32%는 한글 후킹을 나중에 합성할 수 있도록 차분한 negative space. 핵심 피사체는 중앙/하단. 4:5 portrait, premium editorial quality, strong subject separation, mobile-feed readability. HOT_ISSUE는 특정 피해자/실제 인물/현장 보도사진처럼 오인될 재현 금지, 상징적 편집기사형. 음식은 실제로 먹고 싶어지는 질감. AI_PROMPT는 프롬프트 결과물 자체가 욕망을 만들게. AI_TIP은 가짜 앱 화면 대신 개념 시각화. 뻔한 로봇 머리/홀로그램 AI 뇌/파란 회로판을 기본값으로 쓰지 마. 영어 이미지 프롬프트만 출력.`;const r=await fetch(`${TEXT_URL}?key=${encodeURIComponent(key)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:.85}})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j?.error?.message||'IMAGE_DIRECTOR_FAILED');return text(j).slice(0,2500)}
+export default async function handler(req,res){res.setHeader('Cache-Control','no-store');if(req.method!=='POST')return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});const key=process.env.GEMINI_API_KEY;if(!key)return res.status(503).json({ok:false,error:'GEMINI_NOT_CONFIGURED'});const candidate=req.body?.candidate;if(!candidate)return res.status(400).json({ok:false,error:'CANDIDATE_REQUIRED'});const variation=Number(req.body?.variation)||1;try{const prompt=await directPrompt(key,candidate,variation);const r=await fetch(INTERACTIONS,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify({model:IMAGE_MODEL,input:prompt,response_format:{type:'image',mime_type:'image/jpeg',aspect_ratio:'4:5',image_size:'1K'}})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j?.error?.message||'GEMINI_IMAGE_FAILED');const img=imageFromInteraction(j);if(!img)throw new Error('GEMINI_IMAGE_MISSING');return res.status(200).json({ok:true,...img,director_prompt:prompt})}catch(e){console.error('[IMAGE_V2_FAILED]',e.message);return res.status(502).json({ok:false,error:'IMAGE_V2_FAILED',detail:e.message})}}
