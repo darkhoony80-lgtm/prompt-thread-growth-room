@@ -157,7 +157,7 @@ JSON만:
 {"ideas":[{"category":"AI_TIP","topic":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reason":"...","image_brief":"...","source_notes":[]}]}`;
 }
 function selectionPrompt(ideas){
-  return `너는 냉정한 Threads 편집국장이다. 아래 ${ideas.length}개 후보에서 강한 최종 5개를 선정하거나 약한 후보는 같은 소재를 개선해라.
+  return `너는 냉정한 Threads 편집국장이다. 아래 ${ideas.length}개 후보에서 최종 4개를 선정하거나 약한 후보는 같은 소재를 개선해라.
 
 각 항목 0~10:
 stop 스크롤 정지
@@ -171,14 +171,14 @@ total 100점 환산.
 
 중요한 강제 규칙:
 - 콘텐츠 축은 AI_PROMPT / AI_TIP / FOOD_PICK / HOT_ISSUE 네 개뿐.
-- 같은 날 비슷한 효용의 AI_TIP 2개 금지. 예: 답변 품질 개선 + 환각 줄이기처럼 비슷하면 하나만.
+- 최종 4개는 네 축에서 정확히 하나씩 선정한다.
 - AI_TIP은 짧은 전문 용어와 영어 명령어가 없으면 탈락.
 - AI_PROMPT는 영어 프롬프트가 충분히 세부적이지 않으면 탈락.
 - FOOD_PICK은 조사된 실제 식당/메뉴 정보가 있어야 통과.
 - HOT_ISSUE는 팩트 메모 범위를 넘겨 지어내면 탈락.
-- 4개 축 중 최소 3개 축은 최종 5개에 포함. 한 축이 3개 이상 차지하지 못함.
 - 이미지가 뻔하면 탈락 또는 image_brief 재작성.
 - hook은 6~10자 우선, 최대 14자.
+- 네 후보가 서로 다른 효용과 분위기를 가져 피드 전체가 AI 이야기로 도배되지 않게 한다.
 
 후보:
 ${JSON.stringify(ideas).slice(0,32000)}
@@ -203,17 +203,24 @@ export default async function handler(req,res){
     if(ideas.length<10)throw new Error('IDEA_POOL_TOO_SMALL');
 
     const chosen=await generateJson(key,selectionPrompt(ideas),.72);
-    let items=(Array.isArray(chosen?.candidates)?chosen.candidates:[]).map(clean)
-      .filter(x=>x.body&&x.hook).sort((a,b)=>b.score.total-a.score.total).slice(0,5);
-    if(items.length!==5)throw new Error('FINAL_CANDIDATE_COUNT_INVALID');
+    const raw=(Array.isArray(chosen?.candidates)?chosen.candidates:[]).map(clean)
+      .filter(x=>x.body&&x.hook);
+
+    // 정확히 4개 축, 각 1개씩. 같은 축 중에서는 점수가 가장 높은 후보를 채택한다.
+    const order=['AI_PROMPT','AI_TIP','FOOD_PICK','HOT_ISSUE'];
+    const items=order.map(category=>
+      raw.filter(x=>x.category===category).sort((a,b)=>b.score.total-a.score.total)[0]
+    ).filter(Boolean);
+
+    if(items.length!==4)throw new Error('FINAL_FOUR_PILLARS_INVALID');
 
     return res.status(200).json({
-      ok:true,engine:'growth-v3-four-pillars',
+      ok:true,engine:'growth-v4-four-pillars',
       grounded_hot_issues:true,grounded_food:true,
       internal_idea_count:ideas.length,items
     });
   }catch(e){
-    console.error('[CONTENT_V3_FAILED]',JSON.stringify({message:e.message,stack:e.stack?.split('\n').slice(0,3)}));
-    return res.status(502).json({ok:false,error:'CONTENT_V3_FAILED',detail:e.message});
+    console.error('[CONTENT_V4_FAILED]',JSON.stringify({message:e.message,stack:e.stack?.split('\n').slice(0,3)}));
+    return res.status(502).json({ok:false,error:'CONTENT_V4_FAILED',detail:e.message});
   }
 }

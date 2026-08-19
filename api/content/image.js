@@ -3,20 +3,6 @@ import {GoogleGenAI} from '@google/genai';
 const TEXT_MODEL='gemini-3.6-flash';
 const IMAGE_MODEL='gemini-3.1-flash-image';
 
-function imagePart(interaction){
-  if(interaction?.output_image?.data){
-    return {data:interaction.output_image.data,mime_type:interaction.output_image.mime_type||'image/png'};
-  }
-  for(const step of (interaction?.steps||[])){
-    if(step?.type!=='model_output')continue;
-    for(const block of (step?.content||[])){
-      if(block?.type==='image'&&block?.data){
-        return {data:block.data,mime_type:block.mime_type||'image/png'};
-      }
-    }
-  }
-  return null;
-}
 async function director(ai,candidate,variation){
   const r=await ai.interactions.create({
     model:TEXT_MODEL,
@@ -46,12 +32,28 @@ HOT_ISSUE: 실제 보도사진/피해자/특정 현장으로 오인되지 않는
   return String(r.output_text||'').trim().slice(0,3000);
 }
 
+function extractInlineImage(response){
+  const parts=response?.candidates?.[0]?.content?.parts||[];
+  for(const part of parts){
+    if(part?.inlineData?.data){
+      return {
+        data:part.inlineData.data,
+        mime_type:part.inlineData.mimeType||'image/png'
+      };
+    }
+  }
+  return null;
+}
+
 export default async function handler(req,res){
   res.setHeader('Cache-Control','no-store');
   if(req.method!=='POST')return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});
-  const key=process.env.GEMINI_API_KEY,candidate=req.body?.candidate;
+
+  const key=process.env.GEMINI_API_KEY;
+  const candidate=req.body?.candidate;
   if(!key)return res.status(503).json({ok:false,error:'GEMINI_NOT_CONFIGURED'});
   if(!candidate)return res.status(400).json({ok:false,error:'CANDIDATE_REQUIRED'});
+
   const variation=Number(req.body?.variation)||1;
 
   try{
@@ -59,30 +61,49 @@ export default async function handler(req,res){
     const prompt=await director(ai,candidate,variation);
     if(!prompt)throw new Error('IMAGE_DIRECTOR_EMPTY');
 
-    const interaction=await ai.interactions.create({
+    // GenerateContent 경로 사용:
+    // candidates[0].content.parts[].inlineData 에서 실제 이미지 바이트를 읽는다.
+    const response=await ai.models.generateContent({
       model:IMAGE_MODEL,
-      input:prompt,
-      response_format:{
-        type:'image',
-        mime_type:'image/jpeg',
-        aspect_ratio:'4:5',
-        image_size:'1K'
+      contents:prompt,
+      config:{
+        responseModalities:['TEXT','IMAGE'],
+        responseFormat:{
+          image:{
+            aspectRatio:'4:5',
+            imageSize:'1K'
+          }
+        }
       }
     });
 
-    const img=imagePart(interaction);
+    const img=extractInlineImage(response);
     if(!img){
       console.error('[GEMINI_IMAGE_MISSING]',JSON.stringify({
-        status:interaction?.status||null,
-        model:interaction?.model||null,
-        has_output_image:Boolean(interaction?.output_image),
-        step_types:(interaction?.steps||[]).map(s=>s?.type)
+        model:IMAGE_MODEL,
+        candidate_count:response?.candidates?.length||0,
+        part_types:(response?.candidates?.[0]?.content?.parts||[]).map(p=>
+          p?.inlineData?'inlineData':p?.text?'text':'unknown'
+        ),
+        finish_reason:response?.candidates?.[0]?.finishReason||null
       }));
       throw new Error('GEMINI_IMAGE_MISSING');
     }
-    return res.status(200).json({ok:true,...img,director_prompt:prompt});
+
+    return res.status(200).json({
+      ok:true,
+      ...img,
+      director_prompt:prompt
+    });
   }catch(e){
-    console.error('[IMAGE_V3_FAILED]',JSON.stringify({message:e.message}));
-    return res.status(502).json({ok:false,error:'IMAGE_V3_FAILED',detail:e.message});
+    console.error('[IMAGE_V4_FAILED]',JSON.stringify({
+      message:e?.message||String(e),
+      name:e?.name||null
+    }));
+    return res.status(502).json({
+      ok:false,
+      error:'IMAGE_V4_FAILED',
+      detail:e?.message||String(e)
+    });
   }
 }
