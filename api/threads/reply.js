@@ -48,40 +48,61 @@ export default async function handler(req,res){
   }
 
   const replyTo=String(req.body?.reply_to_id||'').trim();
+  const text=String(req.body?.text||'').trim();
   const attachmentText=String(req.body?.attachment_text||'').trim();
 
   if(!replyTo){
     return res.status(400).json({ok:false,error:'REPLY_TO_ID_REQUIRED'});
   }
-  if(!attachmentText){
-    return res.status(400).json({ok:false,error:'ATTACHMENT_TEXT_REQUIRED'});
-  }
 
   /*
-   * Threads text replies can be created with reply_to_id.
-   * For text posts, auto_publish_text=true publishes the text post
-   * during container creation, so do NOT call /me/threads_publish again.
+   * IMPORTANT: This endpoint serves TWO existing reply flows.
+   *
+   * 1) Prompt auto-comment:
+   *    attachment_text -> visible "📋 프롬프트" + text_attachment
+   *
+   * 2) Comment management:
+   *    text -> ordinary visible Threads text reply
+   *
+   * Keep the two payloads separate so fixing comment replies does not
+   * break the existing prompt auto-comment feature.
    */
-  const create=await post('/me/threads',s.accessToken,{
-    media_type:'TEXT',
-    text:'📋 프롬프트',
-    reply_to_id:replyTo,
-    auto_publish_text:'true',
-    text_attachment:{
-      plaintext:attachmentText
-    }
-  });
+  const isAttachmentReply=Boolean(attachmentText);
+
+  if(!isAttachmentReply&&!text){
+    return res.status(400).json({ok:false,error:'REPLY_TEXT_REQUIRED'});
+  }
+
+  const createParams=isAttachmentReply
+    ? {
+        media_type:'TEXT',
+        text:'📋 프롬프트',
+        reply_to_id:replyTo,
+        auto_publish_text:'true',
+        text_attachment:{
+          plaintext:attachmentText
+        }
+      }
+    : {
+        media_type:'TEXT',
+        text,
+        reply_to_id:replyTo,
+        auto_publish_text:'true'
+      };
+
+  const create=await post('/me/threads',s.accessToken,createParams);
 
   if(!create.ok){
-    const d=detail(create.body,'CREATE_AND_PUBLISH_TEXT_ATTACHMENT_REPLY',create.status);
-    console.error('[THREADS_TEXT_ATTACHMENT_REPLY_FAILED]',JSON.stringify({
+    const stage=isAttachmentReply?'CREATE_AND_PUBLISH_TEXT_ATTACHMENT_REPLY':'CREATE_AND_PUBLISH_TEXT_REPLY';
+    const d=detail(create.body,stage,create.status);
+    console.error(isAttachmentReply?'[THREADS_TEXT_ATTACHMENT_REPLY_FAILED]':'[THREADS_TEXT_REPLY_FAILED]',JSON.stringify({
       ...d,
       reply_to_id:replyTo,
-      attachment_length:attachmentText.length
+      text_length:isAttachmentReply?attachmentText.length:text.length
     }));
     return res.status(502).json({
       ok:false,
-      error:'THREADS_TEXT_ATTACHMENT_REPLY_FAILED',
+      error:isAttachmentReply?'THREADS_TEXT_ATTACHMENT_REPLY_FAILED':'THREADS_TEXT_REPLY_FAILED',
       detail:d
     });
   }
@@ -92,24 +113,25 @@ export default async function handler(req,res){
       ok:false,
       error:'THREADS_REPLY_ID_MISSING',
       detail:{
-        stage:'CREATE_AND_PUBLISH_TEXT_ATTACHMENT_REPLY',
+        stage:isAttachmentReply?'CREATE_AND_PUBLISH_TEXT_ATTACHMENT_REPLY':'CREATE_AND_PUBLISH_TEXT_REPLY',
         message:'Threads가 게시된 답글 ID를 반환하지 않았습니다.'
       }
     });
   }
 
-  console.info('[THREADS_TEXT_ATTACHMENT_REPLY_OK]',JSON.stringify({
+  console.info(isAttachmentReply?'[THREADS_TEXT_ATTACHMENT_REPLY_OK]':'[THREADS_TEXT_REPLY_OK]',JSON.stringify({
     id:String(replyId),
     reply_to_id:replyTo,
-    attachment_length:attachmentText.length
+    text_length:isAttachmentReply?attachmentText.length:text.length
   }));
 
   return res.status(200).json({
     ok:true,
     id:String(replyId),
     reply_to_id:replyTo,
-    visible_text:'📋 프롬프트',
-    attachment_length:attachmentText.length,
+    mode:isAttachmentReply?'text_attachment':'text',
+    visible_text:isAttachmentReply?'📋 프롬프트':text,
+    ...(isAttachmentReply?{attachment_length:attachmentText.length}:{text_length:text.length}),
     auto_published:true
   });
 }
