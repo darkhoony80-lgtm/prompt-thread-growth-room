@@ -31,7 +31,7 @@ async function handleSearch(req,res,s){
   const me=await graphGet('/me?fields=id,username',s.accessToken);
   if(!me.ok)return res.status(502).json({ok:false,error:'THREADS_ME_FAILED',detail:detail(me.body,'ME',me.status)});
 
-  const fields='id,text,username,timestamp,permalink,media_type';
+  const fields='id,text,username,timestamp,permalink,media_type,topic_tag';
   const search=await graphGet(`/keyword_search?q=${encodeURIComponent(q)}&search_type=RECENT&search_mode=TAG&fields=${encodeURIComponent(fields)}&limit=50`,s.accessToken);
   if(!search.ok){
     return res.status(502).json({
@@ -43,20 +43,39 @@ async function handleSearch(req,res,s){
 
   const mine=String(me.body?.username||'').toLowerCase();
   const now=Date.now();
-  const items=(Array.isArray(search.body?.data)?search.body.data:[])
+  const raw=Array.isArray(search.body?.data)?search.body.data:[];
+  let mineExcluded=0,timeExcluded=0,invalidIdExcluded=0;
+  const items=raw
     .filter(x=>{
-      if(String(x?.username||'').toLowerCase()===mine)return false;
+      if(String(x?.username||'').toLowerCase()===mine){mineExcluded++;return false}
       const ts=Date.parse(String(x?.timestamp||''));
-      return Number.isFinite(ts)&&now-ts<=MAX_AGE_MS;
+      if(!Number.isFinite(ts)||now-ts>MAX_AGE_MS){timeExcluded++;return false}
+      return true;
     })
     .map(x=>({
       id:String(x.id||''),text:String(x.text||''),username:x.username||null,
       timestamp:x.timestamp||null,permalink:x.permalink||null,
-      media_type:x.media_type||null,matched_query:q
+      media_type:x.media_type||null,topic_tag:x.topic_tag||null,matched_query:q
     }))
-    .filter(x=>x.id);
+    .filter(x=>{if(!x.id){invalidIdExcluded++;return false}return true});
 
-  return res.status(200).json({ok:true,q,count:items.length,items});
+  const firstRaw=raw[0]||null;
+  return res.status(200).json({
+    ok:true,q,count:items.length,items,
+    diagnostic:{
+      search_mode:'TAG',search_type:'RECENT',
+      raw_count:raw.length,
+      mine_excluded:mineExcluded,
+      time_excluded:timeExcluded,
+      invalid_id_excluded:invalidIdExcluded,
+      final_count:items.length,
+      first_raw:firstRaw?{
+        id:firstRaw.id||null,username:firstRaw.username||null,
+        timestamp:firstRaw.timestamp||null,topic_tag:firstRaw.topic_tag||null,
+        text:String(firstRaw.text||'').slice(0,120)
+      }:null
+    }
+  });
 }
 
 async function handleAction(req,res,s){
