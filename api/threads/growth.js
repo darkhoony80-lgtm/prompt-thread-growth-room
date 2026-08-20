@@ -32,7 +32,7 @@ async function handleSearch(req,res,s){
   if(!me.ok)return res.status(502).json({ok:false,error:'THREADS_ME_FAILED',detail:detail(me.body,'ME',me.status)});
 
   const fields='id,text,username,timestamp,permalink,media_type';
-  const search=await graphGet(`/keyword_search?q=${encodeURIComponent(q)}&search_type=RECENT&fields=${encodeURIComponent(fields)}&limit=50`,s.accessToken);
+  const search=await graphGet(`/keyword_search?q=${encodeURIComponent(q)}&search_type=RECENT&search_mode=TAG&fields=${encodeURIComponent(fields)}&limit=50`,s.accessToken);
   if(!search.ok){
     return res.status(502).json({
       ok:false,error:'THREADS_KEYWORD_SEARCH_FAILED',
