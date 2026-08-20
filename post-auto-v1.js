@@ -1,7 +1,7 @@
 /* Growth Engine V3. Filename kept for existing index.html include. */
 (function(){
 const CATS={AI_PROMPT:'AI 프롬프트',AI_TIP:'AI 활용 팁',FOOD_PICK:'오늘 뭐 먹지?',HOT_ISSUE:'🔥 오늘의 핫이슈'};
-const Q='pt_queue_v3',F='pt_feedback_v3',P='pt_published_v3',D='pt_drafts_v6';
+const Q='pt_queue_v3',F='pt_feedback_v3',P='pt_published_v3',D='pt_drafts_v6',FH='pt_food_history_v1';
 const PILLARS=['AI_TIP','AI_PROMPT','FOOD_PICK','HOT_ISSUE'];
 let candidates=[null,null,null,null];
 function read(k,d=[]){try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}}
@@ -56,10 +56,24 @@ async function generatePillar(i){
  try{
   const feedback=read(F).filter(x=>x.category===pillar).slice(0,20).map(x=>`${x.kind}:${x.topic}:${x.hook}`).join(' | ');
   const performance=await perf();
-  const r=await fetch('/api/content-router?action=generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pillar,feedback,performance})});
+  const recentFood=pillar==='FOOD_PICK'?read(FH,[]).slice(0,8):[];
+   const r=await fetch('/api/content-router?action=generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pillar,feedback,performance,recentFood})});
   const text=await r.text();let j;try{j=JSON.parse(text)}catch{throw new Error(text.slice(0,180)||`HTTP ${r.status}`)}
   if(!r.ok)throw new Error(j.detail||j.error||'GENERATE_FAILED');
-  candidates[i]=j.item;saveDrafts();render();s.textContent=`${CATS[pillar]} 생성 완료 · 다른 섹션은 호출하지 않았습니다.`;
+  candidates[i]=j.item;
+   if(pillar==='FOOD_PICK'&&j.item?.topic){
+    const h=read(FH,[]);
+    h.unshift({topic:String(j.item.topic).trim(),at:Date.now()});
+    const seen=new Set(),dedup=[];
+    for(const row of h){
+     const k=String(row?.topic||'').trim().toLowerCase();
+     if(!k||seen.has(k))continue;
+     seen.add(k);dedup.push(row);
+     if(dedup.length>=12)break;
+    }
+    write(FH,dedup);
+   }
+   saveDrafts();render();s.textContent=`${CATS[pillar]} 생성 완료 · 다른 섹션은 호출하지 않았습니다.`;
  }catch(e){s.textContent='';alert(`${CATS[pillar]} 생성 실패: `+e.message)}
  finally{const nb=document.getElementById(`v3gen-${i}`);if(nb){nb.disabled=false;nb.textContent=candidates[i]?'🔄 다시 생성':'✨ 생성'}}
 }
