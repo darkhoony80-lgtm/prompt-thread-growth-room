@@ -149,13 +149,77 @@ AI 뉴스에 편향하지 말고 환율/증시/물가/정책/사회/사건사고
 피해자가 있는 사건은 선정적 묘사를 피하고 공익적 정보 중심으로.`);
 }
 
-async function researchFood(key){
-  return groundedResearch(key,`한국 전국에서 실제 영업 중인 것으로 확인되는 식당/맛집 후보를 조사해.
+function koreaFoodContext(){
+  const parts=new Intl.DateTimeFormat('en-US',{
+    timeZone:'Asia/Seoul',
+    hour:'2-digit',
+    minute:'2-digit',
+    hour12:false,
+    weekday:'short'
+  }).formatToParts(new Date());
+  const get=t=>parts.find(p=>p.type===t)?.value||'';
+  const hour=Number(get('hour'))||0;
+  const minute=Number(get('minute'))||0;
+  const weekday=get('weekday')||'';
+  const hm=`${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}`;
+
+  let meal='간식/카페';
+  let intent='가볍게 먹기 좋은 간식, 카페, 디저트 또는 브런치';
+  if(hour>=5&&hour<10){
+    meal='아침';
+    intent='부담 적은 아침식사, 해장, 국밥, 죽, 토스트, 브런치';
+  }else if(hour>=10&&hour<14){
+    meal='점심';
+    intent='점심 한 끼로 만족도 높은 메뉴, 혼밥/직장인 점심/지역 대표 메뉴';
+  }else if(hour>=14&&hour<17){
+    meal='오후 간식';
+    intent='카페, 디저트, 빵, 분식, 가벼운 간식';
+  }else if(hour>=17&&hour<21){
+    meal='저녁';
+    intent='저녁식사, 데이트, 가족식사, 고기/해산물/면/한식 등 든든한 메뉴';
+  }else if(hour>=21||hour<2){
+    meal='야식·술안주';
+    intent='야식, 술안주, 포장/배달도 어울리는 메뉴, 늦은 시간 먹기 좋은 음식';
+  }else{
+    meal='심야';
+    intent='늦은 밤 해장, 24시간 식사, 국밥/면/분식처럼 접근성 좋은 메뉴';
+  }
+  return {hour,minute,weekday,hm,meal,intent};
+}
+
+function recentFoodNames(input){
+  const rows=Array.isArray(input)?input:[];
+  return rows.map(v=>String(v?.topic||v||'').trim()).filter(Boolean).slice(0,8);
+}
+
+async function researchFood(key,recentFood=[]){
+  const ctx=koreaFoodContext();
+  const recent=recentFoodNames(recentFood);
+  const exclude=recent.length
+    ? `최근 이미 추천/생성한 업장: ${recent.join(' / ')}
+위 업장들은 이번 후보에서 반드시 제외해. 이름이 비슷한 지점/분점으로 돌려막기도 금지.`
+    : '최근 추천 이력 없음.';
+
+  return groundedResearch(key,`현재 한국 시간은 ${ctx.hm}, 추천 상황은 "${ctx.meal}"이야.
+이번 시간대에는 ${ctx.intent} 방향을 우선해.
+
+한국 전국에서 실제 영업 중인 것으로 확인되는 식당/맛집 후보를 조사해.
 서울에 편향하지 말고 부산/대구/대전/광주/인천/울산/제주/강릉/전주/수원 등 전국을 넓게 고려해.
-점심, 저녁, 혼밥, 해장, 회식, 술자리 안주, 여행 한 끼 같은 상황별로 추천할 만한 곳을 최대 12곳.
-각 항목은 정확한 식당명, 지역, 대표적으로 알려진 메뉴, 왜 추천할 만한지까지만.
+${exclude}
+
+중요 다양성 규칙:
+- 직전 추천 업장은 절대 다시 고르지 않는다.
+- 최근 추천 이력에 있는 업장은 최대 8개까지 제외한다.
+- 가능하면 직전과 다른 지역, 다른 음식 장르, 다른 상황을 우선한다.
+- 같은 유명 맛집 하나에 검색 결과가 몰려도 다른 검증 가능한 후보를 찾아라.
+- 전국 추천이므로 특정 도시나 노포 한 종류에 계속 수렴하지 마라.
+- 현재 시간대에 어울리지 않는 메뉴는 우선순위를 낮춘다.
+- 점심이면 점심 한 끼, 저녁이면 저녁식사, 21시 이후면 야식/술안주 성격을 강하게 반영한다.
+
+각 항목은 정확한 식당명, 지역, 대표적으로 알려진 메뉴, 왜 지금 시간대에 추천할 만한지까지만.
 검색으로 실제 존재와 현재 정보를 확인하기 어려운 곳은 제외.
-가격/영업시간은 변동 가능성이 크므로 확실하지 않으면 쓰지 마.`);
+가격/영업시간은 변동 가능성이 크므로 확실하지 않으면 쓰지 마.
+서로 다른 지역/장르로 최대 12곳.`); 
 }
 
 function pillarPrompt({pillar,research='',feedback='',performance=''}){
@@ -170,7 +234,7 @@ AI_TIP:`AI 활용 팁은 반드시 body와 reply_prompt를 완전히 분리한�
 body에는 해당 짧은 명령어 이름을 눈에 띄게 소개하고, 그게 무엇인지 / 언제 쓰는지 / 어떤 효과가 있는지를 한국어 반말로 3~5문장 설명한다. 실제 복붙 명령문은 body에 절대 넣지 않는다. body 마지막은 반드시 '프롬프트는 첫 댓글에 남겨둘게 👇'처럼 안내한다.
 reply_prompt에는 사용자가 그대로 복사해 AI에 넣을 실제 프롬프트만 넣는다. 반드시 영어로 작성한다. 한국어 문장, 한국어 설명, 번역, Markdown, 코드블록, 장식 문구 금지. 길게 장황하게 쓰지 말고 보통 1~3문장의 짧고 강한 명령형 영어 프롬프트로 작성한다.
 예시 방향: "Red-team this plan. Identify hidden assumptions, failure modes, and the strongest counterarguments."처럼 짧고 전문적이어야 한다.`,
-    FOOD_PICK:`FOOD_PICK 하나만 만든다. '오늘 점심은 내가 정해줄게 😋', '오늘 저녁은 이거 먹자', '오늘 술안주는 이걸로 가자'처럼 우리가 먼저 결론을 준다. 아래 검색 결과에서 실제 확인된 전국 식당 하나를 골라 식당명/지역/대표 메뉴/추천 이유를 간결하게 쓴다. 존재, 지역, 메뉴를 지어내지 않는다. 음식은 먹고 싶게 느껴지는 가볍고 맛깔나는 반말로 추천한다. 마지막에 '※ 이미지는 메뉴 이해를 돕는 AI 연출 이미지'를 넣는다.\n검색 결과:\n${research}`,
+    FOOD_PICK:`FOOD_PICK 하나만 만든다. 현재 한국 시간대를 반영해서 지금 먹기 가장 자연스러운 상황을 먼저 정한다. 점심 시간에는 점심, 저녁에는 저녁, 밤 9시 이후에는 야식/술안주 성격을 우선한다. '오늘 점심은 내가 정해줄게 😋', '오늘 저녁은 이거 먹자', '오늘 술안주는 이걸로 가자'처럼 우리가 먼저 결론을 준다. 아래 검색 결과에서 실제 확인된 전국 식당 하나를 고른다. 최근 생성 이력으로 제외된 업장은 절대 선택하지 않는다. 같은 지역/같은 장르/같은 업장을 연속 반복하지 말고 다양성을 우선한다. 식당명/지역/대표 메뉴/추천 이유를 간결하게 쓴다. 존재, 지역, 메뉴를 지어내지 않는다. 음식은 먹고 싶게 느껴지는 가볍고 맛깔나는 반말로 추천한다. 마지막에 '※ 이미지는 메뉴 이해를 돕는 AI 연출 이미지'를 넣는다.\n검색 결과:\n${research}`,
     HOT_ISSUE:`HOT_ISSUE 하나만 만든다. AI에 편향하지 말고 오늘 실제 뉴스 중 대화 가치와 화제성이 가장 큰 하나를 고른다. 환율/증시/정책/사회/사건사고/전쟁/국제/날씨/태풍/스포츠/연예/자동차/부동산/과학/테크 모두 동등하게 본다. 아래 검색 결과만 사실 재료로 사용한다. 기사 제목 복사 금지. 본문은 '무슨 일인데? → 쉽게 말하면 왜 중요한데? → 앞으로 뭘 보면 돼?' 흐름으로 친근한 반말로 풀어준다. 뉴스 앵커처럼 딱딱하게 쓰지 않는다. 다만 재난·전쟁·피해자가 있는 사건은 가벼운 농담 없이 차분하게 쓴다. 루머와 확인 안 된 숫자 금지.\n검색 결과:\n${research}`
   };
 
@@ -187,11 +251,12 @@ async function actionGenerate(req,res){
 
   const feedback=String(req.body?.feedback||'').slice(0,4000);
   const performance=String(req.body?.performance||'').slice(0,5000);
+  const recentFood=Array.isArray(req.body?.recentFood)?req.body.recentFood.slice(0,8):[];
 
   try{
     let research='';
     if(pillar==='HOT_ISSUE')research=await researchHotIssues(key);
-    if(pillar==='FOOD_PICK')research=await researchFood(key);
+    if(pillar==='FOOD_PICK')research=await researchFood(key,recentFood);
 
     const out=await generateJson(key,pillarPrompt({pillar,research,feedback,performance}),.88);
     const raw=out?.candidate||out?.item||out;
