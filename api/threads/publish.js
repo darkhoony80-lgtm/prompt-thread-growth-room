@@ -107,7 +107,10 @@ export default async function handler(req,res){
 
   const text=String(req.body?.text||'').trim();
   const imageUrl=String(req.body?.image_url||'').trim();
-  const topicTag=String(req.body?.topic_tag||'').replace(/^#+/,'').trim().slice(0,80);
+  const topicTagVerified=req.body?.topic_tag_verified===true;
+  const topicTag=topicTagVerified
+    ?String(req.body?.topic_tag||'').replace(/^#+/,'').trim().slice(0,80)
+    :'';
 
   if(!text)return res.status(400).json({ok:false,error:'TEXT_REQUIRED'});
   if(text.length>500){
