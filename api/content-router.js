@@ -310,13 +310,16 @@ AI 프롬프트 무드 지시: ${candidate.category==='AI_PROMPT'?aiPromptMoodRu
 프레임의 위에서 아래까지 실제 장면과 자연스러운 배경이 끊김 없이 이어지는 완성된 full-bleed 이미지여야 한다. 제목을 넣기 위한 전용 공간을 절대 만들지 않는다. 상단 25~30%를 비우거나 단순화하지 말고, 제목 때문에 피사체나 장면을 아래로 밀어내지 않는다.
 검은 띠, 어두운 띠, 흐린 띠, blur band, gradient band, translucent overlay, vignette panel, 빈 직사각형, 인위적인 패널, 프레임, 텍스트 박스, 헤더 영역을 생성하지 않는다. 중요한 얼굴이나 핵심 사물도 제목 합성을 위해 인위적으로 이동시키지 말고 소재 자체에 가장 자연스럽고 강한 구도를 우선한다.
 모바일 피드에서 0.5초 안에 시선을 멈추게 하는 프리미엄 광고 캠페인/매거진 커버급 구도, 강한 명암, 깊이감, 현실적인 재질과 피부 표현.
-사람이 소재 이해와 감정 전달에 도움이 되는 장면이라면 '20대의 매력적이고 세련된 한국 성인 여성'을 우선 사용한다. 귀엽고 자연스러운 인상, 현실적인 피부, 세련된 헤어와 상황에 맞는 의상. 미성년자로 보이는 외모는 금지.
-인물을 사용할 때는 매번 같은 AI 모델처럼 보이지 않도록 얼굴형, 헤어, 의상, 표정, 앵글, 인물 비중을 소재에 맞게 다양화한다. 과도한 노출이나 성적 연출은 금지.
+사람이 소재 이해와 감정 전달에 도움이 되는 장면이라면 고정 캐릭터 'VOA(보아)'를 우선 사용한다. VOA는 모든 생성에서 동일 인물로 유지해야 한다.
+VOA IDENTITY LOCK: a beautiful Korean woman in her mid-20s, softly oval face, clear warm ivory skin, balanced delicate facial proportions, naturally defined straight brows, almond-shaped dark brown eyes, subtle double eyelids, neat medium-height nose bridge with a softly rounded tip, natural rose lips, gentle youthful smile, long straight-to-softly-wavy dark brown hair with a clean center-to-soft side part, elegant and approachable contemporary Korean beauty.
+얼굴형, 눈/코/입 비율, 피부톤, 헤어의 기본 길이와 색, 전체적인 인상은 장면이 바뀌어도 동일하게 유지한다. 다른 여성 모델로 교체하거나 얼굴을 랜덤화하지 않는다. 나이대, 인종적 외형, 핵심 얼굴 특징을 바꾸지 않는다. 의상, 표정, 포즈, 헤어 스타일링의 작은 변화는 장면과 무드에 맞게 허용하되 동일 인물임이 즉시 느껴져야 한다.
+VOA가 등장하는 경우 image prompt 안에 위 identity description을 매번 명시적으로 포함하고, 'same recurring character VOA, preserve exact facial identity and recognizable appearance across all images'를 반드시 포함한다.
+인물이 필요 없는 소재에는 VOA를 억지로 넣지 않는다. 음식 자체, 사물, 풍경, 사건의 핵심 오브젝트가 주인공이어야 하는 경우에는 해당 소재를 우선한다. 과도한 노출이나 성적 연출은 금지.
 표정은 과장된 충격 표정보다 호기심, 미소, 놀람, 만족, 집중 같은 자연스러운 감정을 우선한다.
 뻔한 AI 로봇, 푸른 회로판, 홀로그램 뇌, 의미 없는 네온을 기본값으로 쓰지 않는다.
-AI_PROMPT: 제공 프롬프트의 '완성 결과' 자체가 저장 욕구를 만들 정도로 고급스럽게. 인물이 어울리는 주제라면 20대의 매력적이고 세련된 한국 성인 여성을 자연스럽게 활용한다.
-AI_TIP: 낯선 개념을 한 장면으로 직관화한다. 사람이 어울리면 20대의 매력적이고 세련된 한국 성인 여성이 화면/오브젝트와 자연스럽게 상호작용하게 한다. 실제 읽을 수 있는 UI나 텍스트는 만들지 않는다.
-FOOD_PICK: 음식이 가장 큰 주인공. 윤기, 김, 질감, 단면 등 식욕을 자극하는 디테일을 강조하고, 필요할 때만 실제 식사 중인 성인 여성/친구들을 보조 피사체로 사용한다. 특정 식당 사진을 복제하지 않는다.
+AI_PROMPT: 제공 프롬프트의 '완성 결과' 자체가 저장 욕구를 만들 정도로 고급스럽게. 인물이 어울리는 주제라면 반드시 고정 캐릭터 VOA를 사용하고 위 IDENTITY LOCK을 유지한다.
+AI_TIP: 낯선 개념을 한 장면으로 직관화한다. 사람이 어울리면 반드시 고정 캐릭터 VOA가 화면/오브젝트와 자연스럽게 상호작용하게 하고 위 IDENTITY LOCK을 유지한다. 실제 읽을 수 있는 UI나 텍스트는 만들지 않는다.
+FOOD_PICK: 음식이 가장 큰 주인공. 윤기, 김, 질감, 단면 등 식욕을 자극하는 디테일을 강조한다. 인물이 실제로 도움이 될 때는 일반 여성 모델 대신 고정 캐릭터 VOA를 보조 피사체로 사용하고 위 IDENTITY LOCK을 유지한다. 친구 등 추가 인물은 필요할 때만 사용한다. 특정 식당 사진을 복제하지 않는다.
 HOT_ISSUE: 핵심 사물/상징/장소가 주인공인 프리미엄 편집기사형 비주얼. 인물은 맥락상 자연스러울 때만 사용하며 실제 보도사진, 피해자, 특정 현장 사진으로 오인되지 않게 한다.
 재생성 번호가 달라지면 카메라 앵글, 인물 유무, 구도, 시각적 은유 중 최소 2가지를 확실히 바꾼다.
 영어 이미지 프롬프트만 출력.`;
