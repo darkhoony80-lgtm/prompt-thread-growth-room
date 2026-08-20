@@ -52,9 +52,7 @@ async function handleSearch(req,res,s){
     }
   }
 
-  const mine=String(me.body?.username||'').toLowerCase();
   const items=(Array.isArray(search.body?.data)?search.body.data:[])
-    .filter(x=>String(x?.username||'').toLowerCase()!==mine)
     .map(x=>({
       id:String(x.id||''),text:String(x.text||''),username:x.username||null,
       timestamp:x.timestamp||null,permalink:x.permalink||null,
