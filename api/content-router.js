@@ -364,7 +364,7 @@ async function actionImage(req,res){
 
     let referenceImage=null;
     try{
-      const master=await readFile(join(process.cwd(),'public','voa-character-master.png'));
+      const master=await readFile(join(process.cwd(),'voa-character-master.png'));
       referenceImage={mimeType:'image/png',data:master.toString('base64')};
     }catch(e){
       console.error('[VOA_MASTER_LOAD_FAILED]',e?.message||String(e));
