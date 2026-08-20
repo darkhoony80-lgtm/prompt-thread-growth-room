@@ -32,18 +32,32 @@ async function handleSearch(req,res,s){
   if(!me.ok)return res.status(502).json({ok:false,error:'THREADS_ME_FAILED',detail:detail(me.body,'ME',me.status)});
 
   const fields='id,text,username,timestamp,permalink,media_type,topic_tag';
-  const search=await graphGet(`/keyword_search?q=${encodeURIComponent(q)}&search_type=RECENT&search_mode=TAG&fields=${encodeURIComponent(fields)}&limit=50`,s.accessToken);
-  if(!search.ok){
+  const combos=[
+    ['TAG','RECENT'],['TAG','TOP'],['KEYWORD','RECENT'],['KEYWORD','TOP']
+  ];
+
+  const results={};
+  for(const [mode,type] of combos){
+    const r=await graphGet(`/keyword_search?q=${encodeURIComponent(q)}&search_type=${type}&search_mode=${mode}&fields=${encodeURIComponent(fields)}&limit=50`,s.accessToken);
+    results[`${mode}_${type}`]={
+      ok:r.ok,status:r.status,
+      data:Array.isArray(r.body?.data)?r.body.data:[],
+      error:r.ok?null:detail(r.body,`${mode}_${type}`,r.status)
+    };
+  }
+
+  const primary=results.TAG_RECENT;
+  if(!primary.ok){
     return res.status(502).json({
       ok:false,error:'THREADS_KEYWORD_SEARCH_FAILED',
-      detail:detail(search.body,'SEARCH',search.status),
-      hint:search.status===403?'Threads 계정을 다시 연결해 threads_keyword_search 권한을 승인해 주세요.':null
+      detail:primary.error,
+      four_way:Object.fromEntries(Object.entries(results).map(([k,v])=>[k,{ok:v.ok,status:v.status,count:v.data.length,error:v.error}]))
     });
   }
 
   const mine=String(me.body?.username||'').toLowerCase();
   const now=Date.now();
-  const raw=Array.isArray(search.body?.data)?search.body.data:[];
+  const raw=primary.data;
   let mineExcluded=0,timeExcluded=0,invalidIdExcluded=0;
   const items=raw
     .filter(x=>{
@@ -59,25 +73,26 @@ async function handleSearch(req,res,s){
     }))
     .filter(x=>{if(!x.id){invalidIdExcluded++;return false}return true});
 
-  const firstRaw=raw[0]||null;
+  const fourWay=Object.fromEntries(Object.entries(results).map(([k,v])=>[
+    k,{ok:v.ok,status:v.status,count:v.data.length,error:v.error,
+       first:v.data[0]?{
+         username:v.data[0].username||null,
+         timestamp:v.data[0].timestamp||null,
+         topic_tag:v.data[0].topic_tag||null,
+         text:String(v.data[0].text||'').slice(0,100)
+       }:null}
+  ]));
+
   return res.status(200).json({
     ok:true,q,count:items.length,items,
     diagnostic:{
       search_mode:'TAG',search_type:'RECENT',
-      raw_count:raw.length,
-      mine_excluded:mineExcluded,
-      time_excluded:timeExcluded,
-      invalid_id_excluded:invalidIdExcluded,
-      final_count:items.length,
-      first_raw:firstRaw?{
-        id:firstRaw.id||null,username:firstRaw.username||null,
-        timestamp:firstRaw.timestamp||null,topic_tag:firstRaw.topic_tag||null,
-        text:String(firstRaw.text||'').slice(0,120)
-      }:null
+      raw_count:raw.length,mine_excluded:mineExcluded,time_excluded:timeExcluded,
+      invalid_id_excluded:invalidIdExcluded,final_count:items.length,
+      four_way:fourWay
     }
   });
 }
-
 async function handleAction(req,res,s){
   const threadId=String(req.body?.thread_id||'').trim();
   const text=String(req.body?.text||'').trim().slice(0,500);
