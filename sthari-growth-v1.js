@@ -3,7 +3,7 @@
 const KEY='pt_sthari_growth_v1',LOG='pt_sthari_growth_log_v1',QUERY_KEY='pt_sthari_queries_v1';
 const DEFAULT_QUERIES=['스하리1000명프로젝트'];
 const INTERVAL_MS=90000,DAILY_LIMIT=40,SAME_USER_DAILY=2;
-const POOLS=['스하리 좋아요 😆🙌','스하리 갑니다 😎✨','스하리 왔어요 🔥🙌','스하리 완료 😄💚','반하리 갑니다 😆🙌','반하리 좋아요 😎💚','반하리 완료 🔥✨','또하리 좋아요 😄🙌','또하리 갑니다 😎🔥','또하리 환영해요 😆✨','같이 가요 😄🙌','오늘도 같이 가요 😎💚','성장 같이 가자아 😆🔥'];
+const POOLS=['스하리 좋아요 😆🙌','스하리 갑니다 😎✨','스하리 왔어요 🔥🙌','리포꼭 부탁요 😄💚','반하리 갑니다 😆🙌','반하리 좋아요 😎💚','너무 좋아요 🔥✨','또하리 좋아요 😄🙌','또하리 갑니다 😎🔥','또하리 환영해요 😆✨','같이 함께 가요 😄🙌','오늘도 같이 가요 😎💚','성장 같이 가자아 😆🔥'];
 let running=false,timer=null,queryIndex=0,busy=false;
 function read(k,d){try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}}
 function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
