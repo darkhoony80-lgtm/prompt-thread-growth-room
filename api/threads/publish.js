@@ -83,17 +83,31 @@ async function waitUntilReady(containerId,token){
 export default async function handler(req,res){
   res.setHeader('Cache-Control','no-store');
 
-  if(req.method!=='POST'){
-    return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});
-  }
-
   const s=await getValidSession(req,res);
   if(!s?.accessToken){
     return res.status(401).json({ok:false,error:'THREADS_NOT_CONNECTED'});
   }
 
+  if(req.method==='GET'&&String(req.query?.mode||'')==='topic-search'){
+    const q=String(req.query?.q||'').replace(/^#+/,'').trim().slice(0,80);
+    if(!q)return res.status(400).json({ok:false,error:'TOPIC_QUERY_REQUIRED'});
+    const search=await get(`/keyword_search?q=${encodeURIComponent(q)}&search_type=TOP&search_mode=TAG&fields=${encodeURIComponent('id,text,timestamp')}&limit=5`,s.accessToken);
+    if(!search.ok){
+      const d=detail(search.body,'TOPIC_TAG_SEARCH',search.status);
+      console.warn('[THREADS_TOPIC_SEARCH_FAILED]',JSON.stringify({...d,q}));
+      return res.status(502).json({ok:false,error:'THREADS_TOPIC_SEARCH_FAILED',detail:d,q});
+    }
+    const items=Array.isArray(search.body?.data)?search.body.data:[];
+    return res.status(200).json({ok:true,q,matched:items.length>0,count:items.length,items});
+  }
+
+  if(req.method!=='POST'){
+    return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});
+  }
+
   const text=String(req.body?.text||'').trim();
   const imageUrl=String(req.body?.image_url||'').trim();
+  const topicTag=String(req.body?.topic_tag||'').replace(/^#+/,'').trim().slice(0,80);
 
   if(!text)return res.status(400).json({ok:false,error:'TEXT_REQUIRED'});
   if(text.length>500){
@@ -112,11 +126,14 @@ export default async function handler(req,res){
   }
 
   // 1) Create image container.
-  const create=await post('/me/threads',s.accessToken,{
+  const createParams={
     media_type:'IMAGE',
     image_url:imageUrl,
     text
-  });
+  };
+  if(topicTag)createParams.topic_tag=topicTag;
+
+  const create=await post('/me/threads',s.accessToken,createParams);
 
   if(!create.ok){
     const d=detail(create.body,'CREATE_CONTAINER',create.status);
@@ -174,6 +191,7 @@ export default async function handler(req,res){
     id:pub.body?.id||null,
     creation_id:String(creationId),
     image_url:imageUrl,
+    topic_tag:topicTag||null,
     text_length:text.length
   });
 }
