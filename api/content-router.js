@@ -149,14 +149,32 @@ async function groundedResearch(key,input){
   return textFromGemini(j).slice(0,14000);
 }
 
-async function researchHotIssues(key){
+async function researchHotIssues(key,recentHotIssues=[]){
+  const recent=(Array.isArray(recentHotIssues)?recentHotIssues:[])
+    .slice(0,20)
+    .map(v=>`${String(v?.topic||'').trim()} | ${String(v?.hook||'').trim()}`)
+    .filter(v=>v.replace(/[|\s]/g,''));
+  const exclude=recent.length
+    ? `
+
+우리 계정에서 최근 이미 다룬 핫이슈:
+- ${recent.join('\n- ')}
+
+중복 금지 규칙:
+- 위 목록과 같은 사건/발표/결정/사고/정책은 표현만 바꿔 다시 고르지 않는다.
+- 기사 제목이나 후킹 문구가 달라도 핵심 사건이 같으면 제외한다.
+- 같은 회사/인물/기관이어도 실제 새로운 후속 사건이 발생했고 핵심 사실이 달라졌다면 허용한다.
+- 검색 상위 결과가 이미 다룬 사건이면 그 다음으로 중요한 다른 이슈를 선택한다.`
+    : '';
+
   return groundedResearch(key,`현재 한국 시간 기준으로 오늘 가장 화제가 큰 이슈를 조사해.
 AI 뉴스에 편향하지 말고 환율/증시/물가/정책/사회/사건사고/전쟁/국제/날씨/태풍/폭우/폭염/지진/스포츠/연예/자동차/부동산/과학/테크 전체를 살펴봐.
 최근 24시간을 최우선, 필요하면 48시간까지만.
 여러 출처로 교차 확인되는 사실만 사용하고 루머는 제외.
 오늘 Threads에서 사람들이 가장 많이 궁금해하거나 대화할 가치가 큰 것 위주로 최대 8개.
 각 이슈마다 핵심 사실, 왜 오늘 중요한지, 숫자/시간 등 주의할 팩트를 짧게 정리해.
-피해자가 있는 사건은 선정적 묘사를 피하고 공익적 정보 중심으로.`);
+피해자가 있는 사건은 선정적 묘사를 피하고 공익적 정보 중심으로.
+${exclude}`);
 }
 
 function koreaFoodContext(){
@@ -245,7 +263,7 @@ function aiPromptMoodRule(mood='RANDOM'){
 }
 
 function pillarPrompt({pillar,research='',feedback='',performance='',mood='RANDOM'}){
-  const common=`너는 한국 Threads 계정을 팔로워 성장시키는 콘텐츠 편집장이다.\n목표는 광고가 아니라 저장, 공유, 댓글, 팔로우를 부르는 원본 콘텐츠다.\n본문은 스레드에서 실제 사람이 말하듯 자연스러운 반말로 쓴다. 딱딱한 기사체, 보도자료체, 존댓말, 교과서식 설명은 피한다.\n짧은 문장과 줄바꿈을 활용하고, 귀엽고 친근한 리액션을 자연스럽게 섞는다. 이모지는 보통 1~3개만 사용하고 과하게 도배하지 않는다.\n사건사고·재난·피해자가 있는 내용에서는 장난스러운 표현을 피하고 친근하지만 차분한 반말을 사용한다.\n후킹은 6~10자 우선, 최대 14자. 기사 제목이나 흔한 문구를 복사하지 않는다.\nThreads 주제 태그도 함께 추천한다. 내부 소재명 topic과 Threads 주제 태그 topic_tag는 절대 같은 필드로 취급하지 않는다. topic_tag는 본문에서 핵심 명사나 뉴스 키워드를 뽑는 기능이 아니다. 이 게시물을 어떤 넓은 관심사 대화에 연결할지 판단하는 분류값이다. 예를 들어 '가계부채 2,020조'의 소재명은 가계부채일 수 있지만 Topic 후보는 경제, 금융, 부동산처럼 사람들이 지속적으로 탐색할 만한 상위 관심사여야 한다. 특정 사건명, 수치, 상품명, 식당명, 인물명, 기사 제목을 그대로 Topic으로 복사하지 않는다. topic_tag_candidates는 서로 겹치지 않는 상위 관심사 후보 3개를 만든다. 한국 계정이므로 자연스럽고 실제 사람들이 관심사로 이해할 만한 짧은 한글 Topic을 우선하되, AI Art처럼 영어명이 더 보편적인 분야는 영어도 허용한다. # 기호는 넣지 않는다. 문장형 태그, 광고 문구, 억지 신조어, 지나치게 세부적인 키워드는 금지한다. topic_tag에는 후보 중 가장 적합한 하나를 넣는다.\n이미지는 4:5 세로형이며 글자/로고/워터마크 없이 프레임 전체를 하나의 자연스럽고 완성된 장면으로 채운다. 제목 공간을 위한 빈 영역, 상단 여백, 블러 띠, 검은 띠, 반투명 오버레이, 그라데이션 패널을 만들지 않는다. 후킹 제목과 VOA 워터마크는 이미지 생성 후 프로그램이 별도로 합성한다.\n최근 피드백: ${feedback||'없음'}\n실제 성과: ${performance||'없음'}`;
+  const common=`너는 한국 Threads 계정을 팔로워 성장시키는 콘텐츠 편집장이다.\n목표는 광고가 아니라 저장, 공유, 댓글, 팔로우를 부르는 원본 콘텐츠다.\n본문은 스레드에서 실제 사람이 말하듯 자연스러운 반말로 쓴다. 딱딱한 기사체, 보도자료체, 존댓말, 교과서식 설명은 피한다.\n짧은 문장과 줄바꿈을 활용하고, 귀엽고 친근한 리액션을 자연스럽게 섞는다. 이모지는 보통 1~3개만 사용하고 과하게 도배하지 않는다.\n사건사고·재난·피해자가 있는 내용에서는 장난스러운 표현을 피하고 친근하지만 차분한 반말을 사용한다.\n후킹은 6~10자 우선, 최대 14자. 기사 제목이나 흔한 문구를 복사하지 않는다.\nThreads 주제 태그도 함께 추천한다. 내부 소재명 topic과 Threads 주제 태그 topic_tag는 절대 같은 필드로 취급하지 않는다. topic_tag_candidates는 게시물 내용과 직접 관련된 후보 3개를 만든다. 한국 계정이므로 자연스럽고 실제 사람들이 찾을 법한 한글 Topic을 우선하되, AI Art처럼 영어명이 더 보편적인 주제는 영어도 허용한다. # 기호는 넣지 않는다. 너무 길거나 문장형인 태그, 광고 문구, 억지 신조어는 금지한다. topic_tag에는 후보 중 가장 적합한 하나를 넣는다.\n이미지는 4:5 세로형이며 글자/로고/워터마크 없이 프레임 전체를 하나의 자연스럽고 완성된 장면으로 채운다. 제목 공간을 위한 빈 영역, 상단 여백, 블러 띠, 검은 띠, 반투명 오버레이, 그라데이션 패널을 만들지 않는다. 후킹 제목과 VOA 워터마크는 이미지 생성 후 프로그램이 별도로 합성한다.\n최근 피드백: ${feedback||'없음'}\n실제 성과: ${performance||'없음'}`;
 
   const rules={
     AI_TIP:`AI_TIP 하나만 만든다. 일반인이 잘 모르는 짧은 전문 개념/명령어를 오늘의 명령어처럼 소개한다. RED TEAM, STEELMAN, PRE-MORTEM, EDGE CASES, COUNTEREXAMPLE, RUBRIC, FIRST PRINCIPLES 같은 수준이지만 예시를 재탕하지 말고 더 넓게 발굴한다. '전문가처럼 답해줘', '결론부터', '예시 2개' 같은 초급 팁은 금지. 본문은 ① 낯선 용어 ② 복붙 가능한 짧은 영어 명령어 ③ 쉬운 한국어 설명 ④ 언제 쓰면 좋은지. 영어 명령어 필수. 말투는 '이거 한번 써봐 👀', '생각보다 꽤 쓸만해'처럼 짧고 영리한 반말로 쓴다.`,
@@ -257,7 +275,7 @@ body에는 해당 짧은 명령어 이름을 눈에 띄게 소개하고, 그게 
 reply_prompt에는 사용자가 그대로 복사해 AI에 넣을 실제 프롬프트만 넣는다. 반드시 영어로 작성한다. 한국어 문장, 한국어 설명, 번역, Markdown, 코드블록, 장식 문구 금지. 길게 장황하게 쓰지 말고 보통 1~3문장의 짧고 강한 명령형 영어 프롬프트로 작성한다.
 예시 방향: "Red-team this plan. Identify hidden assumptions, failure modes, and the strongest counterarguments."처럼 짧고 전문적이어야 한다.`,
     FOOD_PICK:`FOOD_PICK 하나만 만든다. 현재 한국 시간대를 반영해서 지금 먹기 가장 자연스러운 상황을 먼저 정한다. 점심 시간에는 점심, 저녁에는 저녁, 밤 9시 이후에는 야식/술안주 성격을 우선한다. '오늘 점심은 내가 정해줄게 😋', '오늘 저녁은 이거 먹자', '오늘 술안주는 이걸로 가자'처럼 우리가 먼저 결론을 준다. 아래 검색 결과에서 실제 확인된 전국 식당 하나를 고른다. 최근 생성 이력으로 제외된 업장은 절대 선택하지 않는다. 같은 지역/같은 장르/같은 업장을 연속 반복하지 말고 다양성을 우선한다. 식당명/지역/대표 메뉴/추천 이유를 간결하게 쓴다. 존재, 지역, 메뉴를 지어내지 않는다. 음식은 먹고 싶게 느껴지는 가볍고 맛깔나는 반말로 추천한다. 마지막에 '※ 이미지는 메뉴 이해를 돕는 AI 연출 이미지'를 넣는다.\n검색 결과:\n${research}`,
-    HOT_ISSUE:`HOT_ISSUE 하나만 만든다. AI에 편향하지 말고 오늘 실제 뉴스 중 대화 가치와 화제성이 가장 큰 하나를 고른다. 환율/증시/정책/사회/사건사고/전쟁/국제/날씨/태풍/스포츠/연예/자동차/부동산/과학/테크 모두 동등하게 본다. 아래 검색 결과만 사실 재료로 사용한다. 기사 제목 복사 금지. 본문은 '무슨 일인데? → 쉽게 말하면 왜 중요한데? → 앞으로 뭘 보면 돼?' 흐름으로 친근한 반말로 풀어준다. 뉴스 앵커처럼 딱딱하게 쓰지 않는다. 다만 재난·전쟁·피해자가 있는 사건은 가벼운 농담 없이 차분하게 쓴다. 루머와 확인 안 된 숫자 금지.\n검색 결과:\n${research}`
+    HOT_ISSUE:`HOT_ISSUE 하나만 만든다. AI에 편향하지 말고 오늘 실제 뉴스 중 대화 가치와 화제성이 가장 큰 하나를 고른다. 환율/증시/정책/사회/사건사고/전쟁/국제/날씨/태풍/스포츠/연예/자동차/부동산/과학/테크 모두 동등하게 본다. 아래 검색 결과만 사실 재료로 사용한다. 검색 결과 안에 '최근 이미 다룬 핫이슈'와 중복 금지 규칙이 포함되어 있으면 반드시 따른다. 같은 사건을 제목/후킹/표현만 바꿔 재사용하지 않는다. 기사 제목 복사 금지. 본문은 '무슨 일인데? → 쉽게 말하면 왜 중요한데? → 앞으로 뭘 보면 돼?' 흐름으로 친근한 반말로 풀어준다. 뉴스 앵커처럼 딱딱하게 쓰지 않는다. 다만 재난·전쟁·피해자가 있는 사건은 가벼운 농담 없이 차분하게 쓴다. 루머와 확인 안 된 숫자 금지.\n검색 결과:\n${research}`
   };
 
   return `${common}\n\n${rules[pillar]}\n\nJSON만 반환:\n{"candidate":{"category":"${pillar}","topic":"...","topic_tag":"...","topic_tag_candidates":["...","...","..."],"hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reason":"...","image_brief":"...","source_notes":[],"score":{"stop":0,"save":0,"share":0,"comment":0,"follow":0,"novelty":0,"visual":0,"total":0}}}`;
@@ -274,13 +292,14 @@ async function actionGenerate(req,res){
   const feedback=String(req.body?.feedback||'').slice(0,4000);
   const performance=String(req.body?.performance||'').slice(0,5000);
   const recentFood=Array.isArray(req.body?.recentFood)?req.body.recentFood.slice(0,8):[];
+  const recentHotIssues=Array.isArray(req.body?.recentHotIssues)?req.body.recentHotIssues.slice(0,20):[];
   const requestedMood=String(req.body?.mood||'RANDOM').trim().toUpperCase();
   const allowedMoods=['RANDOM','HAPPY','LOVE','COMIC','HORROR','FANTASY'];
   const mood=pillar==='AI_PROMPT'&&allowedMoods.includes(requestedMood)?requestedMood:'RANDOM';
 
   try{
     let research='';
-    if(pillar==='HOT_ISSUE')research=await researchHotIssues(key);
+    if(pillar==='HOT_ISSUE')research=await researchHotIssues(key,recentHotIssues);
     if(pillar==='FOOD_PICK')research=await researchFood(key,recentFood);
 
     const out=await generateJson(key,pillarPrompt({pillar,research,feedback,performance,mood}),.88);
