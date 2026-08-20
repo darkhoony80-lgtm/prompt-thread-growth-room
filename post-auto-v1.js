@@ -131,6 +131,13 @@ async function makeImage(i,redo=false){
  const x=candidates[i],box=document.getElementById(`v3img-${i}`);if(!x)return;box.innerHTML='<span class="mut">Gemini 이미지 생성 중…</span>';x.variation=redo?(x.variation||1)+1:(x.variation||1);x.body=body(i);x.hook=hook(i);
  try{const r=await fetch('/api/content-router?action=image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate:x,variation:x.variation})}),j=await r.json();if(!r.ok)throw new Error(apiError(j,'IMAGE_FAILED'));x.base_image=`data:${j.mime_type};base64,${j.data}`;await compose(i);await upload(i);saveDrafts();preview(i)}catch(e){box.innerHTML='<span class="mut">이미지 생성 실패</span>';alert('이미지 생성 실패: '+e.message)}
 }
+async function followerBaseline(){
+ try{
+  const r=await fetch('/api/threads/my-posts?mode=account',{cache:'no-store'}),j=await r.json();
+  const n=j?.account?.insights?.followers_count;
+  return Number.isFinite(Number(n))?Number(n):null;
+ }catch{return null}
+}
 async function publishFirstReply(parentId,text){
  if(!parentId||!text?.trim())return {ok:true,skipped:true};
  const r=await fetch('/api/threads/reply',{
@@ -176,7 +183,7 @@ async function now(i){
   }
 
   fb(x,'PUBLISHED');
-  const a=read(P);a.unshift({thread_id:j.id,category:x.category,topic:x.topic,hook:x.hook,published_at:Date.now(),image_url:url});write(P,a.slice(0,100));
+  const follower_at_publish=await followerBaseline();const a=read(P);a.unshift({thread_id:j.id,category:x.category,topic:x.topic,hook:x.hook,published_at:Date.now(),image_url:url,follower_at_publish});write(P,a.slice(0,100));
   alert('Threads 게시 완료 ✅'+replyMessage);
  }catch(e){alert('게시 실패: '+e.message)}
 }
@@ -184,7 +191,7 @@ async function variant(i){const x=candidates[i];try{x.body=body(i);x.hook=hook(i
 function no(i){if(candidates[i])fb(candidates[i],'DISLIKE');candidates[i]=null;saveDrafts();render()}
 async function applyHook(i){try{await compose(i);await upload(i);saveDrafts();preview(i)}catch(e){alert(e.message)}}
 function renderQueue(){const a=read(Q),n=document.getElementById('v3qcount'),b=document.getElementById('v3queue');if(n)n.textContent=a.length;if(!b)return;b.innerHTML=a.length?a.map((x,i)=>`<article class="card"><div style="display:grid;grid-template-columns:150px 1fr;gap:14px"><img src="${esc(x.image_url)}" style="width:150px;aspect-ratio:4/5;object-fit:cover;border-radius:10px"><div><span class="badge">${esc(x.category_label||CATS[x.category])}</span><h3>${esc(x.hook)}</h3><div class="post-text">${esc(x.body)}</div><div style="margin-top:10px;display:flex;gap:8px"><button class="btn p" onclick="PostAuto.publishQueue(${i})">🚀 지금 게시</button><button class="btn" onclick="PostAuto.drop(${i})">제거</button></div></div></div></article>`).join(''):'<div class="card empty"><div><b>발행 대기 없음</b>이미지를 확인하고 👍한 게시물이 여기에 쌓입니다.</div></div>'}
-async function publishQueue(i){const a=read(Q),x=a[i];if(!x||!confirm(`"${x.hook}" 지금 게시할까요?`))return;const r=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:x.body,image_url:x.image_url})}),j=await r.json();if(!r.ok)return alert('게시 실패: '+(j.detail||j.error));const p=read(P);p.unshift({thread_id:j.id,category:x.category,topic:x.topic,hook:x.hook,published_at:Date.now(),image_url:x.image_url});write(P,p.slice(0,100));fb(x,'PUBLISHED');a.splice(i,1);write(Q,a);renderQueue();alert('게시 완료 ✅')}
+async function publishQueue(i){const a=read(Q),x=a[i];if(!x||!confirm(`"${x.hook}" 지금 게시할까요?`))return;const r=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:x.body,image_url:x.image_url})}),j=await r.json();if(!r.ok)return alert('게시 실패: '+(j.detail||j.error));const follower_at_publish=await followerBaseline();const p=read(P);p.unshift({thread_id:j.id,category:x.category,topic:x.topic,hook:x.hook,published_at:Date.now(),image_url:x.image_url,follower_at_publish});write(P,p.slice(0,100));fb(x,'PUBLISHED');a.splice(i,1);write(Q,a);renderQueue();alert('게시 완료 ✅')}
 function drop(i){const a=read(Q);a.splice(i,1);write(Q,a);renderQueue()}
 function patchReplies(){
  const desc=document.querySelector('#replies .section p.mut');if(desc)desc.textContent='최근 2일 댓글만 표시합니다. 미응답 전체를 API에 무리 없이 천천히 순차 답장합니다.';
