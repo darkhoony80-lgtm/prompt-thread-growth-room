@@ -63,9 +63,12 @@ window.loadGrowth=async function(days=7){
   const top=[...rows].sort((a,b)=>(b.insights?.views||0)-(a.insights?.views||0)).slice(0,3);
   const cats={};rows.forEach(x=>{const k=growthCategoryLabel(x.meta?.category);const o=cats[k]||(cats[k]={n:0,views:0,reposts:0,replies:0});o.n++;o.views+=x.insights?.views||0;o.reposts+=x.insights?.reposts||0;o.replies+=x.insights?.replies||0});
   const catRows=Object.entries(cats).map(([k,v])=>({k,...v,avg:v.views/Math.max(1,v.n)})).sort((a,b)=>b.avg-a.avg),maxAvg=Math.max(1,...catRows.map(x=>x.avg));
+  const topics={};rows.filter(x=>x.meta?.topic_tag).forEach(x=>{const k=String(x.meta.topic_tag).trim();if(!k)return;const o=topics[k]||(topics[k]={n:0,views:0,reposts:0,replies:0});o.n++;o.views+=x.insights?.views||0;o.reposts+=x.insights?.reposts||0;o.replies+=x.insights?.replies||0});
+  const topicRows=Object.entries(topics).map(([k,v])=>({k,...v,avg:v.views/Math.max(1,v.n),rr:pct(v.reposts,v.views)})).sort((a,b)=>b.avg-a.avg).slice(0,8),maxTopicAvg=Math.max(1,...topicRows.map(x=>x.avg));
   const analysis=growthAnalysis(rows);
   const topHtml=top.map((p,i)=>{const m=p.insights||{},meta=p.meta,fd=followerDelta(meta,currentFollowers);const followerText=fd==='collecting'?'24h 데이터 수집 중':fd===null?'기준값 없음':`게시 후 계정 팔로워 ${fd>=0?'+':''}${fd} (참고)`;return `<div class="growth-top-item"><div class="growth-rank">${['🥇','🥈','🥉'][i]}</div><div><b>${esc(meta?.hook||String(p.text||'게시물').slice(0,38))}</b><div class="growth-note">${esc(growthCategoryLabel(meta?.category))} · ${esc(new Date(p.timestamp).toLocaleString('ko-KR'))}</div></div><div style="text-align:right"><b>👁 ${fmt(m.views)}</b><div class="growth-note">🔁 ${fmt(m.reposts)} · 💬 ${fmt(m.replies)} · ❤️ ${fmt(m.likes)} · 📤 ${fmt(m.shares)}</div><div class="growth-note">${esc(followerText)}</div></div></div>`}).join('');
   const catHtml=catRows.map(x=>`<div class="growth-bar-row"><b>${esc(x.k)}</b><div class="growth-track"><div class="growth-fill" style="width:${Math.max(3,x.avg/maxAvg*100)}%"></div></div><div style="text-align:right">${fmt(Math.round(x.avg))} /건</div></div>`).join('');
+  const topicHtml=topicRows.map(x=>`<div class="growth-bar-row"><b>${esc(x.k)}</b><div class="growth-track"><div class="growth-fill" style="width:${Math.max(3,x.avg/maxTopicAvg*100)}%"></div></div><div style="text-align:right">${fmt(Math.round(x.avg))} · 🔁${x.rr.toFixed(1)}%</div></div>`).join('');
   box.innerHTML=`<div class="growth-grid">
    <div class="card growth-kpi"><span class="mut">${days}일 조회</span><b>${fmt(totals.views)}</b><small>${rows.length}개 원본 게시물</small></div>
    <div class="card growth-kpi"><span class="mut">총 참여</span><b>${fmt(engagement)}</b><small>좋아요·답글·리포스트·인용·공유</small></div>
@@ -73,6 +76,7 @@ window.loadGrowth=async function(days=7){
    <div class="card growth-kpi"><span class="mut">현재 팔로워</span><b>${currentFollowers==null?'—':fmt(currentFollowers)}</b><small>Threads 계정 실측값</small></div>
   </div>
   <div class="card growth-section"><div class="section"><b>🏆 성과 TOP 게시물</b><span class="mut">조회수 기준</span></div><div class="growth-top">${topHtml||'<span class="mut">데이터 없음</span>'}</div></div>
+  <div class="card growth-section"><div class="section"><b>🏷 Topic 성과</b><span class="mut">평균 조회 · 리포스트율</span></div><div class="growth-bars">${topicHtml||'<span class="mut">Topic 태그를 사용해 게시한 데이터가 쌓이면 여기에 비교됩니다.</span>'}</div></div>
   <div class="two growth-section"><div class="card"><div class="section"><b>📊 콘텐츠별 성과</b><span class="mut">게시물당 평균 조회</span></div><div class="growth-bars">${catHtml||'<span class="mut">운영실에서 발행한 게시물 메타데이터가 아직 없습니다.</span>'}</div></div>
   <div class="card"><div class="section"><b>🧠 성장 분석</b><span class="mut">실측 데이터 기반</span></div><div class="growth-ai">${analysis.map(x=>`<div>• ${esc(x)}</div>`).join('')}</div><p class="growth-note" style="margin-top:12px">팔로워 변화는 특정 게시물의 직접 유입 수가 아니라 게시 후 계정 전체 변화 참고값입니다.</p></div></div>`;
  }catch(e){box.innerHTML=`<div class="card empty"><div><b>성장 데이터 확인 실패</b>${esc(e.message)}</div></div>`}
