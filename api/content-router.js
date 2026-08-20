@@ -222,12 +222,24 @@ ${exclude}
 서로 다른 지역/장르로 최대 12곳.`); 
 }
 
-function pillarPrompt({pillar,research='',feedback='',performance=''}){
+function aiPromptMoodRule(mood='RANDOM'){
+  const rules={
+    HAPPY:`선택 무드: 행복. 밝고 활기차고 생기 있는 장면을 우선한다. 낮, 햇살, 야외, 여행, 축제, 움직임, 웃음, 선명하고 기분 좋은 색감 등 행복을 시각적으로 전달하되 매번 같은 소재를 반복하지 않는다.`,
+    LOVE:`선택 무드: 사랑. 연인만으로 한정하지 말고 설렘, 애정, 다정함, 우정, 가족애, 반려동물과의 교감, 소중한 순간 등 사랑의 범위를 넓게 해석한다. 부드럽고 매력적인 장면을 만들되 뻔한 하트 장식에 의존하지 않는다.`,
+    COMIC:`선택 무드: 코믹. 예상 밖의 상황, 유쾌한 행동, 시각적 반전, 재미있는 타이밍과 구도를 활용한다. 억지 밈, 과장된 표정, 저품질 개그 이미지가 아니라 사진 자체가 재치 있는 프리미엄 비주얼이어야 한다.`,
+    HORROR:`선택 무드: 공포. 불길함, 미스터리, 기묘함, 긴장감, 심리적 공포를 활용한다. 고어, 유혈, 잔혹 묘사는 금지하고 영화적이면서 세련된 공포 비주얼을 만든다. 밤 장면에만 고정하지 말고 밝은 낮의 기묘함 같은 변주도 허용한다.`,
+    FANTASY:`선택 무드: 판타지. 현실에서 불가능한 세계, 마법적 환경, 초현실적 자연, 독창적 생명체나 공간, 시대 혼합 등 상상력을 적극적으로 사용한다. 흔한 중세 성/엘프/마법사 클리셰에 고정되지 않는다.`,
+    RANDOM:`선택 모드: 완전 랜덤. 이것은 행복/사랑/코믹/공포/판타지 중 하나를 고르는 기능이 아니다. 어떤 무드 목록에도 제한되지 않는다. 주제, 감정, 시대, 국가, 장소, 시간대, 날씨, 계절, 실내/실외, 인물 유무, 행동, 사건, 현실/초현실, 사진 장르, 카메라, 렌즈, 구도, 조명, 색감, 질감을 자유롭게 조합한다. 현재 또는 직전 결과의 분위기를 다음 결과의 기준으로 삼지 않는다. 비 오는 밤/어두운 카페/필름 감성 같은 익숙한 조합을 기본값으로 사용하지 말고 가능한 세계 전체에서 과감하게 새 콘셉트를 선택한다.`
+  };
+  return rules[mood]||rules.RANDOM;
+}
+
+function pillarPrompt({pillar,research='',feedback='',performance='',mood='RANDOM'}){
   const common=`너는 한국 Threads 계정을 팔로워 성장시키는 콘텐츠 편집장이다.\n목표는 광고가 아니라 저장, 공유, 댓글, 팔로우를 부르는 원본 콘텐츠다.\n본문은 스레드에서 실제 사람이 말하듯 자연스러운 반말로 쓴다. 딱딱한 기사체, 보도자료체, 존댓말, 교과서식 설명은 피한다.\n짧은 문장과 줄바꿈을 활용하고, 귀엽고 친근한 리액션을 자연스럽게 섞는다. 이모지는 보통 1~3개만 사용하고 과하게 도배하지 않는다.\n사건사고·재난·피해자가 있는 내용에서는 장난스러운 표현을 피하고 친근하지만 차분한 반말을 사용한다.\n후킹은 6~10자 우선, 최대 14자. 기사 제목이나 흔한 문구를 복사하지 않는다.\n이미지는 4:5 세로형이며 글자/로고/워터마크 없이 프레임 전체를 하나의 자연스럽고 완성된 장면으로 채운다. 제목 공간을 위한 빈 영역, 상단 여백, 블러 띠, 검은 띠, 반투명 오버레이, 그라데이션 패널을 만들지 않는다. 후킹 제목과 VOA 워터마크는 이미지 생성 후 프로그램이 별도로 합성한다.\n최근 피드백: ${feedback||'없음'}\n실제 성과: ${performance||'없음'}`;
 
   const rules={
     AI_TIP:`AI_TIP 하나만 만든다. 일반인이 잘 모르는 짧은 전문 개념/명령어를 오늘의 명령어처럼 소개한다. RED TEAM, STEELMAN, PRE-MORTEM, EDGE CASES, COUNTEREXAMPLE, RUBRIC, FIRST PRINCIPLES 같은 수준이지만 예시를 재탕하지 말고 더 넓게 발굴한다. '전문가처럼 답해줘', '결론부터', '예시 2개' 같은 초급 팁은 금지. 본문은 ① 낯선 용어 ② 복붙 가능한 짧은 영어 명령어 ③ 쉬운 한국어 설명 ④ 언제 쓰면 좋은지. 영어 명령어 필수. 말투는 '이거 한번 써봐 👀', '생각보다 꽤 쓸만해'처럼 짧고 영리한 반말로 쓴다.`,
-    AI_PROMPT:`AI_PROMPT 하나만 만든다. 반드시 body와 reply_prompt를 완전히 분리한다. body는 Threads에 실제 게시되는 한국어 설명문이다. 결과 이미지의 매력, 빛/질감/분위기/촬영 느낌 중 핵심을 3~5문장으로 충분히 설명한다. 자연스러운 반말과 가벼운 이모지 1~2개를 사용한다. 영문 이미지 프롬프트 문장이나 영어 프롬프트 일부를 body에 절대 넣지 않는다. body 마지막은 반드시 '프롬프트는 첫 댓글에 남겨둘게 👇'처럼 첫 댓글을 안내한다. reply_prompt는 복붙용 영문 이미지 프롬프트만 넣는다. 한국어 설명, 번역, Prompt:, 따옴표, Markdown 금지. 피사체/행동/환경/시간/카메라/렌즈/구도/조명/색감/질감/현실성/금지요소 중 필요한 요소를 상세하게 구성한다. 길이 때문에 핵심 디테일을 억지로 삭제하지 않는다. 흔한 cinematic, warm lighting 단순 나열 수준은 금지.`,
+    AI_PROMPT:`AI_PROMPT 하나만 만든다. ${aiPromptMoodRule(mood)} 반드시 body와 reply_prompt를 완전히 분리한다. body는 Threads에 실제 게시되는 한국어 설명문이다. 결과 이미지의 매력, 빛/질감/분위기/촬영 느낌 중 핵심을 3~5문장으로 충분히 설명한다. 자연스러운 반말과 가벼운 이모지 1~2개를 사용한다. 영문 이미지 프롬프트 문장이나 영어 프롬프트 일부를 body에 절대 넣지 않는다. body 마지막은 반드시 '프롬프트는 첫 댓글에 남겨둘게 👇'처럼 첫 댓글을 안내한다. reply_prompt는 복붙용 영문 이미지 프롬프트만 넣는다. 한국어 설명, 번역, Prompt:, 따옴표, Markdown 금지. 피사체/행동/환경/시간/카메라/렌즈/구도/조명/색감/질감/현실성/금지요소 중 필요한 요소를 상세하게 구성한다. 길이 때문에 핵심 디테일을 억지로 삭제하지 않는다. 흔한 cinematic, warm lighting 단순 나열 수준은 금지.`,
 
 AI_TIP:`AI 활용 팁은 반드시 body와 reply_prompt를 완전히 분리한다.
 핵심은 '짧은 전문 명령어/기법 이름' 하나를 소개하는 것이다. RED TEAM, STEELMAN, PRE-MORTEM, EDGE CASES, COUNTEREXAMPLE, RUBRIC, FIRST PRINCIPLES, DECOMPOSITION처럼 1~3단어 수준의 짧고 기억하기 쉬운 개념을 우선한다. 단, 같은 용어를 반복 재탕하지 말고 매번 다른 전문 개념을 발굴한다.
@@ -252,15 +264,19 @@ async function actionGenerate(req,res){
   const feedback=String(req.body?.feedback||'').slice(0,4000);
   const performance=String(req.body?.performance||'').slice(0,5000);
   const recentFood=Array.isArray(req.body?.recentFood)?req.body.recentFood.slice(0,8):[];
+  const requestedMood=String(req.body?.mood||'RANDOM').trim().toUpperCase();
+  const allowedMoods=['RANDOM','HAPPY','LOVE','COMIC','HORROR','FANTASY'];
+  const mood=pillar==='AI_PROMPT'&&allowedMoods.includes(requestedMood)?requestedMood:'RANDOM';
 
   try{
     let research='';
     if(pillar==='HOT_ISSUE')research=await researchHotIssues(key);
     if(pillar==='FOOD_PICK')research=await researchFood(key,recentFood);
 
-    const out=await generateJson(key,pillarPrompt({pillar,research,feedback,performance}),.88);
+    const out=await generateJson(key,pillarPrompt({pillar,research,feedback,performance,mood}),.88);
     const raw=out?.candidate||out?.item||out;
     const item=cleanCandidate({...raw,category:pillar},0);
+    if(pillar==='AI_PROMPT')item.mood=mood;
     if(!item.body||!item.hook)throw new Error('PILLAR_CONTENT_INVALID');
 
     return send(res,200,{
@@ -286,6 +302,7 @@ async function imageDirector(key,candidate,variation){
 후킹(이미지에 직접 쓰지 않음): ${candidate.hook}
 브리프: ${candidate.image_brief}
 재생성 번호: ${variation}
+AI 프롬프트 무드 지시: ${candidate.category==='AI_PROMPT'?aiPromptMoodRule(String(candidate.mood||'RANDOM').toUpperCase()):'해당 없음'}
 
 절대 규칙:
 4:5 portrait, premium social editorial thumbnail quality.
