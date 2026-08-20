@@ -38,6 +38,86 @@ async function getPostInsights(postId,token){
   return {ok:true,metrics:out,error:null};
 }
 
+
+async function getAccountInsights(token){
+  const out={views:null,likes:null,replies:null,reposts:null,quotes:null,followers_count:null};
+
+  // Keep the normal account metrics independent from followers_count.
+  // A failure or response-shape difference in one metric must not blank the other.
+  const baseMetrics='views,likes,replies,reposts,quotes';
+  const base=await graph(`/me/threads_insights?metric=${encodeURIComponent(baseMetrics)}`,token);
+  if(base.ok){
+    for(const m of (Array.isArray(base.body?.data)?base.body.data:[])){
+      if(!(m?.name in out))continue;
+      const values=Array.isArray(m?.values)?m.values:[];
+      const v=m?.total_value?.value ?? values[values.length-1]?.value;
+      out[m.name]=Number.isFinite(Number(v))?Number(v):null;
+    }
+  }
+
+  // followers_count is requested separately because Threads returns it as
+  // an account-level day metric with total_value.value.
+  const followers=await graph(`/me/threads_insights?metric=followers_count`,token);
+  if(followers.ok){
+    const m=(Array.isArray(followers.body?.data)?followers.body.data:[])
+      .find(x=>x?.name==='followers_count');
+    const values=Array.isArray(m?.values)?m.values:[];
+    const v=m?.total_value?.value ?? values[values.length-1]?.value;
+    out.followers_count=Number.isFinite(Number(v))?Number(v):null;
+  }
+
+  if(!base.ok)console.warn('[ACCOUNT_INSIGHTS_BASE_FAILED]',JSON.stringify(err(base.body)));
+  if(!followers.ok)console.warn('[FOLLOWERS_COUNT_FAILED]',JSON.stringify(err(followers.body)));
+  else console.log('[FOLLOWERS_COUNT_OK]',out.followers_count);
+
+  return {
+    ok:base.ok||followers.ok,
+    metrics:out,
+    error:(!base.ok&&!followers.ok)?{base:err(base.body),followers:err(followers.body)}:null,
+    followers_ok:followers.ok && out.followers_count!==null
+  };
+}
+
+async function collectOriginalPosts({token,uid,uname,target=10,sinceMs=0}){
+  const fields='id,media_product_type,media_type,media_url,permalink,owner,username,text,timestamp,shortcode,thumbnail_url,children,is_quote_post,quoted_post,reposted_post,has_replies,alt_text,link_attachment_url';
+  const replyScan=await collectReplyIds(token);
+  if(!replyScan.ok)return {ok:false,error:{code:'THREADS_REPLIES_FAILED',detail:replyScan.error}};
+  let page=await graph(`/me/threads?fields=${encodeURIComponent(fields)}&limit=${PAGE_SIZE}`,token);
+  if(!page.ok)return {ok:false,error:{code:'THREADS_LIST_FAILED',detail:err(page.body)}};
+  const excluded={repost:0,quote:0,reply:0,external:0,duplicate:0};
+  const items=[],seen=new Set();let pagesScanned=0,sourceCount=0,doneByDate=false;
+  while(page.ok && pagesScanned<MAX_THREAD_PAGES && items.length<target && !doneByDate){
+    pagesScanned++;
+    const source=Array.isArray(page.body?.data)?page.body.data:[];
+    sourceCount+=source.length;
+    for(const x of source){
+      const ts=Date.parse(x?.timestamp||'');
+      if(sinceMs && Number.isFinite(ts) && ts<sinceMs){doneByDate=true;break}
+      const id=String(x?.id||'');if(!id)continue;
+      if(seen.has(id)){excluded.duplicate++;continue}seen.add(id);
+      const oid=ownerId(x.owner),username=String(x.username||'').toLowerCase();
+      const mine=(oid&&uid&&oid===uid)||(username&&uname&&username===uname);
+      if(!mine){excluded.external++;continue}
+      if(String(x.media_type||'').toUpperCase()==='REPOST_FACADE'||hasObject(x.reposted_post)){excluded.repost++;continue}
+      if(Boolean(x.is_quote_post||hasObject(x.quoted_post))){excluded.quote++;continue}
+      if(replyScan.ids.has(id)){excluded.reply++;continue}
+      items.push({
+        id,media_type:x.media_type||null,media_product_type:x.media_product_type||null,
+        text:x.text||'',timestamp:x.timestamp||null,permalink:x.permalink||null,
+        media_url:x.media_url||null,thumbnail_url:x.thumbnail_url||null,
+        shortcode:x.shortcode||null,has_replies:Boolean(x.has_replies),
+        username:x.username||null
+      });
+      if(items.length>=target)break;
+    }
+    if(items.length>=target||doneByDate)break;
+    const next=page.body?.paging?.next;if(!next)break;
+    page=await graphNext(next,token);
+    if(!page.ok)return {ok:false,error:{code:'THREADS_PAGING_FAILED',detail:err(page.body)}};
+  }
+  return {ok:true,items,excluded,pagesScanned,sourceCount,replyPages:replyScan.pages};
+}
+
 async function collectReplyIds(token){
   const ids=new Set();
   let page=await graph(`/me/replies?fields=${encodeURIComponent('id')}&limit=${PAGE_SIZE}`,token);
@@ -61,69 +141,25 @@ export default async function handler(req,res){
 
   const me=await graph('/me?fields=id,username',s.accessToken);
   if(!me.ok)return res.status(502).json({ok:false,error:'THREADS_ME_FAILED',detail:err(me.body)});
+  const uid=String(me.body.id||s.userId||''),uname=String(me.body.username||'').toLowerCase();
 
-  const replyScan=await collectReplyIds(s.accessToken);
-  if(!replyScan.ok)return res.status(502).json({ok:false,error:'THREADS_REPLIES_FAILED',detail:replyScan.error});
+  const accountResult=await getAccountInsights(s.accessToken);
+  const account={id:uid,username:me.body.username||null,insights:accountResult.metrics};
 
-  const uid=String(me.body.id||s.userId||'');
-  const uname=String(me.body.username||'').toLowerCase();
-  const fields='id,media_product_type,media_type,media_url,permalink,owner,username,text,timestamp,shortcode,thumbnail_url,children,is_quote_post,quoted_post,reposted_post,has_replies,alt_text,link_attachment_url';
-
-  let page=await graph(`/me/threads?fields=${encodeURIComponent(fields)}&limit=${PAGE_SIZE}`,s.accessToken);
-  if(!page.ok)return res.status(502).json({ok:false,error:'THREADS_LIST_FAILED',detail:err(page.body)});
-
-  const excluded={repost:0,quote:0,reply:0,external:0,duplicate:0};
-  const myPosts=[];
-  const seen=new Set();
-  let pagesScanned=0;
-  let sourceCount=0;
-
-  while(page.ok && pagesScanned<MAX_THREAD_PAGES && myPosts.length<TARGET_POSTS){
-    pagesScanned++;
-    const source=Array.isArray(page.body?.data)?page.body.data:[];
-    sourceCount+=source.length;
-
-    for(const x of source){
-      const id=String(x?.id||'');
-      if(!id)continue;
-      if(seen.has(id)){excluded.duplicate++;continue}
-      seen.add(id);
-
-      const oid=ownerId(x.owner), username=String(x.username||'').toLowerCase();
-      const mine=(oid&&uid&&oid===uid)||(username&&uname&&username===uname);
-      if(!mine){excluded.external++;continue}
-
-      const repostFacade=String(x.media_type||'').toUpperCase()==='REPOST_FACADE';
-      const repostObject=hasObject(x.reposted_post);
-      if(repostFacade||repostObject){excluded.repost++;continue}
-
-      if(Boolean(x.is_quote_post||hasObject(x.quoted_post))){excluded.quote++;continue}
-
-      if(replyScan.ids.has(id)){excluded.reply++;continue}
-
-      myPosts.push({
-        id,
-        media_type:x.media_type||null,
-        media_product_type:x.media_product_type||null,
-        text:x.text||'',
-        timestamp:x.timestamp||null,
-        permalink:x.permalink||null,
-        media_url:x.media_url||null,
-        thumbnail_url:x.thumbnail_url||null,
-        shortcode:x.shortcode||null,
-        has_replies:Boolean(x.has_replies),
-        username:x.username||me.body.username||null
-      });
-      if(myPosts.length>=TARGET_POSTS)break;
-    }
-
-    if(myPosts.length>=TARGET_POSTS)break;
-    const next=page.body?.paging?.next;
-    if(!next)break;
-    page=await graphNext(next,s.accessToken);
-    if(!page.ok)return res.status(502).json({ok:false,error:'THREADS_PAGING_FAILED',detail:err(page.body)});
+  const mode=String(req.query?.mode||'posts');
+  if(mode==='account'){
+    return res.status(200).json({ok:true,account,account_insights_ok:accountResult.ok,followers_count_ok:Boolean(accountResult.followers_ok)});
   }
 
+  const days=Math.max(1,Math.min(30,Number(req.query?.days)||30));
+  const analysisMode=mode==='insights';
+  const target=analysisMode?120:TARGET_POSTS;
+  const sinceMs=analysisMode?Date.now()-days*86400000:0;
+
+  const collected=await collectOriginalPosts({token:s.accessToken,uid,uname,target,sinceMs});
+  if(!collected.ok)return res.status(502).json({ok:false,error:collected.error.code,detail:collected.error.detail});
+
+  const myPosts=collected.items;
   const insightResults=await Promise.all(myPosts.map(p=>getPostInsights(p.id,s.accessToken)));
   let insightFailures=0;
   myPosts.forEach((p,i)=>{p.insights=insightResults[i].metrics;if(!insightResults[i].ok)insightFailures++});
@@ -133,25 +169,16 @@ export default async function handler(req,res){
   for(const p of myPosts){
     for(const k of Object.keys(totals)){
       const v=p.insights?.[k];
-      if(v!==null && v!==undefined){totals[k]+=Number(v)||0;available[k]++}
+      if(v!==null&&v!==undefined){totals[k]+=Number(v)||0;available[k]++}
     }
   }
-  const bestPost=myPosts.filter(p=>p.insights?.views!==null && p.insights?.views!==undefined).sort((a,b)=>(b.insights.views||0)-(a.insights.views||0))[0]||null;
-
+  const bestPost=myPosts.filter(p=>p.insights?.views!=null).sort((a,b)=>(b.insights.views||0)-(a.insights.views||0))[0]||null;
   const summary={
-    source_count:sourceCount,
-    pages_scanned:pagesScanned,
-    reply_pages_scanned:replyScan.pages,
-    my_posts:myPosts.length,
-    target_posts:TARGET_POSTS,
-    excluded,
-    insight_failures:insightFailures,
-    insight_totals:totals,
-    insight_available:available,
-    best_post_id:bestPost?.id||null
+    source_count:collected.sourceCount,pages_scanned:collected.pagesScanned,
+    reply_pages_scanned:collected.replyPages,my_posts:myPosts.length,target_posts:target,
+    analysis_days:analysisMode?days:null,excluded:collected.excluded,insight_failures:insightFailures,
+    insight_totals:totals,insight_available:available,best_post_id:bestPost?.id||null
   };
-
   console.log('[MY_POSTS_SUMMARY]',JSON.stringify(summary));
-  for(const p of myPosts)console.log('[MY_POST_CONFIRMED]',JSON.stringify({id:p.id,media_type:p.media_type,text_preview:p.text.slice(0,120),timestamp:p.timestamp,permalink:p.permalink,insights:p.insights}));
-  return res.status(200).json({ok:true,account:{id:uid,username:me.body.username||null},summary,best_post:bestPost,items:myPosts});
+  return res.status(200).json({ok:true,account,account_insights_ok:accountResult.ok,followers_count_ok:Boolean(accountResult.followers_ok),summary,best_post:bestPost,items:myPosts});
 }
