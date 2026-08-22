@@ -214,7 +214,7 @@ async function openInstagramCarousel(i){
 }
 function selectInstagramSlide(index){if(!instagramCarousel)return;instagramCarousel.selected=index;renderInstagramCarousel()}
 function setInstagramCaption(value){if(!instagramCarousel||instagramCarousel.published)return;instagramCarousel.caption=String(value).slice(0,2200)}
-function closeInstagramCarousel(){if(instagramPublishing)return alert('Instagram 게시 처리가 끝날 때까지 기다려 주세요.');instagramCarousel=null;renderInstagramCarousel()}
+function closeInstagramCarousel(){if(instagramPublishing)return alert('Instagram 게시 처리가 끝날 때까지 기다려 주세요.');if(instagramCarousel?.generating)return alert('캐러셀 이미지 생성이 끝날 때까지 기다려 주세요.');instagramCarousel=null;renderInstagramCarousel()}
 async function regenerateInstagramSlide(){
  const state=instagramCarousel,index=state?.selected||0;if(!state||state.generating||instagramPublishing||state.published)return;
  state.generating=true;state.variations[index]=(state.variations[index]||1)+1;state.status=`${index+1}번 이미지 다시 생성 중…`;renderInstagramCarousel();
