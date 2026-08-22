@@ -443,36 +443,79 @@ Variation: ${variation}`
 }
 
 async function editorialImageDirector(key,candidate,variation){
-  const prompt=`너는 세계적 소셜미디어 아트디렉터다.
-다음 Threads 후보에 맞는 Gemini 이미지 생성용 영어 프롬프트 하나만 작성해.
+  const categoryRule=candidate.category==='FOOD_PICK'
+    ? 'FOOD: 음식과 대표 메뉴가 가장 크고 맛있어 보이는 주인공이어야 한다. 본문에서 확인된 장소/메뉴 핵심 정보를 우선하고, 인물이 필요하면 음식보다 보조적으로 사용한다.'
+    : 'HOT_ISSUE: 본문의 핵심 사건·제품·대상을 가장 명확한 주인공으로 삼고, 무엇이 이슈인지 즉시 이해되는 긴장감 있는 정보 구성을 만든다.';
+  const plan=await generateJson(key,`FOOD 또는 HOT_ISSUE Threads 본문 전체를 분석해서 한 장의 완성형 정보 썸네일을 기획해.
+기존 게시물 제목이나 hook 필드는 참고하거나 재사용하지 않는다.
 
 카테고리: ${candidate.category}
 소재: ${candidate.topic}
-본문: ${candidate.body}
-브리프: ${candidate.image_brief}
-재생성 번호: ${variation}
-절대 규칙:
-4:5 portrait, premium social editorial thumbnail quality.
-이미지 안에 글자/숫자/로고/워터마크/가짜 UI를 생성하지 않는다. 정확한 제목과 VOA 워터마크는 후처리 코드가 담당한다.
-프레임의 위에서 아래까지 실제 장면과 자연스러운 배경이 끊김 없이 이어지는 완성된 full-bleed 이미지여야 한다. 제목을 넣기 위한 전용 공간을 절대 만들지 않는다. 상단 25~30%를 비우거나 단순화하지 말고, 제목 때문에 피사체나 장면을 아래로 밀어내지 않는다.
-검은 띠, 어두운 띠, 흐린 띠, blur band, gradient band, translucent overlay, vignette panel, 빈 직사각형, 인위적인 패널, 프레임, 텍스트 박스, 헤더 영역을 생성하지 않는다. 중요한 얼굴이나 핵심 사물도 제목 합성을 위해 인위적으로 이동시키지 말고 소재 자체에 가장 자연스럽고 강한 구도를 우선한다.
-모바일 피드에서 0.5초 안에 시선을 멈추게 하는 프리미엄 광고 캠페인/매거진 커버급 구도, 강한 명암, 깊이감, 현실적인 재질과 피부 표현.
-사람이 소재 이해와 감정 전달에 도움이 되는 장면이라면 '20대의 매력적이고 세련된 한국 성인 여성'을 우선 사용한다. 귀엽고 자연스러운 인상, 현실적인 피부, 세련된 헤어와 상황에 맞는 의상. 미성년자로 보이는 외모는 금지.
-인물을 사용하는 경우 첨부된 Character Master의 여성은 '보아(VOA)'다. 반드시 그 참조 인물의 동일한 정체성으로 생성한다. 얼굴형, 눈·코·입 비율, 피부톤, 연령대, 기본 머리색과 전체 인상은 바꾸지 않는다. Character Master는 얼굴/정체성 참조용이며 의상 참조용이 아니다. 참조 이미지의 옷을 기본 복장처럼 반복 복제하지 않는다. 보아가 등장할 때마다 장소, 계절, 날씨, 시대, 활동, 직업/역할, 무드에 맞는 자연스럽고 세련된 의상을 새로 스타일링한다. 예: 해변은 리조트웨어, 겨울 도시는 코트/니트, 운동 장면은 스포츠웨어, 업무 장면은 스마트 캐주얼, 판타지는 해당 세계관 복식처럼 장면 논리에 맞춘다. 동일 장면의 연속성이 필요한 경우에만 같은 옷을 유지한다. 표정, 포즈, 헤어 연출, 앵글과 배경도 장면에 맞게 바꿀 수 있다. 다른 여성으로 재해석하거나 얼굴을 랜덤화하지 않는다. 과도한 노출이나 성적 연출은 금지.
-표정은 과장된 충격 표정보다 호기심, 미소, 놀람, 만족, 집중 같은 자연스러운 감정을 우선한다.
-뻔한 AI 로봇, 푸른 회로판, 홀로그램 뇌, 의미 없는 네온을 기본값으로 쓰지 않는다.
-FOOD_PICK: 음식이 가장 큰 주인공. 윤기, 김, 질감, 단면 등 식욕을 자극하는 디테일을 강조하고, 필요할 때만 실제 식사 중인 성인 여성/친구들을 보조 피사체로 사용한다. 특정 식당 사진을 복제하지 않는다.
-HOT_ISSUE: 핵심 사물/상징/장소가 주인공인 프리미엄 편집기사형 비주얼. 인물은 맥락상 자연스러울 때만 사용하며 실제 보도사진, 피해자, 특정 현장 사진으로 오인되지 않게 한다.
-재생성 번호가 달라지면 카메라 앵글, 인물 유무, 구도, 시각적 은유 중 최소 2가지를 확실히 바꾼다.
-영어 이미지 프롬프트만 출력.`;
+본문 전체: ${candidate.body}
+시각 브리프: ${candidate.image_brief}
 
-  const j=await geminiGenerate(key,{
-    model:TEXT_MODEL,
-    prompt,
-    temperature:.8
-  });
+규칙:
+- main_hook은 본문 핵심과 직접 연결된 짧고 강한 한국어 문구이며 가장 크고 즉시 읽혀야 한다.
+- 필요한 경우에만 짧은 topic_label과 supporting_copy를 사용한다. 필요 없으면 빈 문자열로 둔다.
+- key_points는 본문에서 확인되는 핵심 정보만 2~3개 사용한다.
+- 같은 문장이나 같은 의미를 반복하지 않고 긴 설명문을 만들지 않는다.
+- 본문에 없는 장소, 메뉴, 수치, 사건, 제품 정보는 절대 만들지 않는다.
+- visual_direction은 핵심 음식/사건/제품, 배경, 소품, 카메라 구도를 구체적으로 정한다.
+- layout_direction은 메인 후킹, 보조 정보, 핵심 비주얼의 위치·크기·여백·위계를 정한다.
+- design_style과 color_direction은 콘텐츠 성격에 맞게 정하고 고정 템플릿을 반복하지 않는다.
+- ${categoryRule}
 
-  return textFromGemini(j).slice(0,3000);
+JSON만 반환:
+{"main_hook":"...","topic_label":"","supporting_copy":"","key_points":["",""],"visual_direction":"...","layout_direction":"...","design_style":"...","color_direction":"..."}`,.78);
+  const mainHook=[...String(plan?.main_hook||'').replace(/\s+/g,' ').trim()].slice(0,22).join('');
+  if(!mainHook)throw new Error('EDITORIAL_THUMBNAIL_HOOK_EMPTY');
+
+  const seen=new Set([mainHook.replace(/\s+/g,'').toLocaleLowerCase('ko-KR')]);
+  const uniqueText=(value,max)=>{
+    const text=[...String(value||'').replace(/\s+/g,' ').trim()].slice(0,max).join('');
+    const key=text.replace(/\s+/g,'').toLocaleLowerCase('ko-KR');
+    if(!text||seen.has(key))return '';
+    seen.add(key);
+    return text;
+  };
+  const topicLabel=uniqueText(plan?.topic_label,14);
+  const supportingCopy=uniqueText(plan?.supporting_copy,24);
+  const keyPoints=(Array.isArray(plan?.key_points)?plan.key_points:[])
+    .map(value=>uniqueText(value,22))
+    .filter(Boolean)
+    .slice(0,3);
+  const secondaryCopy=[
+    topicLabel&&`Small topic label: "${topicLabel}"`,
+    supportingCopy&&`Short supporting copy: "${supportingCopy}"`,
+    keyPoints.length&&`Key information: ${keyPoints.map(value=>`"${value}"`).join(' / ')}`
+  ].filter(Boolean).join('\n')||'No secondary text is needed.';
+  const visualDirection=String(plan?.visual_direction||candidate.image_brief||'').slice(0,1200);
+  const layoutDirection=String(plan?.layout_direction||'').slice(0,800);
+  const designStyle=String(plan?.design_style||'').slice(0,500);
+  const colorDirection=String(plan?.color_direction||'').slice(0,500);
+  const imagePriority=candidate.category==='FOOD_PICK'
+    ? `FOOD THUMBNAIL RULE:
+Make the verified dish unmistakable, large, richly textured, glossy, steaming when natural, and immediately appetizing. Show the key food and place/menu identity at a glance. A person may appear only when it strengthens the dining story; if used, render the attached Character Master as the same adult Korean woman, VOA, with a natural expression and context-appropriate clothing. Never let the person hide or overpower the food.`
+    : `HOT ISSUE THUMBNAIL RULE:
+Make the verified event, product, object, or symbol unmistakable and visually dominant, with the urgency and polish of a premium breaking-feature thumbnail. Use dramatic but truthful scale, lighting, and framing without fabricating facts or presenting an invented scene as documentary evidence. Use VOA only when a person is genuinely useful to the story.`;
+
+  return `Create one finished 4:5 portrait Threads information thumbnail. Analyze and express the full source content as a single integrated editorial design, not a plain text-free photograph and not a later text overlay.
+
+EXACT MAIN KOREAN HOOK: "${mainHook}"
+${secondaryCopy}
+
+Visual direction: ${visualDirection}
+Layout direction: ${layoutDirection}
+Design style: ${designStyle}
+Color direction: ${colorDirection}
+Source topic: ${candidate.topic}
+Variation: ${variation}
+
+${imagePriority}
+
+Render the exact main hook once as the largest, strongest first-read element with excellent Korean legibility in a small mobile feed. Arrange it in one to three compact lines and allow one key word to use a contrasting color or scale. Secondary copy and 2–3 key facts, when supplied, must be much smaller, concise, and clearly subordinate. Do not paraphrase supplied text, repeat a phrase or meaning, invent extra copy, or fill the image with long tiny text.
+Design the hero subject, background, props, framing, typography position, size, color, hierarchy, and whitespace together from the first generation pass. Match the source content rather than repeating one fixed palette or template. Use tasteful editorial accents only when they support hierarchy; do not add logos, watermarks, fake app UI, or unrelated decoration.
+The image generation model must directly render the complete visual and all supplied text as one final thumbnail. No Canvas typography, pasted headline, separate Hook composite, or later overlay step will be used.`;
 }
 
 function extractInlineImage(j){
