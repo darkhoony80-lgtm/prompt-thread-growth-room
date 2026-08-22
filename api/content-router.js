@@ -403,21 +403,17 @@ async function aiPromptImageDirector(key,candidate,variation){
 
 규칙:
 - 6~12자 우선, 최대 14자로 짧고 강하게 만든다.
-- 작은 설명문이 아니라 피드에서 즉시 읽히는 1~3줄 메인 문구다.
+- 작은 설명문이 아니라 피드에서 즉시 읽히는 1~2줄 메인 문구다.
+- 설명형 제목보다 결과에 대한 호기심을 만드는 문구를 우선한다.
 - 프롬프트 결과의 매력을 직관적으로 전달하되 내용을 과장하지 않는다.
 - 같은 단어나 같은 의미를 문구 안에서 반복하지 않는다.
 - "미쳤다", "충격", "모르면 손해" 같은 반복적 표현은 피한다.
-- 보조 문구는 꼭 필요할 때만 12자 이내로 1개 만들고, 메인 문구와 같은 의미를 반복하지 않는다. 필요 없으면 빈 문자열로 둔다.
-- 긴 설명문이나 그 밖의 추가 카피는 만들지 않는다.
+- 부제, 설명문, 추가 카피, 두 번째 문구를 만들지 않는다.
 
 JSON만 반환:
-{"thumbnail_hook":"...","supporting_copy":""}`,.7);
+{"thumbnail_hook":"..."}`,.7);
   const thumbnailHook=clampHook(plan?.thumbnail_hook);
   if(!thumbnailHook)throw new Error('AI_PROMPT_THUMBNAIL_HOOK_EMPTY');
-  const supportingCopy=[...String(plan?.supporting_copy||'').replace(/\s+/g,' ').trim()].slice(0,12).join('');
-  const normalizedHook=thumbnailHook.replace(/\s+/g,'').toLocaleLowerCase('ko-KR');
-  const normalizedSupporting=supportingCopy.replace(/\s+/g,'').toLocaleLowerCase('ko-KR');
-  const safeSupportingCopy=normalizedSupporting&&normalizedSupporting!==normalizedHook?supportingCopy:'';
 
   return {
     thumbnailHook,
@@ -428,8 +424,8 @@ VOA IDENTITY RULE:
 VOA must be the main character and visual protagonist. Preserve the Character Master's exact adult Korean female identity: facial structure, eyes, nose, mouth proportions, skin tone, age range, base hair color, and overall impression. If the source prompt mentions a woman, girl, model, person, or another main human subject, reinterpret that subject as VOA instead of generating a different person. Do not replace, randomize, or blend VOA's face. Apply the source prompt's clothing, pose, action, location, lighting, camera, and styling to VOA.
 VOA's face must be sharp, fully visible, and unobstructed. Never add sunglasses, masks, veils, hands, hair, props, deep shadow, or any other element that hides her face. If the source prompt requests a face-obscuring element, omit or reinterpret that element while preserving the rest of its styling intent.
 
-EDITORIAL SPLIT-LAYOUT RULE:
-Design the composition as two clearly separated, non-overlapping regions from the start: an uncluttered typography zone occupying roughly 45–55% of the frame on one side, and a VOA plus prompt-result visual zone occupying roughly 45–55% on the opposite side. Choose left or right placement according to the scene. Reserve genuine negative space for typography before rendering the scene. Keep all text completely inside the typography zone and all of VOA, including her face and body, completely outside it. Never place typography over VOA or generate a full-frame portrait and then visually overlay text on top.
+NATURAL PHOTO COMPOSITION RULE:
+The entire frame must remain one continuous, natural, full-bleed photograph from edge to edge. Do not split the image into left/right panels. Do not create a colored typography panel, text-only box, card UI, artificial backdrop, or separate graphic region. First compose the prompt-faithful photographic scene, then identify real negative space that belongs naturally to that scene, such as an empty wall, open sky, uncluttered floor, or calm shadow-free background. Place VOA and adjust the camera framing so this authentic negative space is available without damaging the photograph. The result should feel like editorial typography designed directly into a real photographed environment, not text placed on a separate layout.
 
 SOURCE PROMPT FIDELITY RULE:
 Faithfully reproduce the SOURCE IMAGE PROMPT below as the core visual result. Preserve its environment, composition, mood, palette, lighting, lens, camera angle, textures, props, era, weather, and photographic or artistic style as far as they do not conflict with VOA's fixed identity. A viewer should immediately understand what result this prompt produces.
@@ -438,12 +434,10 @@ SOURCE IMAGE PROMPT:
 ${sourcePrompt}
 
 EXACT KOREAN HOOK: "${thumbnailHook}"
-Render this hook exactly once in one to three short lines as the dominant editorial headline. Make it bold, high-contrast, and immediately readable in a small Threads feed. Keep it wholly inside the reserved typography zone. You may emphasize one key word with a different color or size when it improves hierarchy.
-${safeSupportingCopy?`OPTIONAL SUPPORTING COPY: "${safeSupportingCopy}"
-Render this exactly once below the main hook, clearly smaller and secondary. Do not repeat the hook's meaning.`:'Do not render supporting copy.'}
-Do not paraphrase, translate, duplicate, or repeat either text. Do not add any other explanation, caption, logo, watermark, or text.
+Render this hook exactly once in one or two short lines as a large, bold, high-contrast editorial headline that is immediately readable in a small Threads feed. Place it only within authentic negative space inside the photograph. Never place any text over VOA's face, hair, head, body, clothing, or the scene's essential focal subject. Reposition VOA or adjust the camera composition before generation when necessary to secure clean space. You may emphasize one key word with a different color or size and use a natural shadow or outline for legibility, but never use a rectangular panel, card, or text box behind it.
+Do not paraphrase, translate, duplicate, or repeat the hook. Do not add a subtitle, explanation, extra copy, logo, watermark, or any other text.
 Choose colors, typography, and editorial art direction to suit this specific content and source prompt; do not repeat a fixed color scheme or template across images.
-The image generation model must design VOA, the prompt-faithful scene, and the hook typography together in one complete image. No Canvas, pasted headline, or later overlay step will be used.
+The image generation model must design the prompt-faithful photograph, VOA, its natural negative space, and the hook typography together as one finished image from the start. Preserve the photograph's realism and appeal above decorative graphics. No Canvas, pasted headline, or later overlay step will be used.
 Variation: ${variation}`
   };
 }
