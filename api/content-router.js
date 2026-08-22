@@ -404,8 +404,10 @@ async function aiPromptImageDirector(key,candidate,variation){
 규칙:
 - 6~12자 우선, 최대 14자로 짧고 강하게 만든다.
 - 작은 설명문이 아니라 피드에서 즉시 읽히는 1~2줄 메인 문구다.
-- 설명형 제목보다 결과에 대한 호기심을 만드는 문구를 우선한다.
-- 프롬프트 결과의 매력을 직관적으로 전달하되 내용을 과장하지 않는다.
+- 사진의 장소·인물·풍경을 그대로 요약하는 설명형 제목이나 캡션을 만들지 않는다.
+- "알프스 설원 속 온천 뷰", "도쿄 야경 속 인물 사진", "지중해 여행 감성", "뉴욕 거리 패션" 같은 장면 설명형 문구는 금지한다.
+- 이 프롬프트를 직접 사용해보고 싶게 만드는 호기심, 결과 기대감, 따라 해보고 싶은 욕구, 프롬프트 가치 중 하나를 핵심 메시지로 만든다.
+- 프롬프트 결과의 매력을 과장 없이 전달하되, 원문 문구나 키워드를 단순 복사하지 않는다.
 - 같은 단어나 같은 의미를 문구 안에서 반복하지 않는다.
 - "미쳤다", "충격", "모르면 손해" 같은 반복적 표현은 피한다.
 - 부제, 설명문, 추가 카피, 두 번째 문구를 만들지 않는다.
@@ -422,10 +424,11 @@ JSON만 반환:
 
 VOA IDENTITY RULE:
 VOA must be the main character and visual protagonist. Preserve the Character Master's exact adult Korean female identity: facial structure, eyes, nose, mouth proportions, skin tone, age range, base hair color, and overall impression. If the source prompt mentions a woman, girl, model, person, or another main human subject, reinterpret that subject as VOA instead of generating a different person. Do not replace, randomize, or blend VOA's face. Apply the source prompt's clothing, pose, action, location, lighting, camera, and styling to VOA.
-VOA's face must be sharp, fully visible, and unobstructed. Never add sunglasses, masks, veils, hands, hair, props, deep shadow, or any other element that hides her face. If the source prompt requests a face-obscuring element, omit or reinterpret that element while preserving the rest of its styling intent.
+VOA's face must be sharp, fully visible, and unobstructed. Never add sunglasses, masks, hats, veils, hands, hair, props, deep shadow, or any other element that hides her face. If the source prompt requests a face-obscuring element, omit or reinterpret that element while preserving the rest of its styling intent. Clothing and environment may follow the source prompt, but VOA's face, identity, and recognizable hair characteristics always take priority.
 
 NATURAL PHOTO COMPOSITION RULE:
-The entire frame must remain one continuous, natural, full-bleed photograph from edge to edge. Do not split the image into left/right panels. Do not create a colored typography panel, text-only box, card UI, artificial backdrop, or separate graphic region. First compose the prompt-faithful photographic scene, then identify real negative space that belongs naturally to that scene, such as an empty wall, open sky, uncluttered floor, or calm shadow-free background. Place VOA and adjust the camera framing so this authentic negative space is available without damaging the photograph. The result should feel like editorial typography designed directly into a real photographed environment, not text placed on a separate layout.
+Before rendering anything, simultaneously plan the prompt-faithful scene, VOA placement, camera angle and framing, essential background elements, authentic negative space, exact hook placement, and typography hierarchy as one thumbnail composition. Do not use a sequential "make a photo first, then find an empty spot for text" workflow.
+The entire frame must remain one continuous, natural, full-bleed photograph from edge to edge. Do not split the image into left/right panels. Do not create a colored typography panel, text-only box, card UI, artificial backdrop, poster rectangle, or separate graphic region. Build authentic negative space naturally into the photographed scene by adjusting VOA's position, camera direction, sky ratio, wall or architecture framing, snowfield, floor, water, mist, light, or another calm background area appropriate to the source prompt. Preserve the scene's important background and focal details. The result should feel like editorial typography conceived as part of the photographed environment from the first composition decision, not a caption added to a finished photo.
 
 SOURCE PROMPT FIDELITY RULE:
 Faithfully reproduce the SOURCE IMAGE PROMPT below as the core visual result. Preserve its environment, composition, mood, palette, lighting, lens, camera angle, textures, props, era, weather, and photographic or artistic style as far as they do not conflict with VOA's fixed identity. A viewer should immediately understand what result this prompt produces.
@@ -436,7 +439,7 @@ ${sourcePrompt}
 EXACT KOREAN HOOK: "${thumbnailHook}"
 Render this hook exactly once in one or two short lines as a large, bold, high-contrast editorial headline that is immediately readable in a small Threads feed. Place it only within authentic negative space inside the photograph. Never place any text over VOA's face, hair, head, body, clothing, or the scene's essential focal subject. Reposition VOA or adjust the camera composition before generation when necessary to secure clean space. You may emphasize one key word with a different color or size and use a natural shadow or outline for legibility, but never use a rectangular panel, card, or text box behind it.
 Do not paraphrase, translate, duplicate, or repeat the hook. Do not add a subtitle, explanation, extra copy, logo, watermark, or any other text.
-Choose colors, typography, and editorial art direction to suit this specific content and source prompt; do not repeat a fixed color scheme or template across images.
+Choose VOA placement, hook placement, camera framing, type scale, emphasis, colors, and editorial art direction from this specific source prompt's spatial structure. Do not default to VOA on the right and text on the left, and do not repeat a fixed position, color scheme, type size, or template across images. Variation must stay natural rather than becoming needlessly complex.
 The image generation model must design the prompt-faithful photograph, VOA, its natural negative space, and the hook typography together as one finished image from the start. Preserve the photograph's realism and appeal above decorative graphics. No Canvas, pasted headline, or later overlay step will be used.
 Variation: ${variation}`
   };
