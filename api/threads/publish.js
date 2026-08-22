@@ -107,9 +107,10 @@ export default async function handler(req,res){
 
   const text=String(req.body?.text||'').trim();
   const imageUrl=String(req.body?.image_url||'').trim();
+  const receivedTopicTag=String(req.body?.topic_tag||'').replace(/^#+/,'').trim().slice(0,80);
   const topicTagVerified=req.body?.topic_tag_verified===true;
   const topicTag=topicTagVerified
-    ?String(req.body?.topic_tag||'').replace(/^#+/,'').trim().slice(0,80)
+    ?receivedTopicTag
     :'';
 
   if(!text)return res.status(400).json({ok:false,error:'TEXT_REQUIRED'});
@@ -128,6 +129,11 @@ export default async function handler(req,res){
     return res.status(400).json({ok:false,error:'APPROVED_IMAGE_REQUIRED'});
   }
 
+  console.log('[THREADS_TOPIC_RECEIVED]',JSON.stringify({
+    topic_tag:receivedTopicTag||null,
+    topic_tag_verified:topicTagVerified
+  }));
+
   // 1) Create image container.
   const createParams={
     media_type:'IMAGE',
@@ -136,7 +142,17 @@ export default async function handler(req,res){
   };
   if(topicTag)createParams.topic_tag=topicTag;
 
+  console.log('[THREADS_CREATE_TOPIC_PAYLOAD]',JSON.stringify({
+    topic_tag:topicTag||null,
+    includes_topic_tag:Object.prototype.hasOwnProperty.call(createParams,'topic_tag')
+  }));
+
   const create=await post('/me/threads',s.accessToken,createParams);
+
+  console.log('[THREADS_CREATE_RESPONSE]',JSON.stringify({
+    ok:create.ok,
+    creation_id_present:Boolean(create.body?.id)
+  }));
 
   if(!create.ok){
     const d=detail(create.body,'CREATE_CONTAINER',create.status);
