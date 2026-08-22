@@ -1176,7 +1176,7 @@ async function sendInstagramPublicReply(token,commentId){
 }
 
 async function retryInstagramPublicReply(delivery,token){
-  if(delivery?.dm_status!=='sent'||delivery?.reply_status==='sent')return {status:'duplicate'};
+  if(delivery?.dm_status!=='sent'||delivery?.reply_status!=='failed')return {status:'duplicate'};
   try{
     const publicReplyId=await sendInstagramPublicReply(token,String(delivery.instagram_comment_id));
     await updateInstagramDelivery(String(delivery.instagram_comment_id),{
