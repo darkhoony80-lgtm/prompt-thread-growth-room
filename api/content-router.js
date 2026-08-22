@@ -751,7 +751,7 @@ function normalizeInstagramPlan(raw,source){
   const slides=(Array.isArray(raw?.slides)?raw.slides:[]).slice(0,5).map((slide,index)=>({
     number:index+1,
     role:String(slide?.role||'').trim().slice(0,80),
-    message:String(slide?.message||'').replace(/\s+/g,' ').trim().slice(0,140),
+    message:String(slide?.message||'').replace(/\s+/g,' ').trim().slice(0,90),
     visual:String(slide?.visual||'').trim().slice(0,900),
     composition:String(slide?.composition||'').trim().slice(0,700)
   })).filter(slide=>slide.message&&slide.visual);
@@ -793,10 +793,10 @@ function normalizeInstagramPlan(raw,source){
 }
 
 function instagramCarouselRules(category){
-  if(category==='AI_TIP')return `AI_TIP은 본문 전체를 이해한 뒤 3~5장의 짧은 연속 이야기로 재구성한다. 문제→반전→해결, 경험→핵심→적용 등 소재에 가장 자연스러운 흐름을 스스로 선택하고 고정 템플릿을 강제하지 않는다. 각 장 message는 단순 제목 한 줄도 긴 카드뉴스 문단도 아닌, 모바일 약 3줄로 읽히는 2~3개의 짧은 문장으로 쓴다. 마지막 장 또는 caption에는 프롬프트가 필요하면 댓글에 "저요"를 남겨 달라는 DM CTA를 자연스럽게 넣는다. 실제 프롬프트 전문, 첫 댓글·고정 댓글·댓글 복사 안내는 caption과 이미지에 넣지 않는다.`;
+  if(category==='AI_TIP')return `AI_TIP은 본문 전체를 이해한 뒤 3~5장의 짧은 연속 이야기로 재구성한다. 문제→반전→해결, 경험→핵심→적용 등 소재에 가장 자연스러운 흐름을 스스로 선택하고 고정 템플릿을 강제하지 않는다. 각 장 message는 단순 제목 한 줄도 긴 카드뉴스 문단도 아닌, 공백 포함 35~70자와 2개의 짧은 문장을 우선해 모바일 약 3줄로 쓴다. 마지막 장 또는 caption에는 프롬프트가 필요하면 댓글에 "저요"를 남겨 달라는 DM CTA를 자연스럽게 넣는다. 실제 프롬프트 전문, 첫 댓글·고정 댓글·댓글 복사 안내는 caption과 이미지에 넣지 않는다.`;
   if(category==='AI_PROMPT')return `AI_PROMPT는 하나의 reply_prompt로 만든 VOA 화보 시리즈다. 기본 3~4장이고 충분히 의미 있는 variation이 있을 때만 5장으로 한다. 모든 장에서 같은 VOA 얼굴·정체성, 같은 세계관·장소·기본 의상·색감·조명·촬영 스타일을 유지한다. 장마다 포즈, 시선, 카메라 거리·각도·렌즈 느낌, 좌우 배치, 주변 공간과 순간만 변화시켜 거의 같은 사진을 반복하지 않는다. 마지막 장 또는 caption에는 프롬프트가 필요하면 댓글에 "저요"를 남겨 달라는 DM CTA를 자연스럽게 넣는다. 실제 reply_prompt 전문, 첫 댓글·고정 댓글·댓글 복사 안내는 caption과 이미지에 넣지 않는다.`;
-  if(category==='FOOD_PICK')return `FOOD는 본문 전체를 이해한 뒤 3~5장의 식욕과 발견 욕구가 이어지는 이야기로 재구성한다. 궁금증→음식의 매력→결론, 경험→디테일→추천 등 소재에 맞는 흐름을 선택하며 고정 템플릿을 강제하지 않는다. 각 장 message는 단순 제목 한 줄도 긴 문단도 아닌 모바일 약 3줄의 2~3개 짧은 문장으로 쓴다. 확인된 음식·식당 정보만 사용하고 음식 사진을 반복하지 않는다. "저요", 프롬프트, DM CTA는 절대 넣지 않는다.`;
-  return `HOT_ISSUE는 본문 전체와 source_notes를 이해한 뒤 3~5장의 빠른 연속 이야기로 재구성한다. 사실→이유→의미, 궁금증→사례→결론 등 이슈에 맞는 흐름을 선택하며 고정 템플릿을 강제하지 않는다. 각 장 message는 단순 제목 한 줄도 긴 문단도 아닌 모바일 약 3줄의 2~3개 짧은 문장으로 쓴다. 본문과 source_notes에 없는 숫자·발언·사건은 만들지 않는다. "저요", 프롬프트, DM CTA는 절대 넣지 않는다.`;
+  if(category==='FOOD_PICK')return `FOOD는 본문 전체를 이해한 뒤 3~5장의 식욕과 발견 욕구가 이어지는 이야기로 재구성한다. 궁금증→음식의 매력→결론, 경험→디테일→추천 등 소재에 맞는 흐름을 선택하며 고정 템플릿을 강제하지 않는다. 각 장 message는 단순 제목 한 줄도 긴 문단도 아닌, 공백 포함 35~70자와 2개의 짧은 문장을 우선해 모바일 약 3줄로 쓴다. 확인된 음식·식당 정보만 사용하고 음식 사진을 반복하지 않는다. "저요", 프롬프트, DM CTA는 절대 넣지 않는다.`;
+  return `HOT_ISSUE는 본문 전체와 source_notes를 이해한 뒤 3~5장의 빠른 연속 이야기로 재구성한다. 사실→이유→의미, 궁금증→사례→결론 등 이슈에 맞는 흐름을 선택하며 고정 템플릿을 강제하지 않는다. 각 장 message는 단순 제목 한 줄도 긴 문단도 아닌, 공백 포함 35~70자와 2개의 짧은 문장을 우선해 모바일 약 3줄로 쓴다. 본문과 source_notes에 없는 숫자·발언·사건은 만들지 않는다. "저요", 프롬프트, DM CTA는 절대 넣지 않는다.`;
 }
 
 async function actionInstagramCarouselPrepare(req,res){
@@ -820,7 +820,7 @@ ${instagramCarouselRules(source.category)}
 - 독립 이미지 모음이 아니라 넘겨야 이야기가 완성되는 한 시리즈로 만든다.
 - visual_concept, color_palette, art_direction, 등장인물·공간·분위기는 시리즈 전체에서 일관되게 유지한다.
 - 각 장은 역할, 구도, 정보량이 달라야 하고 같은 문장·의미·레이아웃을 반복하지 않는다.
-- AI_TIP, FOOD_PICK, HOT_ISSUE의 message는 단순 제목 한 줄이나 긴 카드뉴스 문단이 아니라 모바일에서 약 3줄로 읽히는 2~3개의 짧은 문장이다. AI_PROMPT는 화보를 해치지 않는 짧고 강한 한 메시지로 둔다.
+- AI_TIP, FOOD_PICK, HOT_ISSUE의 message는 단순 제목 한 줄이나 긴 카드뉴스 문단이 아니다. 공백 포함 35~70자, 2개의 짧은 문장을 우선해 모바일 약 3줄로 읽히게 한다. AI_PROMPT는 화보를 해치지 않는 짧고 강한 한 메시지로 둔다.
 - 장별 visual과 composition은 다음 장과 구별되는 구체적 장면·카메라·여백·타이포그래피 위치를 정한다.
 - 텍스트는 주요 인물, 얼굴, 음식, 제품, 사건의 핵심 피사체를 가리지 않는 실제 여백에 둔다.
 - 이미지 생성 AI가 텍스트까지 직접 디자인할 것이므로 Canvas, 후합성, 별도 Hook 합성은 없다.
