@@ -464,7 +464,11 @@ function pillarPrompt({pillar,research='',feedback='',performance='',mood='RANDO
 
   const rules={
     AI_TIP:`AI_TIP 하나만 만든다. 일반인이 잘 모르는 짧은 전문 개념/명령어를 오늘의 명령어처럼 소개한다. RED TEAM, STEELMAN, PRE-MORTEM, EDGE CASES, COUNTEREXAMPLE, RUBRIC, FIRST PRINCIPLES 같은 수준이지만 예시를 재탕하지 말고 더 넓게 발굴한다. '전문가처럼 답해줘', '결론부터', '예시 2개' 같은 초급 팁은 금지. 본문은 ① 낯선 용어 ② 복붙 가능한 짧은 영어 명령어 ③ 쉬운 한국어 설명 ④ 언제 쓰면 좋은지. 영어 명령어 필수. 말투는 '이거 한번 써봐 👀', '생각보다 꽤 쓸만해'처럼 짧고 영리한 반말로 쓴다.`,
-    AI_PROMPT:`AI_PROMPT 하나만 만든다. ${aiPromptMoodRule(mood)} 반드시 body와 reply_prompt를 완전히 분리한다. body는 Threads에 실제 게시되는 한국어 설명문이다. 결과 이미지의 매력, 빛/질감/분위기/촬영 느낌 중 핵심을 3~5문장으로 충분히 설명한다. 자연스러운 반말과 가벼운 이모지 1~2개를 사용한다. 영문 이미지 프롬프트 문장이나 영어 프롬프트 일부를 body에 절대 넣지 않는다. body 마지막은 반드시 '프롬프트는 첫 댓글에 남겨둘게 👇'처럼 첫 댓글을 안내한다. reply_prompt는 복붙용 영문 이미지 프롬프트만 넣는다. 한국어 설명, 번역, Prompt:, 따옴표, Markdown 금지. 피사체/행동/환경/시간/카메라/렌즈/구도/조명/색감/질감/현실성/금지요소 중 필요한 요소를 상세하게 구성한다. 길이 때문에 핵심 디테일을 억지로 삭제하지 않는다. 흔한 cinematic, warm lighting 단순 나열 수준은 금지. image_brief는 reply_prompt 결과 이미지의 구도와 시각적 매력을 보충하되 별도의 텍스트 중심 썸네일로 바꾸지 않는다.`,
+    AI_PROMPT:`AI_PROMPT 하나만 만든다. ${aiPromptMoodRule(mood)} 반드시 body와 reply_prompt를 완전히 분리한다. body는 Threads에 실제 게시되는 한국어 설명문이다. 결과 이미지의 매력, 빛/질감/분위기/촬영 느낌 중 핵심을 3~5문장으로 충분히 설명한다. 자연스러운 반말과 가벼운 이모지 1~2개를 사용한다. 영문 이미지 프롬프트 문장이나 영어 프롬프트 일부를 body에 절대 넣지 않는다. body 마지막은 반드시 '프롬프트는 첫 댓글에 남겨둘게 👇'처럼 첫 댓글을 안내한다.
+
+reply_prompt를 쓰기 전에 내부적으로 다음 Scene Design 20개 항목을 빠짐없이 결정하고 충돌을 제거한다: SUBJECT, IDENTITY, ACTION/POSE, EXPRESSION, WARDROBE/STYLING, LOCATION, ENVIRONMENT DETAILS, ERA/CULTURAL CONTEXT, COMPOSITION, CAMERA POSITION, LENS/FOCAL LENGTH, DEPTH OF FIELD, LIGHTING, MATERIAL/SKIN/FABRIC DETAIL, COLOR SCIENCE, FILM/DIGITAL CHARACTER, ATMOSPHERE, PHYSICAL REALISM, IDENTITY CONSTRAINTS, NEGATIVE/PROHIBITED ELEMENTS. 내부 설계 목록은 출력하지 말고 이를 자연스럽게 통합한 하나의 고밀도 영문 MASTER PROMPT만 reply_prompt에 넣는다. 일반적으로 800~1500자 정도를 목표로 하되 단순한 장면을 억지로 늘리거나 키워드를 반복하지 않는다. camera height/distance, 자연스러운 원근과 공간 관계, 장면에 맞는 렌즈와 조명 방향·부드러움·하이라이트·그림자, 재질과 피부·직물, 색 반응을 구체적으로 선택한다. cinematic, ultra detailed, 35mm 같은 장식어의 기계적 나열은 금지한다.
+
+reply_prompt는 사용자가 자신의 사진을 첨부한 뒤 그대로 복사해 사용할 수 있어야 하며 반드시 다음 정체성 의미를 자연스러운 영문 지시로 포함한다: Use the attached reference image as the PRIMARY IDENTITY REFERENCE. Preserve the exact identity and recognizable facial characteristics, including facial structure, proportions, eyes, nose, lips, jawline, skin characteristics and apparent age. Do not reinterpret, replace, beautify, idealize, age-shift or generate a different person. Identity preservation takes priority over styling, era, fashion and cinematic aesthetics. 얼굴과 양쪽 눈은 완전히 보여야 한다. sunglasses, goggles, masks, veils, hands, hair, props, deep hat shadows, dramatic shadows over the eyes, foreground objects로 얼굴을 가리지 않는다. 콘셉트에 얼굴 가림 요소가 있어도 제거하고 나머지 시대·의상·환경으로 스타일을 유지한다. 비정상 신체, 물체 관통, 불가능한 카메라·공간 관계, 부자연스러운 반사, 복제 인물, 추가 손·팔·손가락을 금지한다. 한국어 설명, 번역, Prompt:, 따옴표, Markdown은 reply_prompt에 넣지 않는다. image_brief는 reply_prompt 결과 이미지의 구도와 시각적 매력을 보충하되 별도의 텍스트 중심 썸네일로 바꾸지 않는다.`,
 
 AI_TIP:`AI 활용 팁은 반드시 body와 reply_prompt를 완전히 분리한다.
 핵심은 '짧은 전문 명령어/기법 이름' 하나를 소개하는 것이다. RED TEAM, STEELMAN, PRE-MORTEM, EDGE CASES, COUNTEREXAMPLE, RUBRIC, FIRST PRINCIPLES, DECOMPOSITION처럼 1~3단어 수준의 짧고 기억하기 쉬운 개념을 우선한다. 단, 같은 용어를 반복 재탕하지 말고 매번 다른 전문 개념을 발굴한다.
@@ -476,7 +480,7 @@ image_brief는 본문 핵심을 한눈에 이해시키는 보조 장면을 설�
     HOT_ISSUE:`HOT_ISSUE 하나만 만든다. AI에 편향하지 말고 오늘 실제 뉴스 중 대화 가치와 화제성이 가장 큰 하나를 고른다. 환율/증시/정책/사회/사건사고/전쟁/국제/날씨/태풍/스포츠/연예/자동차/부동산/과학/테크 모두 동등하게 본다. 아래 검색 결과만 사실 재료로 사용한다. 검색 결과 안에 '최근 이미 다룬 핫이슈'와 중복 금지 규칙이 포함되어 있으면 반드시 따른다. 같은 사건을 제목/후킹/표현만 바꿔 재사용하지 않는다. 기사 제목 복사 금지. 본문은 '무슨 일인데? → 쉽게 말하면 왜 중요한데? → 앞으로 뭘 보면 돼?' 흐름으로 친근한 반말로 풀어준다. 뉴스 앵커처럼 딱딱하게 쓰지 않는다. 다만 재난·전쟁·피해자가 있는 사건은 가벼운 농담 없이 차분하게 쓴다. 루머와 확인 안 된 숫자 금지.\n검색 결과:\n${research}`
   };
 
-  return `${common}\n\n${rules[pillar]}\n\nJSON만 반환:\n{"candidate":{"category":"${pillar}","topic":"...","topic_tag":"...","topic_tag_candidates":["...","...","..."],"hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reason":"...","image_brief":"...","source_notes":[],"score":{"stop":0,"save":0,"share":0,"comment":0,"follow":0,"novelty":0,"visual":0,"total":0}}}`;
+  return `${common}\n\n${rules[pillar]}\n\nJSON만 반환:\n{"candidate":{"category":"${pillar}","topic":"...","topic_tag":"...","topic_tag_candidates":["...","...","..."],"hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reply_prompt":"AI_PROMPT/AI_TIP만 규칙에 맞게 작성, 나머지는 빈 문자열","reason":"...","image_brief":"...","source_notes":[],"score":{"stop":0,"save":0,"share":0,"comment":0,"follow":0,"novelty":0,"visual":0,"total":0}}}`;
 }
 
 async function actionGenerate(req,res){
@@ -505,6 +509,11 @@ async function actionGenerate(req,res){
     const item=cleanCandidate({...raw,category:pillar},0);
     if(pillar==='AI_PROMPT')item.mood=mood;
     if(!item.body||!item.hook)throw new Error('PILLAR_CONTENT_INVALID');
+    if(pillar==='AI_PROMPT'&&(
+      item.reply_prompt.length<650||
+      !/PRIMARY IDENTITY REFERENCE/i.test(item.reply_prompt)||
+      !/attached reference image/i.test(item.reply_prompt)
+    ))throw new Error('AI_PROMPT_MASTER_PROMPT_INVALID');
 
     return send(res,200,{
       ok:true,
@@ -592,8 +601,8 @@ function identitySafePrompt(value){
   return String(value||'')
     .replace(/\b(?:vintage\s+)?sunglasses?\b/gi,'period styling with fully visible eyes')
     .replace(/\bgoggles?\b/gi,'eye area fully visible and unobstructed')
-    .replace(/\b(?:face[- ]?covering\s+)?masks?\b/gi,'unobstructed face')
-    .replace(/\bveils?\b/gi,'unobstructed face with era-appropriate styling')
+    .replace(/\b(?:face[- ]?covering\s+)?masks?\b/gi,'fully visible face')
+    .replace(/\bveils?\b/gi,'fully visible face with era-appropriate styling')
     .replace(/\b(?:face\s+hidden|hidden\s+face|shadow\s+over\s+(?:the\s+)?eyes?)\b/gi,'face and eyes clearly lit and fully visible');
 }
 
@@ -965,19 +974,30 @@ function instagramSource(candidate={}){
 }
 
 function normalizeInstagramPlan(raw,source){
-  const slides=(Array.isArray(raw?.slides)?raw.slides:[]).slice(0,5).map((slide,index)=>({
-    number:index+1,
-    role:String(slide?.role||'').trim().slice(0,80),
-    message:String(slide?.message||'').replace(/\s+/g,' ').trim().slice(0,90),
-    visual:String(slide?.visual||'').trim().slice(0,900),
-    composition:String(slide?.composition||'').trim().slice(0,700)
-  })).filter(slide=>slide.message&&slide.visual);
-  if(slides.length<3||slides.length>5)throw new Error('INSTAGRAM_CAROUSEL_SLIDE_COUNT_INVALID');
-  const seen=new Set();
+  const slides=(Array.isArray(raw?.slides)?raw.slides:[]).slice(0,5).map((slide,index)=>{
+    const lines=String(slide?.message||'').split(/\r?\n|\\n/).map(v=>v.replace(/\s+/g,' ').trim()).filter(Boolean);
+    if(!lines.length||lines.length>3)throw new Error('INSTAGRAM_STORY_TEXT_LINES_INVALID');
+    const message=lines.join('\n');
+    const maxCharacters=index===0?34:54;
+    if([...message.replace(/\s/g,'')].length>maxCharacters)throw new Error('INSTAGRAM_STORY_TEXT_TOO_LONG');
+    return {
+      number:index+1,
+      role:index===0?'HOOK':String(slide?.role||'').trim().slice(0,80),
+      message,
+      visual:String(slide?.visual||'').trim().slice(0,900),
+      composition:String(slide?.composition||'').trim().slice(0,700)
+    };
+  }).filter(slide=>slide.message&&slide.visual&&slide.composition);
+  if(slides.length<2||slides.length>5)throw new Error('INSTAGRAM_CAROUSEL_SLIDE_COUNT_INVALID');
+  const seen=new Set(),seenVisuals=new Set(),sourceKey=source.body.replace(/[\s\p{P}\p{S}]/gu,'').toLocaleLowerCase('ko-KR');
   for(const slide of slides){
     const key=slide.message.replace(/[\s\p{P}\p{S}]/gu,'').toLocaleLowerCase('ko-KR');
     if(!key||seen.has(key))throw new Error('INSTAGRAM_CAROUSEL_DUPLICATE_COPY');
+    if(key.length>=18&&sourceKey.includes(key))throw new Error('INSTAGRAM_STORY_BODY_COPY_FORBIDDEN');
     seen.add(key);
+    const visualKey=`${slide.visual} ${slide.composition}`.replace(/[\s\p{P}\p{S}]/gu,'').toLocaleLowerCase('en-US');
+    if(!visualKey||seenVisuals.has(visualKey))throw new Error('INSTAGRAM_STORY_DUPLICATE_SCENE');
+    seenVisuals.add(visualKey);
   }
   const caption=String(raw?.caption||'').trim().slice(0,2200);
   if(!caption)throw new Error('INSTAGRAM_CAROUSEL_CAPTION_EMPTY');
@@ -997,12 +1017,20 @@ function normalizeInstagramPlan(raw,source){
   }else if(/저요|프롬프트.{0,20}DM|DM.{0,20}프롬프트/i.test(allCopy)){
     throw new Error('INSTAGRAM_CAROUSEL_PROMPT_CTA_FORBIDDEN');
   }
+  const visualConcept=String(raw?.visual_concept||'').trim().slice(0,900);
+  const masterScene=String(raw?.master_scene||'').trim().slice(0,1600);
+  const colorPalette=String(raw?.color_palette||'').trim().slice(0,400);
+  const artDirection=String(raw?.art_direction||'').trim().slice(0,1000);
+  if(!visualConcept||!masterScene||!colorPalette||!artDirection){
+    throw new Error('INSTAGRAM_STORY_VISUAL_DIRECTION_INVALID');
+  }
   return {
     category:source.category,
     slide_count:slides.length,
-    visual_concept:String(raw?.visual_concept||'').trim().slice(0,900),
-    color_palette:String(raw?.color_palette||'').trim().slice(0,400),
-    art_direction:String(raw?.art_direction||'').trim().slice(0,1000),
+    visual_concept:visualConcept,
+    master_scene:masterScene,
+    color_palette:colorPalette,
+    art_direction:artDirection,
     character_direction:String(raw?.character_direction||'').trim().slice(0,600),
     caption,
     slides
@@ -1010,10 +1038,10 @@ function normalizeInstagramPlan(raw,source){
 }
 
 function instagramCarouselRules(category){
-  if(category==='AI_TIP')return `AI_TIP은 본문 전체를 이해한 뒤 3~5장의 짧은 연속 이야기로 재구성한다. 문제→반전→해결, 경험→핵심→적용 등 소재에 가장 자연스러운 흐름을 스스로 선택하고 고정 템플릿을 강제하지 않는다. 각 장 message는 단순 제목 한 줄도 긴 카드뉴스 문단도 아닌, 공백 포함 35~70자와 2개의 짧은 문장을 우선해 모바일 약 3줄로 쓴다. 마지막 장 또는 caption에는 프롬프트가 필요하면 댓글에 "저요"를 남겨 달라는 DM CTA를 자연스럽게 넣는다. 실제 프롬프트 전문, 첫 댓글·고정 댓글·댓글 복사 안내는 caption과 이미지에 넣지 않는다.`;
-  if(category==='AI_PROMPT')return `AI_PROMPT는 하나의 reply_prompt로 만든 VOA 화보 시리즈다. 기본 3~4장이고 충분히 의미 있는 variation이 있을 때만 5장으로 한다. 모든 장에서 같은 VOA 얼굴·정체성, 같은 세계관·장소·기본 의상·색감·조명·촬영 스타일을 유지한다. 장마다 포즈, 시선, 카메라 거리·각도·렌즈 느낌, 좌우 배치, 주변 공간과 순간만 변화시켜 거의 같은 사진을 반복하지 않는다. VOA 얼굴은 모든 장에서 선명하고 완전히 보여야 하며 선글라스, 마스크, 모자, 손, 머리카락, 소품, 깊은 그림자로 가리지 않는다. reply_prompt가 얼굴 가림 요소를 요구해도 storyboard visual과 composition에서 제외한다. 마지막 장 또는 caption에는 프롬프트가 필요하면 댓글에 "저요"를 남겨 달라는 DM CTA를 자연스럽게 넣는다. 실제 reply_prompt 전문, 첫 댓글·고정 댓글·댓글 복사 안내는 caption과 이미지에 넣지 않는다.`;
-  if(category==='FOOD_PICK')return `FOOD는 본문 전체를 이해한 뒤 3~5장의 식욕과 발견 욕구가 이어지는 이야기로 재구성한다. 궁금증→음식의 매력→결론, 경험→디테일→추천 등 소재에 맞는 흐름을 선택하며 고정 템플릿을 강제하지 않는다. 각 장 message는 단순 제목 한 줄도 긴 문단도 아닌, 공백 포함 35~70자와 2개의 짧은 문장을 우선해 모바일 약 3줄로 쓴다. 확인된 음식·식당 정보만 사용하고 음식 사진을 반복하지 않는다. "저요", 프롬프트, DM CTA는 절대 넣지 않는다.`;
-  return `HOT_ISSUE는 본문 전체와 source_notes를 이해한 뒤 3~5장의 빠른 연속 이야기로 재구성한다. 사실→이유→의미, 궁금증→사례→결론 등 이슈에 맞는 흐름을 선택하며 고정 템플릿을 강제하지 않는다. 각 장 message는 단순 제목 한 줄도 긴 문단도 아닌, 공백 포함 35~70자와 2개의 짧은 문장을 우선해 모바일 약 3줄로 쓴다. 본문과 source_notes에 없는 숫자·발언·사건은 만들지 않는다. "저요", 프롬프트, DM CTA는 절대 넣지 않는다.`;
+  if(category==='AI_TIP')return `AI_TIP은 추상적인 AI 회로나 카드뉴스 요약 대신 개념을 직관적으로 체감시키는 실제 장면의 연속으로 만든다. 첫 장은 낯선 반전·질문으로 멈추게 하고, 뒤 장은 문제→발견→적용처럼 조금씩 의미를 공개한다. 마지막 장 또는 caption에는 프롬프트가 필요하면 댓글에 "저요"를 남겨 달라는 DM CTA를 자연스럽게 넣되 실제 프롬프트 전문, 첫 댓글·고정 댓글·댓글 복사 안내는 넣지 않는다.`;
+  if(category==='AI_PROMPT')return `AI_PROMPT는 하나의 reply_prompt로 만든 고품질 VOA 화보 스토리다. master_scene에 동일 인물·정체성·장소/시간대·의상 또는 의도된 연속 의상·주요 소품·색감·촬영 세계관을 구체적으로 고정한다. 각 slide는 MASTER SCENE을 반복 설명하는 독립 프롬프트가 아니라 establishing/full-body, medium lifestyle, environment interaction, strong facial editorial portrait 등 서로 다른 SHOT 역할만 바꾼다. 같은 포즈와 구도 반복은 금지한다. VOA 얼굴과 양쪽 눈은 모든 장에서 선명하고 완전히 보여야 하며 sunglasses, goggles, masks, veils, hands, hair, props, deep hat shadows, dramatic shadows, foreground objects로 가리지 않는다. source reply_prompt와 충돌하면 Identity Lock이 우선한다. 마지막 장 또는 caption에는 프롬프트가 필요하면 댓글에 "저요"를 남겨 달라는 DM CTA를 자연스럽게 넣되 실제 reply_prompt 전문은 넣지 않는다.`;
+  if(category==='FOOD_PICK')return `FOOD는 음식의 질감, 조리 과정, 김·불·소스와 먹는 순간을 서로 다른 실제 장면으로 보여주는 식욕 스토리다. 첫 장은 메뉴를 다 설명하기보다 맛의 단서로 궁금증을 만들고, 뒤 장에서 음식의 정체와 장소·메뉴 핵심을 조금씩 공개한다. 확인된 정보만 사용하며 같은 완성 접시 사진을 반복하지 않는다. "저요", 프롬프트, DM CTA는 절대 넣지 않는다.`;
+  return `HOT_ISSUE는 단순 로고 포스터나 본문 요약 카드가 아니라 사건·기업·산업을 상징하는 강한 서로 다른 장면으로 전개한다. 첫 장은 사실을 훼손하지 않는 비유·질문·반전으로 멈추게 하고, 뒤 장에서 무슨 일→왜 중요한지→핵심 의미를 점진적으로 공개한다. source_notes 밖의 숫자·발언·사건, 실제 인물에 대한 근거 없는 주장은 만들지 않는다. "저요", 프롬프트, DM CTA는 절대 넣지 않는다.`;
 }
 
 async function actionInstagramCarouselPrepare(req,res){
@@ -1026,20 +1054,22 @@ async function actionInstagramCarouselPrepare(req,res){
   }
   const sourceMaterial=JSON.stringify(source).slice(0,11000);
   try{
-    const raw=await generateJson(key,`다음 콘텐츠를 Instagram 전용 3~5장 캐러셀 하나로 새로 기획해. Threads용 한 장 이미지를 복제하거나 기존 hook 필드를 사용하지 않는다.
+    const raw=await generateJson(key,`다음 공통 본문을 2~5장의 AI IMAGE STORY 하나로 기획해. 기존 hook 필드나 기존 한 장 이미지를 사용하지 않는다. 이미지 생성 전에 Story Board를 완성하는 단계다.
 
 원본 콘텐츠: ${sourceMaterial}
 
 ${instagramCarouselRules(source.category)}
 
 공통 규칙:
-- 최소 3장, 기본 3~4장, 최대 5장이다. 본문 분량과 이야기 흐름에 맞춰 적정 장수를 결정하고 내용이 끝났으면 3장이나 4장에서 멈춘다. 의미 있는 variation이 충분할 때만 5장으로 한다.
-- 독립 이미지 모음이 아니라 넘겨야 이야기가 완성되는 한 시리즈로 만든다.
-- visual_concept, color_palette, art_direction, 등장인물·공간·분위기는 시리즈 전체에서 일관되게 유지한다.
-- 각 장은 역할, 구도, 정보량이 달라야 하고 같은 문장·의미·레이아웃을 반복하지 않는다.
-- AI_TIP, FOOD_PICK, HOT_ISSUE의 message는 단순 제목 한 줄이나 긴 카드뉴스 문단이 아니다. 공백 포함 35~70자, 2개의 짧은 문장을 우선해 모바일 약 3줄로 읽히게 한다. AI_PROMPT는 화보를 해치지 않는 짧고 강한 한 메시지로 둔다.
-- 장별 visual과 composition은 다음 장과 구별되는 구체적 장면·카메라·여백·타이포그래피 위치를 정한다.
+- 최소 2장, 일반적으로 3~4장, 최대 5장이다. 정보량과 시각적 가치가 2~3장으로 충분하면 즉시 끝내고 장수를 채우려고 반복하지 않는다.
+- 독립 카드 모음이나 본문 요약이 아니라 응? → 무슨 일인데? → 왜? → 아, 이 얘기구나의 감정 흐름을 소재에 맞게 압축한 시각적 예고편으로 만든다.
+- 첫 장 role은 HOOK이다. 사실을 훼손하지 않는 비유·질문·반전·의외성·짧은 유머 중 콘텐츠에 맞는 방법으로 1초 안에 궁금증을 만든다. 실제 인물의 허위 사실, 무관한 선정성, 의미 없는 과장, 충격/대박/전격의 반복은 금지한다.
+- 각 message가 이미지에 표시할 최종 hook text다. 한 이미지에 하나의 메시지만, 1~2줄 우선·최대 3줄, 첫 장 34자 이내·나머지 54자 이내로 쓴다. 제목+부제+설명문을 함께 넣지 말고 본문 문장을 그대로 복사하지 않는다.
+- visual_concept, master_scene, color_palette, art_direction, typography와 text panel treatment를 시리즈 전체에서 일관되게 유지한다.
+- 각 장은 역할·실제 장면·카메라·구도·정보 공개량이 달라야 하며 같은 문장·의미·장면·레이아웃을 반복하지 않는다.
+- 장별 visual과 composition은 다음 장과 구별되는 구체적 장면과, message만 놓을 실제 여백·타이포그래피 위치를 정한다.
 - 텍스트는 주요 인물, 얼굴, 음식, 제품, 사건의 핵심 피사체를 가리지 않는 실제 여백에 둔다.
+- 텍스트에는 반투명 패널, 단색 카드, 자연스러운 그라데이션, negative space, editorial caption area 중 장면에 맞는 하나의 읽기 쉬운 영역을 정한다. 비주얼이 주인공이어야 하며 화면 전체를 거대한 텍스트 카드로 만들지 않는다.
 - 이미지 생성 AI가 텍스트까지 직접 디자인할 것이므로 Canvas, 후합성, 별도 Hook 합성은 없다.
 - Instagram caption은 Threads 본문 복사가 아닌 별도 문장으로 쓴다. 첫 1~2줄은 강하게, 이미지 설명을 장황하게 반복하지 않고 과도한 CTA·광고 말투를 피한다.
 - AI_TIP과 AI_PROMPT caption에는 실제 reply_prompt 전문을 절대 넣지 않는다. 콘텐츠 설명 뒤에 프롬프트가 필요한 사람은 댓글에 "저요"를 남기면 DM으로 무료 전달한다는 CTA를 자연스럽게 넣는다. 첫 댓글·고정 댓글·댓글 복사 안내는 금지한다.
@@ -1047,7 +1077,7 @@ ${instagramCarouselRules(source.category)}
 - HOT_ISSUE와 FOOD는 제공된 사실 밖의 내용을 만들지 않는다.
 
 JSON만 반환:
-{"visual_concept":"...","color_palette":"...","art_direction":"...","character_direction":"...","caption":"...","slides":[{"role":"...","message":"...","visual":"...","composition":"..."}]}`,.72);
+{"visual_concept":"...","master_scene":"시리즈에서 고정할 인물·장소·시간·의상·소품·색감·촬영 세계관","color_palette":"...","art_direction":"타이포그래피·가독성 영역·graphic language 포함","character_direction":"...","caption":"...","slides":[{"role":"첫 장은 HOOK, 이후 장별 정보 공개 역할","message":"이미지에 정확히 한 번 표시할 최종 문구, 줄바꿈은 \\n","visual":"이 장의 실제 장면","composition":"카메라·피사체·텍스트 안전 영역"}]}`,.72);
     return send(res,200,{ok:true,plan:normalizeInstagramPlan(raw,source)});
   }catch(e){
     console.error('[INSTAGRAM_CAROUSEL_PREPARE_FAILED]',JSON.stringify({message:e?.message||String(e)}));
@@ -1065,6 +1095,7 @@ function instagramCarouselImagePrompt(source,plan,slide,variation){
   return `Create slide ${slide.number} of ${plan.slide_count} as one finished 4:5 portrait Instagram carousel image.
 
 SERIES VISUAL CONCEPT: ${plan.visual_concept}
+MASTER SCENE: ${plan.master_scene||plan.visual_concept}
 SERIES COLOR PALETTE: ${plan.color_palette}
 SERIES ART DIRECTION: ${plan.art_direction}
 SERIES CHARACTER DIRECTION: ${plan.character_direction}
@@ -1072,7 +1103,8 @@ CATEGORY: ${source.category}
 SOURCE TOPIC: ${source.topic}
 
 THIS SLIDE ROLE: ${slide.role}
-EXACT KOREAN MESSAGE: "${slide.message}"
+DISPLAY TEXT:
+"${slide.message}"
 THIS SLIDE VISUAL: ${slide.visual}
 THIS SLIDE COMPOSITION: ${slide.composition}
 VARIATION: ${variation}
@@ -1080,8 +1112,8 @@ VARIATION: ${variation}
 ${aiPromptRule}
 ${factRule}
 
-Continue the same coherent visual world, palette, subject identity and editorial system as the series, but make this slide's camera framing, information density and composition visibly distinct. Render the exact Korean message once, directly inside the generated image. For AI_TIP, FOOD_PICK and HOT_ISSUE, arrange its 2–3 short sentences as an easily scanned approximately three-line story unit; do not collapse it into a tiny one-line title or expand it into a long paragraph. For AI_PROMPT, keep the message concise so the VOA result image remains dominant. Do not paraphrase it, repeat it, add logos, watermarks, fake UI, slide numbers or extra facts.
-Reserve a generous no-text safety zone around every face, body and essential food/product/event subject. Typography, badges, graphic accents and backgrounds must remain fully outside those silhouettes with visible breathing room. Reposition the subject or camera to create authentic negative space; never cover the subject. Design image and typography together from the first generation pass. No Canvas, pasted headline or later overlay is used.`;
+Continue the same coherent MASTER SCENE, palette, subject identity, typography family, text treatment, contrast and editorial mood as the series, while making this slide's actual scene, camera framing and composition visibly distinct. The visual scene is the protagonist; the short text only creates curiosity. Render the supplied DISPLAY TEXT exactly once. Never duplicate the headline, never repeat a caption, never add explanatory text, invented secondary copy, labels, logos, watermarks, fake UI, slide numbers or extra facts. Do not paraphrase or extend DISPLAY TEXT. Its authored line count is final and must never exceed three lines.
+Give DISPLAY TEXT one deliberate readable area chosen for this scene: authentic negative space, a restrained translucent panel, a compact solid editorial card, or a natural gradient field. Do not turn the full image into a giant text card. Reserve a generous no-text safety zone around every face, body and essential food/product/event subject. Typography and its readability treatment must remain fully outside those silhouettes with visible breathing room. Reposition the subject or camera to create the space; never cover the subject. Design the scene and its exact text together in the first generation pass. No Canvas, pasted headline or later overlay is used.`;
 }
 
 async function actionInstagramCarouselImage(req,res){
@@ -1196,11 +1228,11 @@ function instagramCommentEvents(payload){
 
 function instagramPublicReplyText(commentId){
   const variants=[
-    '보내드렸어요 🙌 DM 확인해 주세요!',
-    '슝 보내드렸습니다 📩 메시지 확인해 주세요!',
-    '프롬프트 보내드렸어요 😊 DM 확인해 주세요!',
-    '요청하신 프롬프트 보내드렸습니다 🙌',
-    'DM으로 보내드렸어요 📩 확인해 보세요!'
+    '복붙 프롬프트 보내드렸어요 ♥️ 좋아요 감사합니다!',
+    '프롬프트 슝 보내드렸어요 📩 팔로우 감사합니다!',
+    '복붙용 프롬프트 보내드렸습니다 🙌 좋아요 감사해요!',
+    'DM으로 프롬프트 보내드렸어요 💌 팔로우 감사합니다!',
+    '프롬프트 전송 완료 ♥️ 좋아요와 팔로우 감사합니다!'
   ];
   const index=[...String(commentId)].reduce((sum,char)=>sum+char.charCodeAt(0),0)%variants.length;
   return variants[index];
@@ -1296,12 +1328,11 @@ async function processInstagramCommentEvent(event){
   const account=await instagramGraph(token,`me?fields=${INSTAGRAM_PROFILE_FIELDS}`);
   const userId=String(account?.user_id??account?.id??'').trim();
   if(!userId)throw new Error('INSTAGRAM_USER_ID_MISSING');
-  const dmText=`요청하신 복붙용 프롬프트입니다 📌\n\n${replyPrompt}\n\n그대로 복사해서 사용하시면 됩니다.`;
   let dm;
   try{
     dm=await instagramGraphJson(token,`${userId}/messages`,{
       recipient:{comment_id:event.commentId},
-      message:{text:dmText}
+      message:{text:replyPrompt}
     });
     const messageId=String(dm?.message_id||'').trim();
     if(!messageId)throw new Error('INSTAGRAM_PRIVATE_REPLY_MESSAGE_ID_MISSING');
