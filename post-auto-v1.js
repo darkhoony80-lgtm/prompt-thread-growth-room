@@ -27,8 +27,8 @@ function restoreDrafts(){
 }
 function syncDraft(i){
  const x=candidates[i];if(!x)return;
- const oldHook=x.hook||'';
- x.hook=hook(i);x.body=body(i);x.topic_tag=topicTag(i);if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))x.reply_prompt=replyPrompt(i);
+ const oldHook=x.hook||'',oldTopicTag=String(x.topic_tag||'').replace(/^#+/,'').trim().slice(0,80),nextTopicTag=topicTag(i);
+ x.hook=hook(i);x.body=body(i);x.topic_tag=nextTopicTag;if(oldTopicTag!==nextTopicTag)x.topic_tag_verified=false;if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))x.reply_prompt=replyPrompt(i);
  if(oldHook!==x.hook&&x.final_image)x.thumbnail_dirty=true;
  saveDrafts();
 }
@@ -196,7 +196,7 @@ async function now(i){
   const r=await fetch('/api/threads/publish',{
    method:'POST',
    headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({text,image_url:url,topic_tag:topicTag(i)})
+   body:JSON.stringify({text,image_url:url,topic_tag:topicTag(i),topic_tag_verified:x.topic_tag_verified===true})
   });
   const j=await r.json().catch(()=>({}));
   if(!r.ok)throw new Error(apiError(j,'PUBLISH_FAILED'));
@@ -220,7 +220,7 @@ async function variant(i){const x=candidates[i];try{x.body=body(i);x.hook=hook(i
 function no(i){if(candidates[i])fb(candidates[i],'DISLIKE');candidates[i]=null;saveDrafts();render()}
 async function applyHook(i){try{await compose(i);await upload(i);saveDrafts();preview(i)}catch(e){alert(e.message)}}
 function renderQueue(){const a=read(Q),n=document.getElementById('v3qcount'),b=document.getElementById('v3queue');if(n)n.textContent=a.length;if(!b)return;b.innerHTML=a.length?a.map((x,i)=>`<article class="card"><div style="display:grid;grid-template-columns:150px 1fr;gap:14px"><img src="${esc(x.image_url)}" style="width:150px;aspect-ratio:4/5;object-fit:cover;border-radius:10px"><div><span class="badge">${esc(x.category_label||CATS[x.category])}</span><h3>${esc(x.hook)}</h3><div class="post-text">${esc(x.body)}</div><div style="margin-top:10px;display:flex;gap:8px"><button class="btn p" onclick="PostAuto.publishQueue(${i})">🚀 지금 게시</button><button class="btn" onclick="PostAuto.drop(${i})">제거</button></div></div></div></article>`).join(''):'<div class="card empty"><div><b>발행 대기 없음</b>이미지를 확인하고 👍한 게시물이 여기에 쌓입니다.</div></div>'}
-async function publishQueue(i){const a=read(Q),x=a[i];if(!x||!confirm(`"${x.hook}" 지금 게시할까요?`))return;const r=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:x.body,image_url:x.image_url,topic_tag:String(x.topic_tag||'').replace(/^#+/,'').trim()})}),j=await r.json();if(!r.ok)return alert('게시 실패: '+(j.detail||j.error));const follower_at_publish=await followerBaseline();const p=read(P);p.unshift({thread_id:j.id,category:x.category,topic:x.topic,topic_tag:String(x.topic_tag||'').replace(/^#+/,'').trim(),hook:x.hook,published_at:Date.now(),image_url:x.image_url,follower_at_publish});write(P,p.slice(0,100));fb(x,'PUBLISHED');a.splice(i,1);write(Q,a);renderQueue();alert('게시 완료 ✅')}
+async function publishQueue(i){const a=read(Q),x=a[i];if(!x||!confirm(`"${x.hook}" 지금 게시할까요?`))return;const r=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:x.body,image_url:x.image_url,topic_tag:String(x.topic_tag||'').replace(/^#+/,'').trim(),topic_tag_verified:x.topic_tag_verified===true})}),j=await r.json();if(!r.ok)return alert('게시 실패: '+(j.detail||j.error));const follower_at_publish=await followerBaseline();const p=read(P);p.unshift({thread_id:j.id,category:x.category,topic:x.topic,topic_tag:String(x.topic_tag||'').replace(/^#+/,'').trim(),hook:x.hook,published_at:Date.now(),image_url:x.image_url,follower_at_publish});write(P,p.slice(0,100));fb(x,'PUBLISHED');a.splice(i,1);write(Q,a);renderQueue();alert('게시 완료 ✅')}
 function drop(i){const a=read(Q);a.splice(i,1);write(Q,a);renderQueue()}
 function patchReplies(){
  const desc=document.querySelector('#replies .section p.mut');if(desc)desc.textContent='최근 2일 댓글만 표시합니다. 미응답 전체를 API에 무리 없이 천천히 순차 답장합니다.';
