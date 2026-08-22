@@ -2,6 +2,7 @@ import {readFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {createHmac,timingSafeEqual} from 'node:crypto';
 import {put} from '@vercel/blob';
+import {handleUpload} from '@vercel/blob/client';
 
 const TEXT_MODEL='gemini-3.6-flash';
 const IMAGE_MODEL='gemini-3.1-flash-image';
@@ -588,9 +589,19 @@ The image generation model must directly render the complete text hierarchy and 
   };
 }
 
+function identitySafePrompt(value){
+  return String(value||'')
+    .replace(/\b(?:vintage\s+)?sunglasses?\b/gi,'period styling with fully visible eyes')
+    .replace(/\bgoggles?\b/gi,'eye area fully visible and unobstructed')
+    .replace(/\b(?:face[- ]?covering\s+)?masks?\b/gi,'unobstructed face')
+    .replace(/\bveils?\b/gi,'unobstructed face with era-appropriate styling')
+    .replace(/\b(?:face\s+hidden|hidden\s+face|shadow\s+over\s+(?:the\s+)?eyes?)\b/gi,'face and eyes clearly lit and fully visible');
+}
+
 async function aiPromptImageDirector(key,candidate,variation){
   const sourcePrompt=String(candidate.reply_prompt||'').trim();
   if(!sourcePrompt)throw new Error('AI_PROMPT_SOURCE_PROMPT_EMPTY');
+  const safeSourcePrompt=identitySafePrompt(sourcePrompt);
 
   const plan=await generateJson(key,`다음 이미지 프롬프트와 게시물 설명을 분석해서 Threads 이미지 전용 한국어 후킹 문구를 정확히 1개만 새로 만들어.
 기존 게시물 제목이나 hook 필드는 참고하거나 재사용하지 않는다.
@@ -620,8 +631,8 @@ JSON만 반환:
     prompt:`Create one finished 4:5 portrait Threads image using the attached Character Master as the mandatory identity reference for VOA.
 
 VOA IDENTITY RULE:
-VOA must be the main character and visual protagonist. Preserve the Character Master's exact adult Korean female identity: facial structure, eyes, nose, mouth proportions, skin tone, age range, base hair color, and overall impression. If the source prompt mentions a woman, girl, model, person, or another main human subject, reinterpret that subject as VOA instead of generating a different person. Do not replace, randomize, or blend VOA's face. Apply the source prompt's clothing, pose, action, location, lighting, camera, and styling to VOA.
-VOA's face must be sharp, fully visible, and unobstructed. Never add sunglasses, masks, hats, veils, hands, hair, props, deep shadow, or any other element that hides her face. If the source prompt requests a face-obscuring element, omit or reinterpret that element while preserving the rest of its styling intent. Clothing and environment may follow the source prompt, but VOA's face, identity, and recognizable hair characteristics always take priority.
+Use the attached reference image as the PRIMARY IDENTITY REFERENCE. VOA must be the main character and visual protagonist. Preserve the exact identity of the person in the reference image throughout the generation. Maintain the same facial structure, facial proportions, eyes, nose, lips, jawline, skin characteristics, apparent age, and recognizable identity. Do not reinterpret, replace, beautify, randomize, blend, or generate a different person. If the source prompt mentions a woman, girl, model, person, or another main human subject, reinterpret that subject as VOA. Apply only the source prompt's clothing, pose, action, location, lighting, camera, and styling to VOA.
+Keep the person's face fully visible and unobstructed. Do not use sunglasses, goggles, masks, veils, face-covering hats, hands, hair, props, or heavy shadows that cover or obscure the eyes or face. Before generating, remove every conflicting face-obscuring instruction from SOURCE IMAGE PROMPT. Preserve its non-conflicting era or styling intent through clothing, hair styling, environment, palette, lighting, and props placed away from the face. The PRIMARY IDENTITY REFERENCE always overrides the source prompt.
 
 NATURAL PHOTO COMPOSITION RULE:
 Before rendering anything, simultaneously plan the prompt-faithful scene, VOA placement, camera angle and framing, essential background elements, authentic negative space, exact hook placement, and typography hierarchy as one thumbnail composition. Do not use a sequential "make a photo first, then find an empty spot for text" workflow.
@@ -631,7 +642,7 @@ SOURCE PROMPT FIDELITY RULE:
 Faithfully reproduce the SOURCE IMAGE PROMPT below as the core visual result. Preserve its environment, composition, mood, palette, lighting, lens, camera angle, textures, props, era, weather, and photographic or artistic style as far as they do not conflict with VOA's fixed identity. A viewer should immediately understand what result this prompt produces.
 
 SOURCE IMAGE PROMPT:
-${sourcePrompt}
+${safeSourcePrompt}
 
 EXACT KOREAN HOOK: "${thumbnailHook}"
 Render this hook exactly once in one or two short lines as a large, bold, high-contrast editorial headline that is immediately readable in a small Threads feed. Place it only within authentic negative space inside the photograph. Never place any text over VOA's face, hair, head, body, clothing, or the scene's essential focal subject. Reposition VOA or adjust the camera composition before generation when necessary to secure clean space. You may emphasize one key word with a different color or size and use a natural shadow or outline for legibility, but never use a rectangular panel, card, or text box behind it.
@@ -816,11 +827,17 @@ function decodeImage(dataUrl=''){
 }
 
 async function actionStoreImage(req,res){
-  const d=decodeImage(req.body?.data_url);
+  let d=decodeImage(req.body?.data_url);
 
   if(!d)return send(res,400,{ok:false,error:'IMAGE_DATA_REQUIRED'});
   if(d.buffer.length>4_000_000){
     return send(res,413,{ok:false,error:'IMAGE_TOO_LARGE'});
+  }
+
+  if(req.body?.convert_jpeg===true&&d.mime!=='image/jpeg'){
+    const {default:sharp}=await import('sharp');
+    d={mime:'image/jpeg',buffer:await sharp(d.buffer).rotate().jpeg({quality:92,mozjpeg:true}).toBuffer()};
+    if(d.buffer.length>4_000_000)return send(res,413,{ok:false,error:'IMAGE_TOO_LARGE'});
   }
 
   const id=String(req.body?.candidate_id||Date.now())
@@ -906,6 +923,30 @@ JSON만:
       error:'VARIANT_FAILED',
       detail:e?.message||String(e)
     });
+  }
+
+}
+
+async function actionMediaUpload(req,res){
+  try{
+    const response=await handleUpload({
+      request:req,
+      body:req.body||{},
+      onBeforeGenerateToken:async pathname=>{
+        const safe=String(pathname||'').replace(/\\/g,'/');
+        if(!/^content-master\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9._-]+$/.test(safe))throw new Error('MEDIA_UPLOAD_PATH_INVALID');
+        return {
+          allowedContentTypes:['image/jpeg','video/mp4','video/quicktime'],
+          maximumSizeInBytes:1_073_741_824,
+          addRandomSuffix:true,
+          cacheControlMaxAge:31_536_000
+        };
+      }
+    });
+    return send(res,200,response);
+  }catch(e){
+    console.error('[CONTENT_MASTER_MEDIA_UPLOAD_FAILED]',JSON.stringify({message:e?.message||String(e)}));
+    return send(res,400,{ok:false,error:'CONTENT_MASTER_MEDIA_UPLOAD_FAILED',detail:e?.message||String(e)});
   }
 }
 
@@ -1017,8 +1058,9 @@ JSON만 반환:
 }
 
 function instagramCarouselImagePrompt(source,plan,slide,variation){
+  const safeReplyPrompt=identitySafePrompt(source.reply_prompt);
   const aiPromptRule=source.category==='AI_PROMPT'
-    ?`The attached Character Master is mandatory identity reference. Every human protagonist is VOA, the exact same adult Korean woman. Keep her face sharp, complete and unobstructed: no sunglasses, mask, hat, hand, hair, prop or deep shadow over her face. Faithfully apply the reply_prompt world, wardrobe, location, lighting, camera and mood while varying this slide's framing. SOURCE REPLY_PROMPT: ${source.reply_prompt}`
+    ?`Use the attached reference image as the PRIMARY IDENTITY REFERENCE. Preserve the exact identity of that person throughout every slide: the same facial structure, proportions, eyes, nose, lips, jawline, skin characteristics, apparent age and recognizable identity. Do not reinterpret, replace, beautify, randomize, blend or generate a different person. Every human protagonist is VOA, the exact same person across the full carousel; only pose, gaze, framing and camera distance may vary. Keep the face and eyes fully visible and unobstructed. Never use sunglasses, goggles, masks, veils, face-covering hats, hands, hair, props or heavy shadows over the eyes or face. Remove any conflicting face-obscuring instruction from SOURCE REPLY_PROMPT and preserve its era or styling through non-face elements. Identity Lock overrides the source prompt. Faithfully apply the remaining world, wardrobe, location, lighting, camera and mood. IDENTITY-SAFE SOURCE REPLY_PROMPT: ${safeReplyPrompt}`
     :'If a person is useful, use the attached Character Master as the same adult Korean woman VOA; otherwise do not force a person into the scene.';
   const factRule=source.category==='HOT_ISSUE'||source.category==='FOOD_PICK'
     ?`FACT SAFETY: Do not add any place, menu, number, quote, event, product claim or fact absent from this source: ${JSON.stringify({body:source.body,source_notes:source.source_notes})}`:'';
@@ -1367,14 +1409,15 @@ function instagramPublishFailure(res,error,stage){
 async function actionInstagramCarouselPublish(req,res){
   const token=String(process.env.INSTAGRAM_ACCESS_TOKEN||'').trim();
   if(!token)return send(res,503,{ok:false,error:'INSTAGRAM_ACCESS_TOKEN_NOT_CONFIGURED'});
-  const urls=(Array.isArray(req.body?.image_urls)?req.body.image_urls:[]).map(instagramBlobUrl);
+  const legacy=(Array.isArray(req.body?.image_urls)?req.body.image_urls:[]).map(url=>({type:'image',url}));
+  const media=(Array.isArray(req.body?.media)&&req.body.media.length?req.body.media:legacy).map(item=>({type:String(item?.type||'').toLowerCase(),url:instagramBlobUrl(item?.url)}));
   const caption=String(req.body?.caption||'').trim().slice(0,2200);
   const requestId=String(req.body?.request_id||'').trim();
   const contentId=String(req.body?.content_id||'').trim().slice(0,200);
   const contentType=String(req.body?.content_type||'').trim();
   const replyPrompt=String(req.body?.reply_prompt||'').trim();
-  if(urls.length<3||urls.length>5||urls.some(url=>!url)){
-    return send(res,400,{ok:false,error:'INSTAGRAM_CAROUSEL_IMAGE_URLS_INVALID'});
+  if(media.length<1||media.length>10||media.some(item=>!['image','video'].includes(item.type)||!item.url)){
+    return send(res,400,{ok:false,error:'INSTAGRAM_MEDIA_INVALID'});
   }
   if(!caption)return send(res,400,{ok:false,error:'INSTAGRAM_CAROUSEL_CAPTION_REQUIRED'});
   if(!/^[a-zA-Z0-9_-]{12,100}$/.test(requestId)){
@@ -1411,22 +1454,37 @@ async function actionInstagramCarouselPublish(req,res){
     const account=await instagramGraph(token,`me?fields=${INSTAGRAM_PROFILE_FIELDS}`);
     const userId=String(account?.user_id??account?.id??'');
     if(!userId)throw new Error('INSTAGRAM_USER_ID_MISSING');
-    stage='children_create';
-    const children=await Promise.all(urls.map(url=>instagramGraph(token,`${userId}/media`,{
-      method:'POST',params:{image_url:url,is_carousel_item:'true'}
-    })));
-    const childIds=children.map(item=>String(item?.id||''));
-    if(childIds.some(id=>!id))throw new Error('INSTAGRAM_CHILD_ID_MISSING');
-    stage='children_status';
-    await Promise.all(childIds.map(id=>waitForInstagramContainer(token,id)));
-    stage='parent_create';
-    const parent=await instagramGraph(token,`${userId}/media`,{
-      method:'POST',params:{media_type:'CAROUSEL',children:childIds.join(','),caption}
-    });
-    const parentId=String(parent?.id||'');
-    if(!parentId)throw new Error('INSTAGRAM_PARENT_ID_MISSING');
-    stage='parent_status';
-    await waitForInstagramContainer(token,parentId);
+    let parentId='';
+    if(media.length===1){
+      stage='single_create';
+      const item=media[0],params=item.type==='video'
+        ?{media_type:'REELS',video_url:item.url,caption,share_to_feed:'true'}
+        :{image_url:item.url,caption};
+      const single=await instagramGraph(token,`${userId}/media`,{method:'POST',params});
+      parentId=String(single?.id||'');
+      if(!parentId)throw new Error('INSTAGRAM_CONTAINER_ID_MISSING');
+      stage='single_status';
+      await waitForInstagramContainer(token,parentId);
+    }else{
+      stage='children_create';
+      const children=await Promise.all(media.map(item=>instagramGraph(token,`${userId}/media`,{
+        method:'POST',params:item.type==='video'
+          ?{media_type:'VIDEO',video_url:item.url,is_carousel_item:'true'}
+          :{image_url:item.url,is_carousel_item:'true'}
+      })));
+      const childIds=children.map(item=>String(item?.id||''));
+      if(childIds.some(id=>!id))throw new Error('INSTAGRAM_CHILD_ID_MISSING');
+      stage='children_status';
+      await Promise.all(childIds.map(id=>waitForInstagramContainer(token,id)));
+      stage='parent_create';
+      const parent=await instagramGraph(token,`${userId}/media`,{
+        method:'POST',params:{media_type:'CAROUSEL',children:childIds.join(','),caption}
+      });
+      parentId=String(parent?.id||'');
+      if(!parentId)throw new Error('INSTAGRAM_PARENT_ID_MISSING');
+      stage='parent_status';
+      await waitForInstagramContainer(token,parentId);
+    }
     stage='media_publish';
     const published=await instagramGraph(token,`${userId}/media_publish`,{
       method:'POST',params:{creation_id:parentId}
@@ -1619,6 +1677,7 @@ export default async function handler(req,res){
   if(action==='generate')return actionGenerate(req,res);
   if(action==='image')return actionImage(req,res);
   if(action==='store-image')return actionStoreImage(req,res);
+  if(action==='media_upload')return actionMediaUpload(req,res);
   if(action==='variant')return actionVariant(req,res);
   if(action==='instagram_carousel_prepare')return actionInstagramCarouselPrepare(req,res);
   if(action==='instagram_carousel_image')return actionInstagramCarouselImage(req,res);
@@ -1628,7 +1687,7 @@ export default async function handler(req,res){
   return send(res,400,{
     ok:false,
     error:'UNKNOWN_CONTENT_ACTION',
-    allowed:['generate','image','store-image','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish','instagram_prompt_store','instagram_prompt_lookup','supabase_status']
+    allowed:['generate','image','store-image','media_upload','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish','instagram_prompt_store','instagram_prompt_lookup','supabase_status']
   });
 }
 

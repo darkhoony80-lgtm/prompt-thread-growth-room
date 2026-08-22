@@ -1,12 +1,32 @@
 /* Growth Engine V3. Filename kept for existing index.html include. */
 (function(){
 const CATS={AI_PROMPT:'AI 프롬프트',AI_TIP:'AI 활용 팁',FOOD_PICK:'오늘 뭐 먹지?',HOT_ISSUE:'🔥 오늘의 핫이슈'};
-const Q='pt_queue_v3',F='pt_feedback_v3',P='pt_published_v3',D='pt_drafts_v6',FH='pt_food_history_v1',IGC='pt_instagram_carousels_v1';
+const Q='pt_queue_v3',F='pt_feedback_v3',P='pt_published_v3',D='pt_drafts_v6',FH='pt_food_history_v1',IGC='pt_instagram_carousels_v1',CM='pt_content_masters_v1';
 const PILLARS=['AI_TIP','AI_PROMPT','FOOD_PICK','HOT_ISSUE'];
+const PLATFORM_LIMITS={threads:{maxMedia:20},instagram:{maxMedia:10}};
 let candidates=[null,null,null,null];
 let instagramCarousel=null,instagramPublishing=false,instagramModalOpen=false;
 function read(k,d=[]){try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}}
 function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
+function masterRecords(){const value=read(CM,{});return value&&typeof value==='object'&&!Array.isArray(value)?value:{}}
+function mediaId(prefix='media'){return `${prefix}_${globalThis.crypto?.randomUUID?.()||`${Date.now()}_${Math.random().toString(36).slice(2)}`}`}
+function masterKey(i){return String(candidates[i]?.id||`${PILLARS[i]}-${i}`)}
+function ensureMaster(i){
+ const x=candidates[i];if(!x)return null;
+ const key=masterKey(i),records=masterRecords();
+ if(records[key])return records[key];
+ const media=[];
+ if(x.image_url)media.push({id:mediaId('legacy'),type:'image',source:'ai',url:x.image_url,previewUrl:x.image_url,order:0,status:'ready',mime_type:/\.jpe?g(?:$|\?)/i.test(x.image_url)?'image/jpeg':'image/png'});
+ const master={version:1,content_id:key,content_type:PILLARS[i],title:x.topic||x.category_label||'',master_body:x.body||'',threads_body_override:'',instagram_caption_override:'',reply_prompt:x.reply_prompt||'',topic_tag:x.topic_tag||'',topic_tag_verified:x.topic_tag_verified===true,media,status:{threads:'draft',instagram:'draft'},updated_at:Date.now()};
+ records[key]=master;write(CM,records);return master;
+}
+function saveMaster(i,master){if(!master)return;master.media=(master.media||[]).map((m,order)=>({...m,order}));master.updated_at=Date.now();const records=masterRecords();records[master.content_id]=master;write(CM,records)}
+function cleanMediaItem(item,order){return {id:String(item.id),type:item.type,source:item.source,url:String(item.url),previewUrl:String(item.previewUrl||item.url),order,status:'ready',mime_type:String(item.mime_type||''),size:Number(item.size)||0,duration:Number(item.duration)||0}}
+function snapshotMaster(i){syncDraft(i);const m=ensureMaster(i);return JSON.parse(JSON.stringify({...m,media:(m.media||[]).map(cleanMediaItem)}))}
+function appendMasterMedia(i,item){const m=ensureMaster(i);if(!m||!item?.url)return;const url=String(item.url);if(m.media.some(v=>v.id===item.id||v.url===url))return;m.media.push(cleanMediaItem({...item,id:item.id||mediaId(item.source||'media')},m.media.length));saveMaster(i,m);renderMedia(i)}
+function removeMasterMedia(i,id){const m=ensureMaster(i);if(!m)return;m.media=m.media.filter(v=>v.id!==id);saveMaster(i,m);renderMedia(i)}
+function moveMasterMedia(i,id,direction){const m=ensureMaster(i);if(!m)return;const from=m.media.findIndex(v=>v.id===id),to=from+direction;if(from<0||to<0||to>=m.media.length)return;[m.media[from],m.media[to]]=[m.media[to],m.media[from]];saveMaster(i,m);renderMedia(i)}
+function masterOverrides(i){const m=ensureMaster(i);if(!m)return;const threads=document.getElementById(`v3threads-${i}`),instagram=document.getElementById(`v3instagram-${i}`);if(threads)m.threads_body_override=threads.value;if(instagram)m.instagram_caption_override=instagram.value;saveMaster(i,m)}
 function instagramRecords(){const value=read(IGC,{});return value&&typeof value==='object'&&!Array.isArray(value)?value:{}}
 function instagramRecord(id){return instagramRecords()[String(id||'')]||null}
 function persistInstagramCarousel(state=instagramCarousel){
@@ -63,6 +83,8 @@ function syncDraft(i){
  const pillar=PILLARS[i],aiThumbnail=['AI_PROMPT','AI_TIP'].includes(pillar),oldBody=x.body||'',oldReply=x.reply_prompt||'',oldTopicTag=String(x.topic_tag||'').replace(/^#+/,'').trim().slice(0,80),nextTopicTag=topicTag(i),nextBody=body(i),nextReply=aiThumbnail?replyPrompt(i):'';
  x.body=nextBody;x.topic_tag=nextTopicTag;if(oldTopicTag!==nextTopicTag)x.topic_tag_verified=false;if(aiThumbnail)x.reply_prompt=nextReply;
  if(x.final_image&&((aiThumbnail&&oldBody!==nextBody)||(pillar==='AI_PROMPT'&&oldReply!==nextReply)))x.thumbnail_dirty=true;
+ const master=ensureMaster(i);
+ if(master){master.master_body=nextBody;master.reply_prompt=aiThumbnail?nextReply:master.reply_prompt||'';master.topic_tag=nextTopicTag;master.topic_tag_verified=x.topic_tag_verified===true;saveMaster(i,master)}
  saveDrafts();
 }
 function esc(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -149,29 +171,46 @@ function emptyCard(pillar,i){
 <button class="btn" onclick="PostAuto.generate(${i},'FANTASY')">🧚 판타지</button>
 </div>`:`<button class="btn p" id="v3gen-${i}" onclick="PostAuto.generate(${i})">✨ 생성</button>`}</article>`;
 }
+function mediaEditorHtml(i,master){
+ return `<section class="cm-editor"><div class="section"><div><b>공통 미디어</b><p class="mut">현재 배열 순서가 실제 게시 순서입니다. 삭제한 항목은 다시 합쳐지지 않습니다.</p></div><label class="btn">사진/영상 추가<input type="file" accept="image/jpeg,video/mp4,video/quicktime" multiple hidden onchange="PostAuto.addMedia(${i},this.files);this.value=''" /></label></div><div id="v3media-${i}" class="cm-media"></div><details><summary class="mut">채널별 본문 수정</summary><label class="mut">Threads override</label><textarea id="v3threads-${i}" class="cm-override" maxlength="500" oninput="PostAuto.overrides(${i})" placeholder="비워두면 공통 본문 사용">${esc(master.threads_body_override||'')}</textarea><label class="mut">Instagram caption override</label><textarea id="v3instagram-${i}" class="cm-override" maxlength="2200" oninput="PostAuto.overrides(${i})" placeholder="비워두면 공통 본문 사용">${esc(master.instagram_caption_override||'')}</textarea></details></section>`;
+}
 function render(){
  const box=document.getElementById('v3list');if(!box)return;
- box.innerHTML=PILLARS.map((pillar,i)=>{const x=candidates[i];if(!x)return emptyCard(pillar,i);return `<article class="card" id="v3card-${i}"><div class="post-meta"><span class="badge">${esc(x.category_label||CATS[pillar])}</span><span class="badge">4:5 이미지 검수</span><span class="mut">총점 ${x.score?.total||0}</span></div><div class="v3grid" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,380px);gap:18px;align-items:start"><div><div style="display:flex;justify-content:flex-end;gap:8px;align-items:center">${pillar==='AI_PROMPT'?`<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
-<button class="btn" id="v3gen-${i}" onclick="PostAuto.generate(${i},'RANDOM')">🎲 랜덤</button>
-<button class="btn" onclick="PostAuto.generate(${i},'HAPPY')">😊 행복</button>
-<button class="btn" onclick="PostAuto.generate(${i},'LOVE')">❤️ 사랑</button>
-<button class="btn" onclick="PostAuto.generate(${i},'COMIC')">😂 코믹</button>
-<button class="btn" onclick="PostAuto.generate(${i},'HORROR')">👻 공포</button>
-<button class="btn" onclick="PostAuto.generate(${i},'FANTASY')">🧚 판타지</button>
-</div>`:`<button class="btn" id="v3gen-${i}" onclick="PostAuto.generate(${i})">🔄 다시 생성</button>`}</div><label class="mut">본문</label><textarea id="v3body-${i}" maxlength="500" oninput="PostAuto.save(${i})" style="width:100%;min-height:190px;margin-top:5px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:12px;line-height:1.55">${esc(x.body)}</textarea>${['AI_PROMPT','AI_TIP'].includes(pillar)?`<label class="mut" style="display:block;margin-top:10px">첫 댓글 · 복붙용 프롬프트</label><textarea id="v3reply-${i}" oninput="PostAuto.save(${i})" style="width:100%;min-height:150px;margin-top:5px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:12px;line-height:1.55">${esc(x.reply_prompt||'')}</textarea><p class="mut">본문에는 설명만, 실제 복붙용 프롬프트는 이 칸에만 저장됩니다.</p>`:'' }<p class="mut">소재 · ${esc(x.topic)}</p><p class="mut">추천 이유 · ${esc(x.reason)}</p>${x.source_notes?.length?`<p class="mut">검증 메모 · ${esc(x.source_notes.join(' / '))}</p>`:''}<div style="margin:10px 0"><label class="mut">🏷 Threads 추천 Topic ${x.topic_tag_verified?'· TAG 검색 확인 ✅':(x.topic_tag_search_available===false?'· 검색 확인 불가':'· 추천값')}</label><input id="v3topic-${i}" maxlength="80" oninput="PostAuto.save(${i})" value="${esc(x.topic_tag||'')}" placeholder="예: AI 이미지" style="width:100%;margin-top:5px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:10px 11px"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" onclick="PostAuto.image(${i})">🖼 이미지 생성</button><button class="btn" onclick="PostAuto.reimage(${i})">🔄 이미지 다시 생성</button><button class="btn" onclick="PostAuto.variant(${i})">다른 버전</button><button class="btn" onclick="PostAuto.keep(${i})">👍 발행 대기</button><button class="btn p" onclick="PostAuto.now(${i})">🚀 즉시 게시</button><button class="btn" onclick="PostAuto.no(${i})">👎 비우기</button></div></div><div id="v3img-${i}" class="card" style="padding:10px;min-height:270px;display:grid;place-items:center"><span class="mut">이미지를 생성한 뒤 직접 확인하세요.</span></div></div></article>`}).join('');
- if(!document.getElementById('v3css'))document.head.insertAdjacentHTML('beforeend','<style id="v3css">@media(max-width:900px){.v3grid{grid-template-columns:1fr!important}}</style>');
- candidates.forEach((x,i)=>{
-  if(x?.image_url||x?.final_image)preview(i);
-  const card=document.getElementById(`v3card-${i}`),buttons=card?.querySelectorAll('button');
-  const actionRow=buttons?.length?buttons[buttons.length-1].parentElement:null;
-  if(actionRow&&!actionRow.querySelector('.instagram-carousel-button')){
-   actionRow.insertAdjacentHTML('beforeend',`<button class="btn instagram-carousel-button" onclick="PostAuto.instagram(${i})">Instagram 캐러셀 만들기</button>`);
-  }
- });
+ box.innerHTML=PILLARS.map((pillar,i)=>{const x=candidates[i];if(!x)return emptyCard(pillar,i);const master=ensureMaster(i);return `<article class="card" id="v3card-${i}"><div class="post-meta"><span class="badge">${esc(x.category_label||CATS[pillar])}</span><span class="badge">Content Master</span><span class="mut">총점 ${x.score?.total||0}</span></div><div class="v3grid" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,430px);gap:18px;align-items:start"><div><div style="display:flex;justify-content:flex-end;gap:8px;align-items:center">${pillar==='AI_PROMPT'?`<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="btn" id="v3gen-${i}" onclick="PostAuto.generate(${i},'RANDOM')">🎲 랜덤</button><button class="btn" onclick="PostAuto.generate(${i},'HAPPY')">😊 행복</button><button class="btn" onclick="PostAuto.generate(${i},'LOVE')">❤️ 사랑</button><button class="btn" onclick="PostAuto.generate(${i},'COMIC')">😂 코믹</button><button class="btn" onclick="PostAuto.generate(${i},'HORROR')">👻 공포</button><button class="btn" onclick="PostAuto.generate(${i},'FANTASY')">🧚 판타지</button></div>`:`<button class="btn" id="v3gen-${i}" onclick="PostAuto.generate(${i})">🔄 다시 생성</button>`}</div><label class="mut">공통 본문</label><textarea id="v3body-${i}" maxlength="500" oninput="PostAuto.save(${i})" class="cm-body">${esc(master.master_body)}</textarea>${['AI_PROMPT','AI_TIP'].includes(pillar)?`<label class="mut" style="display:block;margin-top:10px">최종 reply_prompt</label><textarea id="v3reply-${i}" oninput="PostAuto.save(${i})" class="cm-reply">${esc(master.reply_prompt||'')}</textarea><p class="mut">이 최종값만 LocalStorage와 Instagram 게시 후 DM 연결에 사용됩니다.</p>`:''}<p class="mut">소재 · ${esc(x.topic)}</p><p class="mut">추천 이유 · ${esc(x.reason)}</p>${x.source_notes?.length?`<p class="mut">검증 메모 · ${esc(x.source_notes.join(' / '))}</p>`:''}<div style="margin:10px 0"><label class="mut">🏷 Threads 추천 Topic ${x.topic_tag_verified?'· TAG 검색 확인 ✅':(x.topic_tag_search_available===false?'· 검색 확인 불가':'· 추천값')}</label><input id="v3topic-${i}" maxlength="80" oninput="PostAuto.save(${i})" value="${esc(master.topic_tag||'')}" placeholder="예: AI 이미지" class="cm-input"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" onclick="PostAuto.image(${i})">🖼 AI 이미지 추가</button><button class="btn" onclick="PostAuto.reimage(${i})">🔄 AI 이미지 추가 생성</button><button class="btn" onclick="PostAuto.instagram(${i})">Instagram 이미지 시리즈 추가</button><button class="btn" onclick="PostAuto.variant(${i})">다른 버전</button><button class="btn" onclick="PostAuto.keep(${i})">👍 발행 대기</button><button class="btn p" onclick="PostAuto.now(${i})">Threads 게시</button><button class="btn p" onclick="PostAuto.instagramMasterPublish(${i})">Instagram 게시</button><button class="btn" onclick="PostAuto.no(${i})">👎 비우기</button></div></div><div>${mediaEditorHtml(i,master)}</div></div></article>`}).join('');
+ if(!document.getElementById('v3css'))document.head.insertAdjacentHTML('beforeend',`<style id="v3css">@media(max-width:900px){.v3grid{grid-template-columns:1fr!important}}.cm-body,.cm-reply,.cm-override,.cm-input{width:100%;margin-top:5px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:12px;line-height:1.55}.cm-body{min-height:190px}.cm-reply{min-height:150px}.cm-override{min-height:100px;resize:vertical}.cm-editor{border:1px solid var(--l);border-radius:12px;padding:12px}.cm-media{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:10px 0}.cm-item{position:relative;border:1px solid var(--l);border-radius:10px;padding:6px;background:#090b0f}.cm-item img,.cm-item video{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:7px;display:block}.cm-item-actions{display:flex;gap:4px;margin-top:5px}.cm-item-actions .btn{padding:5px 8px}.cm-kind{position:absolute;top:10px;left:10px;background:#090b0fdd;border-radius:10px;padding:3px 6px;font-size:10px}</style>`);
+ candidates.forEach((x,i)=>{if(x)renderMedia(i)});
+}
+function renderMedia(i){
+ const box=document.getElementById(`v3media-${i}`),master=ensureMaster(i);if(!box||!master)return;
+ box.innerHTML=master.media.length?master.media.map((m,index)=>`<div class="cm-item"><span class="cm-kind">${index+1} · ${m.source==='ai'?'AI':'업로드'} ${m.type==='video'?'영상':'사진'}</span>${m.type==='video'?`<video src="${esc(m.previewUrl||m.url)}" controls preload="metadata"></video>`:`<img src="${esc(m.previewUrl||m.url)}" alt="${index+1}번 미디어">`}<div class="cm-item-actions"><button class="btn" onclick="PostAuto.moveMedia(${i},'${esc(m.id)}',-1)" ${index===0?'disabled':''}>←</button><button class="btn" onclick="PostAuto.moveMedia(${i},'${esc(m.id)}',1)" ${index===master.media.length-1?'disabled':''}>→</button><button class="btn" onclick="PostAuto.removeMedia(${i},'${esc(m.id)}')">삭제</button></div></div>`).join(''):'<div class="card empty"><div><b>미디어 없음</b>AI 이미지 생성 전에도 사진이나 영상을 추가할 수 있습니다.</div></div>';
+}
+async function videoDuration(file){
+ return new Promise((resolve,reject)=>{const video=document.createElement('video'),url=URL.createObjectURL(file);video.preload='metadata';video.onloadedmetadata=()=>{const value=Number(video.duration)||0;URL.revokeObjectURL(url);resolve(value)};video.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('영상 정보를 읽지 못했습니다.'))};video.src=url});
+}
+function validateLocalMedia(file){
+ const type=String(file?.type||'').toLowerCase();
+ if(type==='image/jpeg'){if(file.size>8*1024*1024)throw new Error(`${file.name}: JPEG 이미지는 8MB 이하여야 합니다.`);return 'image'}
+ if(type==='video/mp4'||type==='video/quicktime'){if(file.size>1024*1024*1024)throw new Error(`${file.name}: 영상은 1GB 이하여야 합니다.`);return 'video'}
+ throw new Error(`${file?.name||'파일'}: JPEG 사진 또는 MP4/MOV 영상만 추가할 수 있습니다.`);
+}
+async function uploadLocalMedia(file,i,type){
+ const safe=String(file.name||`${type}-${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g,'-').slice(-100);
+ const pathname=`content-master/${masterKey(i)}/${Date.now()}-${safe}`;
+ const mod=await import('https://esm.sh/@vercel/blob@2.8.0/client?bundle');
+ return mod.upload(pathname,file,{access:'public',handleUploadUrl:'/api/content-router?action=media_upload',contentType:file.type,multipart:file.size>5*1024*1024});
+}
+async function addLocalMedia(i,fileList){
+ const files=Array.from(fileList||[]);if(!files.length)return;
+ const status=document.getElementById('v3status');
+ for(const file of files){
+  try{const type=validateLocalMedia(file);if(status)status.textContent=`${file.name} 업로드 중…`;const duration=type==='video'?await videoDuration(file):0;const blob=await uploadLocalMedia(file,i,type);appendMasterMedia(i,{id:mediaId('upload'),type,source:'upload',url:blob.url,previewUrl:blob.url,mime_type:file.type,size:file.size,duration});}
+  catch(e){alert('미디어 추가 실패: '+e.message)}
+ }
+ if(status)status.textContent='공통 미디어 저장 완료';
 }
 function preview(i){const x=candidates[i],b=document.getElementById(`v3img-${i}`),src=x?.final_image||x?.image_url;if(!src){b.innerHTML='<span class="mut">이미지를 생성한 뒤 직접 확인하세요.</span>';return}b.innerHTML=`<div><img src="${src}" style="width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:11px;display:block"><p class="mut" style="margin:8px 2px 0">최종 썸네일 미리보기 · 확인 후 채택/게시</p></div>`}
 async function makeImage(i,redo=false){
- const x=candidates[i],box=document.getElementById(`v3img-${i}`);if(!x)return;box.innerHTML='<span class="mut">Gemini 이미지 생성 중…</span>';x.variation=redo?(x.variation||1)+1:(x.variation||1);x.body=body(i);if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))x.reply_prompt=replyPrompt(i);
+ const x=candidates[i],box=document.getElementById('v3status');if(!x)return;if(box)box.textContent='Gemini 이미지 생성 중…';x.variation=redo?(x.variation||1)+1:(x.variation||1);x.body=body(i);if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))x.reply_prompt=replyPrompt(i);
  try{
   const imageCandidate={...x};delete imageCandidate.hook;delete imageCandidate.hook_candidates;
   const r=await fetch('/api/content-router?action=image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate:imageCandidate,variation:x.variation})}),j=await r.json();
@@ -182,8 +221,8 @@ async function makeImage(i,redo=false){
   x.image_url=null;
   x.thumbnail_hook=String(j.thumbnail_hook||'').trim();
   x.thumbnail_dirty=false;
-  await upload(i);saveDrafts();preview(i);
- }catch(e){box.innerHTML='<span class="mut">이미지 생성 실패</span>';alert('이미지 생성 실패: '+e.message)}
+  const url=await upload(i);appendMasterMedia(i,{id:mediaId('ai'),type:'image',source:'ai',url,previewUrl:url,mime_type:'image/jpeg'});saveDrafts();if(box)box.textContent='AI 이미지가 공통 미디어에 추가되었습니다.';
+ }catch(e){if(box)box.textContent='이미지 생성 실패';alert('이미지 생성 실패: '+e.message)}
 }
 function instagramCandidate(i){
  const x=candidates[i];if(!x)return null;
@@ -214,8 +253,7 @@ function renderInstagramCarousel(){
  if(!plan){box.innerHTML='<div class="card empty"><div><b>스토리보드 생성 중</b>Instagram 전용 흐름과 캡션을 준비하고 있습니다.</div></div>';return}
  const selected=Math.max(0,Math.min(state.selected||0,plan.slides.length-1)),image=state.images[selected];
  const thumbs=plan.slides.map((slide,index)=>`<button class="ig-thumb ${index===selected?'on':''}" onclick="PostAuto.instagramSelect(${index})" title="${esc(slide.role)}"><span>${index+1}/${plan.slide_count}</span>${state.images[index]?`<img src="${esc(state.images[index])}" alt="${index+1}번 캐러셀 이미지">`:'<div style="aspect-ratio:4/5;display:grid;place-items:center;color:var(--m)">생성 중</div>'}</button>`).join('');
- const promptEditor=['AI_TIP','AI_PROMPT'].includes(state.candidate.category)?`<h3>DM으로 보낼 복붙용 프롬프트</h3><textarea id="igCarouselReplyPrompt" class="ig-prompt" oninput="PostAuto.instagramReplyPrompt(this.value)" ${state.published?'disabled':''}>${esc(state.replyPrompt||'')}</textarea><p class="mut">게시 버튼을 누르는 순간 이 칸의 최종값이 저장되고 DM에 그대로 사용됩니다.</p>`:'';
- box.innerHTML=`<div class="ig-preview-grid"><div>${image?`<img class="ig-main-image" src="${esc(image)}" alt="확대된 ${selected+1}번 캐러셀 이미지">`:'<div class="ig-main-image" style="display:grid;place-items:center;color:var(--m)">이미지 준비 중</div>'}<div class="ig-thumbs">${thumbs}</div><p class="mut">${selected+1}/${plan.slide_count} · ${esc(plan.slides[selected]?.role||'')}</p><p>${esc(plan.slides[selected]?.message||'')}</p></div><div><span class="badge">${esc(CATS[plan.category]||plan.category)}</span><h3>Instagram 전용 캡션</h3><textarea id="igCarouselCaption" class="ig-caption" maxlength="2200" oninput="PostAuto.instagramCaption(this.value)" ${state.published?'disabled':''}>${esc(state.caption)}</textarea><p class="mut">게시 전에 자유롭게 수정할 수 있습니다. ${state.caption.length}/2200자</p>${promptEditor}<div class="ig-actions"><button class="btn" onclick="PostAuto.instagramRegenerate()" ${state.generating||instagramPublishing||state.published?'disabled':''}>${selected+1}번 이미지 다시 생성</button><button class="btn" onclick="PostAuto.instagramRegenerateAll()" ${state.generating||instagramPublishing||state.published?'disabled':''}>캐러셀 전체 다시 생성</button><button class="btn p" onclick="PostAuto.instagramPublish()" ${state.images.filter(Boolean).length!==plan.slide_count||state.generating||instagramPublishing||state.published?'disabled':''}>${instagramPublishing?'Instagram 게시 중…':state.published?'Instagram 게시 완료':'Instagram 게시'}</button>${state.published&&state.promptStoreStatus==='failed'?'<button class="btn" onclick="PostAuto.instagramPromptStoreRetry()">프롬프트 저장 재시도</button>':''}</div><p class="mut">${state.promptStoreStatus==='failed'?'Instagram 게시 완료 / 프롬프트 저장 실패 · 게시물을 다시 올리지 않고 저장만 재시도할 수 있습니다.':'게시 버튼을 직접 누르고 최종 확인한 경우에만 Instagram에 게시됩니다. Threads 게시와는 독립입니다.'}</p></div></div>`;
+ box.innerHTML=`<div class="ig-preview-grid"><div>${image?`<img class="ig-main-image" src="${esc(image)}" alt="확대된 ${selected+1}번 캐러셀 이미지">`:'<div class="ig-main-image" style="display:grid;place-items:center;color:var(--m)">이미지 준비 중</div>'}<div class="ig-thumbs">${thumbs}</div><p class="mut">${selected+1}/${plan.slide_count} · ${esc(plan.slides[selected]?.role||'')}</p><p>${esc(plan.slides[selected]?.message||'')}</p></div><div><span class="badge">${esc(CATS[plan.category]||plan.category)}</span><h3>Instagram 이미지 시리즈 생성</h3><p class="mut">생성된 이미지는 즉시 Content Master 미디어 배열 끝에 추가됩니다. 캡션과 최종 reply_prompt는 공통 편집기에서 한 번만 관리합니다.</p><div class="ig-actions"><button class="btn" onclick="PostAuto.instagramRegenerate()" ${state.generating||instagramPublishing?'disabled':''}>${selected+1}번 이미지 추가 생성</button><button class="btn" onclick="PostAuto.instagramRegenerateAll()" ${state.generating||instagramPublishing?'disabled':''}>새 시리즈 추가 생성</button></div><p class="mut">실제 게시 작업은 이 모달이 아니라 공통 편집기의 Instagram 게시 버튼에서만 시작됩니다.</p></div></div>`;
 }
 async function instagramApi(action,payload){
  const r=await fetch(`/api/content-router?action=${encodeURIComponent(action)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}),j=await r.json().catch(()=>({}));
@@ -228,6 +266,7 @@ async function generateInstagramSlide(index){
  const j=await instagramApi('instagram_carousel_image',{candidate:state.candidate,candidate_id:state.candidateId,plan:state.plan,slide,variation});
  if(state!==instagramCarousel)return;
  state.images[index]=j.url;
+ appendMasterMedia(state.candidateIndex,{id:mediaId('ig-ai'),type:'image',source:'ai',url:j.url,previewUrl:j.url,mime_type:'image/jpeg'});
  persistInstagramCarousel(state);
 }
 async function completeInstagramCarousel(state,createPlan=false){
@@ -235,7 +274,7 @@ async function completeInstagramCarousel(state,createPlan=false){
   if(createPlan||!state.plan){
    const prepared=await instagramApi('instagram_carousel_prepare',{candidate:state.candidate});
    if(state!==instagramCarousel)return;
-    state.plan=prepared.plan;state.caption=prepared.plan.caption;state.images=new Array(prepared.plan.slide_count).fill(null);state.variations=new Array(prepared.plan.slide_count).fill(1);persistInstagramCarousel(state);
+    state.plan=prepared.plan;state.caption=prepared.plan.caption;state.images=new Array(prepared.plan.slide_count).fill(null);state.variations=new Array(prepared.plan.slide_count).fill(1);const master=ensureMaster(state.candidateIndex);if(master&&!master.instagram_caption_override){master.instagram_caption_override=prepared.plan.caption;saveMaster(state.candidateIndex,master);const input=document.getElementById(`v3instagram-${state.candidateIndex}`);if(input)input.value=prepared.plan.caption}persistInstagramCarousel(state);
   }
   for(let index=0;index<state.plan.slide_count;index++){
    if(state!==instagramCarousel)return;
@@ -266,14 +305,14 @@ function setInstagramCaption(value){if(!instagramCarousel||instagramCarousel.pub
 function setInstagramReplyPrompt(value){if(!instagramCarousel||instagramCarousel.published||!['AI_TIP','AI_PROMPT'].includes(instagramCarousel.candidate.category))return;instagramCarousel.replyPrompt=String(value);persistInstagramCarousel()}
 function closeInstagramCarousel(){instagramModalOpen=false;renderInstagramCarousel()}
 async function regenerateInstagramSlide(){
- const state=instagramCarousel,index=state?.selected||0;if(!state||state.generating||instagramPublishing||state.published)return;
+ const state=instagramCarousel,index=state?.selected||0;if(!state||state.generating||instagramPublishing)return;
  state.generating=true;state.recordStatus='generating';state.variations[index]=(state.variations[index]||1)+1;state.status=`${index+1}번 이미지 다시 생성 중…`;renderInstagramCarousel();
  try{await generateInstagramSlide(index);state.status='게시 전 검토';state.recordStatus='ready'}catch(e){state.status='이미지 다시 생성 실패';state.recordStatus='ready';alert('이미지 다시 생성 실패: '+e.message)}
  finally{state.generating=false;persistInstagramCarousel(state);renderInstagramCarousel()}
 }
 async function regenerateInstagramCarousel(){
- const state=instagramCarousel;if(!state||state.generating||instagramPublishing||state.published)return;
- if(!confirm(`기존 ${state.plan.slide_count}장의 이미지는 교체됩니다. 캐러셀 전체를 다시 생성하시겠습니까?`))return;
+ const state=instagramCarousel;if(!state||state.generating||instagramPublishing)return;
+ if(!confirm(`새 이미지 시리즈를 Content Master 끝에 추가할까요? 기존 미디어는 유지됩니다.`))return;
  const candidate=instagramCandidate(state.candidateIndex);if(!candidate)return alert('Instagram 캐러셀을 다시 만들 본문이 필요합니다.');
  const replacement={candidate,candidateId:state.candidateId,plan:null,caption:'',replyPrompt:state.replyPrompt||candidate.reply_prompt||'',images:[],variations:[],selected:0,status:'스토리보드 생성 중…',generating:true,published:false,requestId:instagramRequestId(),candidateIndex:state.candidateIndex,createdAt:Date.now(),recordStatus:'generating'};
  instagramCarousel=replacement;renderInstagramCarousel();await completeInstagramCarousel(replacement,true);
@@ -324,24 +363,30 @@ async function publishFirstReply(parentId,text){
  if(!r.ok)throw new Error(apiError(j,'FIRST_REPLY_FAILED'));
  return j;
 }
-async function upload(i){const x=candidates[i];if(x.image_url&&!x.final_image)return x.image_url;if(!x.final_image)throw new Error('최종 이미지를 먼저 확인해 주세요.');const r=await fetch('/api/content-router?action=store-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate_id:x.id,data_url:x.final_image})}),j=await r.json();if(!r.ok)throw new Error(apiError(j,'IMAGE_UPLOAD_FAILED'));x.image_url=j.url;return j.url}
+function threadsAdapter(snapshot){
+ const text=String(snapshot.threads_body_override||snapshot.master_body||'').trim(),media=snapshot.media.map(({type,url})=>({type,url}));
+ if(!text)throw new Error('Threads 본문을 입력해 주세요.');if(text.length>500)throw new Error(`Threads 본문은 500자 이하입니다. 현재 ${text.length}자입니다.`);if(media.length>PLATFORM_LIMITS.threads.maxMedia)throw new Error(`Threads 미디어는 최대 ${PLATFORM_LIMITS.threads.maxMedia}개입니다.`);
+ return {text,media,topic_tag:snapshot.topic_tag,topic_tag_verified:snapshot.topic_tag_verified===true,reply_prompt:snapshot.reply_prompt||''};
+}
+function instagramAdapter(snapshot){
+ const caption=String(snapshot.instagram_caption_override||snapshot.master_body||'').trim(),media=snapshot.media.map(m=>({type:m.type,url:m.url,mime_type:m.mime_type,duration:m.duration||0}));
+ if(!caption)throw new Error('Instagram 캡션을 입력해 주세요.');if(caption.length>2200)throw new Error(`Instagram 캡션은 2200자 이하입니다. 현재 ${caption.length}자입니다.`);if(!media.length)throw new Error('Instagram 게시에는 미디어가 필요합니다.');if(media.length>PLATFORM_LIMITS.instagram.maxMedia)throw new Error(`Instagram 미디어는 최대 ${PLATFORM_LIMITS.instagram.maxMedia}개입니다.`);
+ for(const item of media){if(item.type==='image'&&item.mime_type&&item.mime_type!=='image/jpeg')throw new Error('Instagram 이미지 게시에는 JPEG 미디어만 사용할 수 있습니다.');if(item.type==='video'&&item.duration&&(item.duration<3||item.duration>900))throw new Error('Instagram 영상은 3초 이상 15분 이하여야 합니다.')}
+ return {media,caption,request_id:instagramRequestId(),content_id:snapshot.content_id,content_type:snapshot.content_type,reply_prompt:snapshot.reply_prompt||''};
+}
+async function upload(i){const x=candidates[i];if(x.image_url&&!x.final_image)return x.image_url;if(!x.final_image)throw new Error('최종 이미지를 먼저 확인해 주세요.');const r=await fetch('/api/content-router?action=store-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate_id:x.id,data_url:x.final_image,convert_jpeg:true})}),j=await r.json();if(!r.ok)throw new Error(apiError(j,'IMAGE_UPLOAD_FAILED'));x.image_url=j.url;return j.url}
 async function keep(i){const x=candidates[i];if(!x?.final_image&&!x?.image_url)return alert('먼저 이미지를 생성해서 최종 썸네일을 확인해 주세요.');try{syncDraft(i);if(x.thumbnail_dirty)return alert('이미지에 반영되는 내용을 수정했어요. 이미지 다시 생성을 눌러 최종 썸네일을 확인해 주세요.');const url=await upload(i),v={...x,image_url:url,kept_at:Date.now()};delete v.base_image;delete v.final_image;const a=read(Q);a.unshift(v);write(Q,a);fb(x,'LIKE');renderQueue();alert('이미지 포함 발행 대기 저장 완료 ✅')}catch(e){alert('저장 실패: '+e.message)}}
 async function now(i){
- const x=candidates[i];if(!x?.final_image&&!x?.image_url)return alert('즉시 게시 전에 이미지를 생성해서 직접 확인해 주세요.');
+ const x=candidates[i];if(!x)return;
  try{
-  syncDraft(i);
-   if(x.thumbnail_dirty)return alert('이미지에 반영되는 내용을 수정했어요. 이미지 다시 생성을 눌러 최종 썸네일을 확인해 주세요.');
-  if(!confirm(`지금 보이는 이미지와 본문 그대로 게시할까요?\n\n${x.topic||x.category_label||''}`))return;
-
-  const url=await upload(i);
-  const text=body(i);
-  if(text.length>500)return alert(`본문이 ${text.length}자예요. Threads 본문은 500자 이하로 줄여 주세요.`);
-  if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i])&&!replyPrompt(i))return alert('첫 댓글용 영문 프롬프트가 비어 있어요. AI 프롬프트를 다시 생성해 주세요.');
+  const snapshot=snapshotMaster(i),payload=threadsAdapter(snapshot);
+  if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i])&&!payload.reply_prompt)return alert('최종 reply_prompt를 입력해 주세요.');
+  if(!confirm(`Content Master snapshot 그대로 Threads에 게시할까요?\n\n${x.topic||x.category_label||''}`))return;
 
   const r=await fetch('/api/threads/publish',{
    method:'POST',
    headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({text,image_url:url,topic_tag:topicTag(i),topic_tag_verified:x.topic_tag_verified===true})
+   body:JSON.stringify(payload)
   });
   const j=await r.json().catch(()=>({}));
   if(!r.ok)throw new Error(apiError(j,'PUBLISH_FAILED'));
@@ -349,7 +394,7 @@ async function now(i){
   let replyMessage='';
   if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i])){
    try{
-    await publishFirstReply(j.id,replyPrompt(i));
+    await publishFirstReply(j.id,payload.reply_prompt);
     replyMessage='\n프롬프트도 첫 댓글 텍스트 첨부로 게시 완료 ✅';
    }catch(e){
     replyMessage=`\n본문은 게시됐지만 첫 댓글 첨부 실패: ${e.message}`;
@@ -357,11 +402,23 @@ async function now(i){
   }
 
   fb(x,'PUBLISHED');
-  const follower_at_publish=await followerBaseline();const a=read(P);a.unshift({thread_id:j.id,category:x.category,topic:x.topic,topic_tag:topicTag(i),hook:x.hook,published_at:Date.now(),image_url:url,follower_at_publish});write(P,a.slice(0,100));
+  const master=ensureMaster(i);master.status.threads='published';saveMaster(i,master);
+  const follower_at_publish=await followerBaseline();const a=read(P);a.unshift({thread_id:j.id,category:x.category,topic:x.topic,topic_tag:payload.topic_tag,hook:x.hook,published_at:Date.now(),image_url:payload.media[0]?.url||null,media:payload.media,follower_at_publish});write(P,a.slice(0,100));
   alert('Threads 게시 완료 ✅'+replyMessage);
  }catch(e){alert('게시 실패: '+e.message)}
 }
-async function variant(i){const x=candidates[i];try{x.body=body(i);if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))x.reply_prompt=replyPrompt(i);const r=await fetch('/api/content-router?action=variant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate:x})}),j=await r.json();if(!r.ok)throw new Error(j.detail||j.error);candidates[i]=j.item;candidates[i].variation=1;fb(x,'VARIANT');saveDrafts();render()}catch(e){alert('다른 버전 실패: '+e.message)}}
+async function publishInstagramMaster(i){
+ const x=candidates[i];if(!x||instagramPublishing)return;
+ try{
+  const snapshot=snapshotMaster(i),payload=instagramAdapter(snapshot);
+  if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i])&&!payload.reply_prompt)return alert('DM으로 보낼 최종 reply_prompt를 입력해 주세요.');
+  if(!confirm(`현재 Content Master snapshot의 미디어 ${payload.media.length}개를 @voara.lab에 게시할까요?\n\n이 작업은 실제 Instagram 게시입니다.`))return;
+  instagramPublishing=true;const j=await instagramApi('instagram_carousel_publish',payload);
+  const master=ensureMaster(i);master.status.instagram='published';saveMaster(i,master);
+  alert(j.prompt_stored===false?'Instagram 게시 완료 / 프롬프트 저장 실패':'Instagram 게시 완료 ✅');
+ }catch(e){alert('Instagram 게시 실패: '+e.message)}finally{instagramPublishing=false}
+}
+async function variant(i){const x=candidates[i];try{x.body=body(i);if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))x.reply_prompt=replyPrompt(i);const r=await fetch('/api/content-router?action=variant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate:x})}),j=await r.json();if(!r.ok)throw new Error(j.detail||j.error);candidates[i]=j.item;candidates[i].variation=1;const master=ensureMaster(i);master.master_body=j.item.body||master.master_body;if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))master.reply_prompt=j.item.reply_prompt||master.reply_prompt;saveMaster(i,master);fb(x,'VARIANT');saveDrafts();render()}catch(e){alert('다른 버전 실패: '+e.message)}}
 function no(i){if(candidates[i])fb(candidates[i],'DISLIKE');candidates[i]=null;saveDrafts();render()}
 function renderQueue(){const a=read(Q),n=document.getElementById('v3qcount'),b=document.getElementById('v3queue');if(n)n.textContent=a.length;if(!b)return;b.innerHTML=a.length?a.map((x,i)=>`<article class="card"><div style="display:grid;grid-template-columns:150px 1fr;gap:14px"><img src="${esc(x.image_url)}" style="width:150px;aspect-ratio:4/5;object-fit:cover;border-radius:10px"><div><span class="badge">${esc(x.category_label||CATS[x.category])}</span><h3>${esc(x.topic||x.category_label||'')}</h3><div class="post-text">${esc(x.body)}</div><div style="margin-top:10px;display:flex;gap:8px"><button class="btn p" onclick="PostAuto.publishQueue(${i})">🚀 지금 게시</button><button class="btn" onclick="PostAuto.drop(${i})">제거</button></div></div></div></article>`).join(''):'<div class="card empty"><div><b>발행 대기 없음</b>이미지를 확인하고 👍한 게시물이 여기에 쌓입니다.</div></div>'}
 async function publishQueue(i){const a=read(Q),x=a[i];if(!x||!confirm(`"${x.topic||x.category_label||''}" 지금 게시할까요?`))return;const r=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:x.body,image_url:x.image_url,topic_tag:String(x.topic_tag||'').replace(/^#+/,'').trim(),topic_tag_verified:x.topic_tag_verified===true})}),j=await r.json();if(!r.ok)return alert('게시 실패: '+(j.detail||j.error));const follower_at_publish=await followerBaseline();const p=read(P);p.unshift({thread_id:j.id,category:x.category,topic:x.topic,topic_tag:String(x.topic_tag||'').replace(/^#+/,'').trim(),hook:x.hook,published_at:Date.now(),image_url:x.image_url,follower_at_publish});write(P,p.slice(0,100));fb(x,'PUBLISHED');a.splice(i,1);write(Q,a);renderQueue();alert('게시 완료 ✅')}
@@ -372,6 +429,6 @@ function patchReplies(){
  const b=document.getElementById('batchReply');if(!b)return;b.onclick=async()=>{if(window._batchRunning||window._replyHistoryAvailable===false)return;const all=window._replyItems||[],targets=[];all.forEach((x,i)=>{if(x.review_required||x.already_replied)return;const text=document.getElementById(`replyText-${i}`)?.value.trim();if(text)targets.push({i,id:x.id,text})});if(!targets.length||!confirm(`${targets.length}개 미응답 댓글을 순차 답장할까요?`))return;window._batchRunning=true;updateBatchButton();let ok=0,fail=0;for(let n=0;n<targets.length;n++){const t=targets[n];b.textContent=`일괄 답장 ${n+1}/${targets.length}`;try{await postReply(t.id,t.text);markReplyDone(t.i,t.id,t.text);ok++}catch{fail++}if(n<targets.length-1)await new Promise(r=>setTimeout(r,500))}window._batchRunning=false;updateBatchButton();alert(`완료 · 성공 ${ok} / 실패 ${fail}`);await syncReplies(currentPostIds).catch(()=>{})};
  setTimeout(()=>{try{updateBatchButton()}catch{}},100);
 }
-window.PostAuto={generate:generatePillar,image:i=>makeImage(i,false),reimage:i=>makeImage(i,true),keep,now,variant,no,drop,publishQueue,save:syncDraft,instagram:openInstagramCarousel,instagramSelect:selectInstagramSlide,instagramCaption:setInstagramCaption,instagramReplyPrompt:setInstagramReplyPrompt,instagramClose:closeInstagramCarousel,instagramRegenerate:regenerateInstagramSlide,instagramRegenerateAll:regenerateInstagramCarousel,instagramPublish:publishInstagramCarousel,instagramPromptStoreRetry:retryInstagramPromptStore};
+window.PostAuto={generate:generatePillar,image:i=>makeImage(i,false),reimage:i=>makeImage(i,true),keep,now,variant,no,drop,publishQueue,save:syncDraft,overrides:masterOverrides,addMedia:addLocalMedia,removeMedia:removeMasterMedia,moveMedia:moveMasterMedia,instagram:openInstagramCarousel,instagramSelect:selectInstagramSlide,instagramCaption:setInstagramCaption,instagramReplyPrompt:setInstagramReplyPrompt,instagramClose:closeInstagramCarousel,instagramRegenerate:regenerateInstagramSlide,instagramRegenerateAll:regenerateInstagramCarousel,instagramPublish:publishInstagramCarousel,instagramMasterPublish:publishInstagramMaster,instagramPromptStoreRetry:retryInstagramPromptStore};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ensure);else ensure();
 })();

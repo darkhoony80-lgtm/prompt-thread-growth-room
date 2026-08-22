@@ -107,6 +107,11 @@ export default async function handler(req,res){
 
   const text=String(req.body?.text||'').trim();
   const imageUrl=String(req.body?.image_url||'').trim();
+  const legacy=imageUrl?[{type:'image',url:imageUrl}]:[];
+  const media=(Array.isArray(req.body?.media)&&req.body.media.length?req.body.media:legacy).map(item=>({
+    type:String(item?.type||'').toLowerCase(),
+    url:String(item?.url||'').trim()
+  }));
   const receivedTopicTag=String(req.body?.topic_tag||'').replace(/^#+/,'').trim().slice(0,80);
   const topicTagVerified=req.body?.topic_tag_verified===true;
   const topicTag=topicTagVerified
@@ -125,8 +130,8 @@ export default async function handler(req,res){
       }
     });
   }
-  if(!imageUrl){
-    return res.status(400).json({ok:false,error:'APPROVED_IMAGE_REQUIRED'});
+  if(media.length>20||media.some(item=>!['image','video'].includes(item.type)||!/^https:\/\//i.test(item.url))){
+    return res.status(400).json({ok:false,error:'THREADS_MEDIA_INVALID'});
   }
 
   console.log('[THREADS_TOPIC_RECEIVED]',JSON.stringify({
@@ -134,12 +139,28 @@ export default async function handler(req,res){
     topic_tag_verified:topicTagVerified
   }));
 
-  // 1) Create image container.
-  const createParams={
-    media_type:'IMAGE',
-    image_url:imageUrl,
-    text
-  };
+  // Create exactly from the adapter snapshot. Legacy image_url remains supported.
+  let createParams={text};
+  if(media.length===1){
+    createParams={media_type:media[0].type.toUpperCase(),[media[0].type==='video'?'video_url':'image_url']:media[0].url,text};
+  }else if(media.length>1){
+    const childResults=await Promise.all(media.map(item=>{
+      const childParams={media_type:item.type.toUpperCase(),[item.type==='video'?'video_url':'image_url']:item.url,is_carousel_item:'true'};
+      return post('/me/threads',s.accessToken,childParams);
+    }));
+    const failedChild=childResults.find(child=>!child.ok||!child.body?.id);
+    if(failedChild){
+      const d=detail(failedChild.body,'CREATE_CAROUSEL_ITEM',failedChild.status);
+      return res.status(502).json({ok:false,error:'THREADS_CAROUSEL_ITEM_CREATE_FAILED',detail:d});
+    }
+    const children=childResults.map(child=>String(child.body.id));
+    const readiness=await Promise.all(children.map(id=>waitUntilReady(id,s.accessToken)));
+    const failedReady=readiness.find(result=>!result.ok);
+    if(failedReady)return res.status(failedReady.retryable?409:502).json({ok:false,error:failedReady.retryable?'THREADS_MEDIA_PROCESSING':'THREADS_MEDIA_FAILED',detail:failedReady.detail});
+    createParams={media_type:'CAROUSEL',children:children.join(','),text};
+  }else{
+    createParams={media_type:'TEXT',text};
+  }
   if(topicTag)createParams.topic_tag=topicTag;
 
   console.log('[THREADS_CREATE_TOPIC_PAYLOAD]',JSON.stringify({
@@ -156,7 +177,7 @@ export default async function handler(req,res){
 
   if(!create.ok){
     const d=detail(create.body,'CREATE_CONTAINER',create.status);
-    console.error('[THREADS_CREATE_FAILED]',JSON.stringify({...d,image_url:imageUrl,text_length:text.length}));
+    console.error('[THREADS_CREATE_FAILED]',JSON.stringify({...d,media_count:media.length,text_length:text.length}));
     return res.status(502).json({
       ok:false,
       error:'THREADS_CREATE_FAILED',
@@ -173,20 +194,13 @@ export default async function handler(req,res){
     });
   }
 
-  // 2) Meta fetches/processes the public image asynchronously.
-  //    Do not publish before the container reaches FINISHED.
-  const ready=await waitUntilReady(String(creationId),s.accessToken);
-  if(!ready.ok){
-    console.error('[THREADS_CONTAINER_NOT_READY]',JSON.stringify({
-      creation_id:String(creationId),
-      ...ready.detail
-    }));
-    return res.status(ready.retryable?409:502).json({
-      ok:false,
-      error:ready.retryable?'THREADS_MEDIA_PROCESSING':'THREADS_MEDIA_FAILED',
-      creation_id:String(creationId),
-      detail:ready.detail
-    });
+  // Media and carousel parents are asynchronous; text-only containers publish directly.
+  if(media.length){
+    const ready=await waitUntilReady(String(creationId),s.accessToken);
+    if(!ready.ok){
+      console.error('[THREADS_CONTAINER_NOT_READY]',JSON.stringify({creation_id:String(creationId),...ready.detail}));
+      return res.status(ready.retryable?409:502).json({ok:false,error:ready.retryable?'THREADS_MEDIA_PROCESSING':'THREADS_MEDIA_FAILED',creation_id:String(creationId),detail:ready.detail});
+    }
   }
 
   // 3) Publish only after media is ready.
@@ -209,7 +223,8 @@ export default async function handler(req,res){
     ok:true,
     id:pub.body?.id||null,
     creation_id:String(creationId),
-    image_url:imageUrl,
+    image_url:media[0]?.type==='image'?media[0].url:null,
+    media,
     topic_tag:topicTag||null,
     text_length:text.length
   });
