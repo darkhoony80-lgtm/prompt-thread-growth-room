@@ -54,7 +54,13 @@ function supabaseConfig(){
     error.status=503;
     throw error;
   }
-  return {baseUrl:url.origin,secret};
+  const keyType=secret.startsWith('sb_secret_')?'secret':secret.startsWith('sb_publishable_')?'publishable':'legacy';
+  if(keyType==='publishable'){
+    const error=new Error('SUPABASE_SECRET_KEY_INVALID');
+    error.status=503;
+    throw error;
+  }
+  return {baseUrl:url.origin,secret,keyType};
 }
 function safeSupabaseError(body,secret=''){
   const source=body&&typeof body==='object'?body:{};
@@ -69,7 +75,7 @@ function safeSupabaseError(body,secret=''){
   };
 }
 async function supabaseRest(path,{method='GET',body=null,prefer=''}={}){
-  const {baseUrl,secret}=supabaseConfig();
+  const {baseUrl,secret,keyType}=supabaseConfig();
   const headers={Accept:'application/json',apikey:secret};
   if(!secret.startsWith('sb_'))headers.Authorization=`Bearer ${secret}`;
   if(body!=null)headers['Content-Type']='application/json';
@@ -81,7 +87,7 @@ async function supabaseRest(path,{method='GET',body=null,prefer=''}={}){
   if(!response.ok){
     const error=new Error('SUPABASE_REQUEST_FAILED');
     error.status=response.status;
-    error.meta=safeSupabaseError(responseBody,secret);
+    error.meta={...safeSupabaseError(responseBody,secret),key_type:keyType};
     throw error;
   }
   return responseBody;
@@ -1140,7 +1146,7 @@ async function actionInstagramPromptStore(req,res){
     const record=await upsertInstagramPromptPost(req.body||{});
     return send(res,200,{ok:true,stored:true,instagram_media_id:record.instagram_media_id});
   }catch(e){
-    const validation=/^(INSTAGRAM_|SUPABASE_NOT_CONFIGURED|SUPABASE_URL_INVALID)/.test(e?.message||'');
+    const validation=/^(INSTAGRAM_|SUPABASE_NOT_CONFIGURED|SUPABASE_URL_INVALID|SUPABASE_SECRET_KEY_INVALID)/.test(e?.message||'');
     const status=validation?(Number(e?.status)||400):502;
     const detail=e?.meta?.message||e?.message||'SUPABASE_STORE_FAILED';
     console.error('[INSTAGRAM_PROMPT_STORE_FAILED]',JSON.stringify({stage:'manual_retry',message:detail,status:e?.status||null}));
@@ -1182,9 +1188,9 @@ async function actionSupabaseStatus(req,res){
     await supabaseRest(`${INSTAGRAM_PROMPT_TABLE}?select=id&limit=1`);
     return send(res,200,{ok:true,connected:true});
   }catch(e){
-    const missing=e?.message==='SUPABASE_NOT_CONFIGURED'||e?.message==='SUPABASE_URL_INVALID';
+    const missing=['SUPABASE_NOT_CONFIGURED','SUPABASE_URL_INVALID','SUPABASE_SECRET_KEY_INVALID'].includes(e?.message);
     const detail=e?.meta?.message||e?.message||'SUPABASE_CONNECTION_FAILED';
-    console.error('[SUPABASE_STATUS_FAILED]',JSON.stringify({message:detail,status:e?.status||null}));
+    console.error('[SUPABASE_STATUS_FAILED]',JSON.stringify({message:detail,status:e?.status||null,key_type:e?.meta?.key_type||null}));
     return send(res,missing?503:502,{ok:false,connected:false,error:missing?e.message:'SUPABASE_CONNECTION_FAILED'});
   }
 }
