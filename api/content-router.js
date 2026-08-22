@@ -434,7 +434,6 @@ async function editorialImageDirector(key,candidate,variation){
 카테고리: ${candidate.category}
 소재: ${candidate.topic}
 본문: ${candidate.body}
-후킹(이미지에 직접 쓰지 않음): ${candidate.hook}
 브리프: ${candidate.image_brief}
 재생성 번호: ${variation}
 절대 규칙:
