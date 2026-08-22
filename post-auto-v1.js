@@ -197,7 +197,7 @@ async function uploadLocalMedia(file,i,type){
  const safe=String(file.name||`${type}-${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g,'-').slice(-100);
  const pathname=`content-master/${masterKey(i)}/${Date.now()}-${safe}`;
  const mod=await import('https://esm.sh/@vercel/blob@2.8.0/client?bundle');
- return mod.upload(pathname,file,{access:'public',handleUploadUrl:'/api/content-router?action=media_upload',contentType:file.type,multipart:file.size>5*1024*1024});
+ return mod.uploadPresigned(pathname,file,{access:'public',handleUploadUrl:'/api/content-router?action=media_upload',contentType:file.type,multipart:file.size>5*1024*1024});
 }
 async function addLocalMedia(i,fileList){
  const files=Array.from(fileList||[]);if(!files.length)return;

@@ -928,18 +928,16 @@ JSON만:
 
 async function actionMediaUpload(req,res){
   try{
-    const {handleUpload}=await import('@vercel/blob/client');
-    const response=await handleUpload({
+    const [{handleUploadPresigned},{issueSignedToken}]=await Promise.all([import('@vercel/blob/client'),import('@vercel/blob')]);
+    const response=await handleUploadPresigned({
       request:req,
       body:req.body||{},
-      onBeforeGenerateToken:async pathname=>{
+      getSignedToken:async pathname=>{
         const safe=String(pathname||'').replace(/\\/g,'/');
         if(!/^content-master\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9._-]+$/.test(safe))throw new Error('MEDIA_UPLOAD_PATH_INVALID');
         return {
-          allowedContentTypes:['image/jpeg','video/mp4','video/quicktime'],
-          maximumSizeInBytes:1_073_741_824,
-          addRandomSuffix:true,
-          cacheControlMaxAge:31_536_000
+          token:await issueSignedToken({pathname:safe,operations:['put'],allowedContentTypes:['image/jpeg','video/mp4','video/quicktime'],maximumSizeInBytes:1_073_741_824}),
+          urlOptions:{access:'public',allowedContentTypes:['image/jpeg','video/mp4','video/quicktime'],maximumSizeInBytes:1_073_741_824,addRandomSuffix:true,cacheControlMaxAge:31_536_000}
         };
       }
     });
