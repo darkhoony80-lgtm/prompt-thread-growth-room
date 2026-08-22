@@ -2,7 +2,6 @@ import {readFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {createHmac,timingSafeEqual} from 'node:crypto';
 import {put} from '@vercel/blob';
-import {handleUpload} from '@vercel/blob/client';
 
 const TEXT_MODEL='gemini-3.6-flash';
 const IMAGE_MODEL='gemini-3.1-flash-image';
@@ -929,6 +928,7 @@ JSON만:
 
 async function actionMediaUpload(req,res){
   try{
+    const {handleUpload}=await import('@vercel/blob/client');
     const response=await handleUpload({
       request:req,
       body:req.body||{},
