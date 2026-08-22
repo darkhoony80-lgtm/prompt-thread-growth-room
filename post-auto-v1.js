@@ -27,9 +27,9 @@ function restoreDrafts(){
 }
 function syncDraft(i){
  const x=candidates[i];if(!x)return;
- const oldHook=x.hook||'',oldTopicTag=String(x.topic_tag||'').replace(/^#+/,'').trim().slice(0,80),nextTopicTag=topicTag(i);
- x.hook=hook(i);x.body=body(i);x.topic_tag=nextTopicTag;if(oldTopicTag!==nextTopicTag)x.topic_tag_verified=false;if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))x.reply_prompt=replyPrompt(i);
- if(oldHook!==x.hook&&x.final_image)x.thumbnail_dirty=true;
+ const pillar=PILLARS[i],aiThumbnail=['AI_PROMPT','AI_TIP'].includes(pillar),oldHook=x.hook||'',oldBody=x.body||'',oldReply=x.reply_prompt||'',oldTopicTag=String(x.topic_tag||'').replace(/^#+/,'').trim().slice(0,80),nextTopicTag=topicTag(i),nextBody=body(i),nextReply=aiThumbnail?replyPrompt(i):'';
+ x.hook=hook(i);x.body=nextBody;x.topic_tag=nextTopicTag;if(oldTopicTag!==nextTopicTag)x.topic_tag_verified=false;if(aiThumbnail)x.reply_prompt=nextReply;
+ if(x.final_image&&((!aiThumbnail&&oldHook!==x.hook)||(aiThumbnail&&oldBody!==nextBody)||(pillar==='AI_PROMPT'&&oldReply!==nextReply)))x.thumbnail_dirty=true;
  saveDrafts();
 }
 function esc(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -157,8 +157,23 @@ async function compose(i){
 }
 function preview(i){const x=candidates[i],b=document.getElementById(`v3img-${i}`),src=x?.final_image||x?.image_url;if(!src){b.innerHTML='<span class="mut">이미지를 생성한 뒤 직접 확인하세요.</span>';return}b.innerHTML=`<div><img src="${src}" style="width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:11px;display:block"><p class="mut" style="margin:8px 2px 0">최종 썸네일 미리보기 · 확인 후 채택/게시</p></div>`}
 async function makeImage(i,redo=false){
- const x=candidates[i],box=document.getElementById(`v3img-${i}`);if(!x)return;box.innerHTML='<span class="mut">Gemini 이미지 생성 중…</span>';x.variation=redo?(x.variation||1)+1:(x.variation||1);x.body=body(i);x.hook=hook(i);
- try{const r=await fetch('/api/content-router?action=image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate:x,variation:x.variation})}),j=await r.json();if(!r.ok)throw new Error(apiError(j,'IMAGE_FAILED'));x.base_image=`data:${j.mime_type};base64,${j.data}`;await compose(i);await upload(i);saveDrafts();preview(i)}catch(e){box.innerHTML='<span class="mut">이미지 생성 실패</span>';alert('이미지 생성 실패: '+e.message)}
+ const x=candidates[i],box=document.getElementById(`v3img-${i}`);if(!x)return;box.innerHTML='<span class="mut">Gemini 이미지 생성 중…</span>';x.variation=redo?(x.variation||1)+1:(x.variation||1);x.body=body(i);x.hook=hook(i);if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))x.reply_prompt=replyPrompt(i);
+ try{
+  const r=await fetch('/api/content-router?action=image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate:x,variation:x.variation})}),j=await r.json();
+  if(!r.ok)throw new Error(apiError(j,'IMAGE_FAILED'));
+  const generated=`data:${j.mime_type};base64,${j.data}`;
+  if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i])){
+   x.base_image=null;
+   x.final_image=generated;
+   x.image_url=null;
+   x.thumbnail_hook=String(j.thumbnail_hook||'').trim();
+   x.thumbnail_dirty=false;
+  }else{
+   x.base_image=generated;
+   await compose(i);
+  }
+  await upload(i);saveDrafts();preview(i);
+ }catch(e){box.innerHTML='<span class="mut">이미지 생성 실패</span>';alert('이미지 생성 실패: '+e.message)}
 }
 async function followerBaseline(){
  try{
@@ -179,12 +194,12 @@ async function publishFirstReply(parentId,text){
  return j;
 }
 async function upload(i){const x=candidates[i];if(x.image_url&&!x.final_image)return x.image_url;if(!x.final_image)throw new Error('최종 이미지를 먼저 확인해 주세요.');const r=await fetch('/api/content-router?action=store-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate_id:x.id,data_url:x.final_image})}),j=await r.json();if(!r.ok)throw new Error(apiError(j,'IMAGE_UPLOAD_FAILED'));x.image_url=j.url;return j.url}
-async function keep(i){const x=candidates[i];if(!x?.final_image&&!x?.image_url)return alert('먼저 이미지를 생성해서 최종 썸네일을 확인해 주세요.');try{syncDraft(i);if(x.thumbnail_dirty&&!x.base_image)return alert('제목을 수정했어요. 이미지 다시 생성을 눌러 새 제목이 들어간 썸네일을 확인해 주세요.');if(x.base_image)await compose(i);const url=await upload(i),v={...x,image_url:url,kept_at:Date.now()};delete v.base_image;delete v.final_image;const a=read(Q);a.unshift(v);write(Q,a);fb(x,'LIKE');renderQueue();alert('이미지 포함 발행 대기 저장 완료 ✅')}catch(e){alert('저장 실패: '+e.message)}}
+async function keep(i){const x=candidates[i];if(!x?.final_image&&!x?.image_url)return alert('먼저 이미지를 생성해서 최종 썸네일을 확인해 주세요.');try{syncDraft(i);if(x.thumbnail_dirty&&!x.base_image)return alert('이미지에 반영되는 내용을 수정했어요. 이미지 다시 생성을 눌러 최종 썸네일을 확인해 주세요.');if(x.base_image)await compose(i);const url=await upload(i),v={...x,image_url:url,kept_at:Date.now()};delete v.base_image;delete v.final_image;const a=read(Q);a.unshift(v);write(Q,a);fb(x,'LIKE');renderQueue();alert('이미지 포함 발행 대기 저장 완료 ✅')}catch(e){alert('저장 실패: '+e.message)}}
 async function now(i){
  const x=candidates[i];if(!x?.final_image&&!x?.image_url)return alert('즉시 게시 전에 이미지를 생성해서 직접 확인해 주세요.');
  try{
   syncDraft(i);
-  if(x.thumbnail_dirty&&!x.base_image)return alert('제목을 수정했어요. 이미지 다시 생성을 눌러 새 제목이 들어간 썸네일을 확인해 주세요.');
+   if(x.thumbnail_dirty&&!x.base_image)return alert('이미지에 반영되는 내용을 수정했어요. 이미지 다시 생성을 눌러 최종 썸네일을 확인해 주세요.');
   if(x.base_image)await compose(i);
   if(!confirm(`지금 보이는 이미지와 본문 그대로 게시할까요?\n\n${x.hook}`))return;
 
@@ -218,7 +233,7 @@ async function now(i){
 }
 async function variant(i){const x=candidates[i];try{x.body=body(i);x.hook=hook(i);if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))x.reply_prompt=replyPrompt(i);const r=await fetch('/api/content-router?action=variant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate:x})}),j=await r.json();if(!r.ok)throw new Error(j.detail||j.error);candidates[i]=j.item;candidates[i].variation=1;fb(x,'VARIANT');saveDrafts();render()}catch(e){alert('다른 버전 실패: '+e.message)}}
 function no(i){if(candidates[i])fb(candidates[i],'DISLIKE');candidates[i]=null;saveDrafts();render()}
-async function applyHook(i){try{await compose(i);await upload(i);saveDrafts();preview(i)}catch(e){alert(e.message)}}
+async function applyHook(i){if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))return makeImage(i,true);try{await compose(i);await upload(i);saveDrafts();preview(i)}catch(e){alert(e.message)}}
 function renderQueue(){const a=read(Q),n=document.getElementById('v3qcount'),b=document.getElementById('v3queue');if(n)n.textContent=a.length;if(!b)return;b.innerHTML=a.length?a.map((x,i)=>`<article class="card"><div style="display:grid;grid-template-columns:150px 1fr;gap:14px"><img src="${esc(x.image_url)}" style="width:150px;aspect-ratio:4/5;object-fit:cover;border-radius:10px"><div><span class="badge">${esc(x.category_label||CATS[x.category])}</span><h3>${esc(x.hook)}</h3><div class="post-text">${esc(x.body)}</div><div style="margin-top:10px;display:flex;gap:8px"><button class="btn p" onclick="PostAuto.publishQueue(${i})">🚀 지금 게시</button><button class="btn" onclick="PostAuto.drop(${i})">제거</button></div></div></div></article>`).join(''):'<div class="card empty"><div><b>발행 대기 없음</b>이미지를 확인하고 👍한 게시물이 여기에 쌓입니다.</div></div>'}
 async function publishQueue(i){const a=read(Q),x=a[i];if(!x||!confirm(`"${x.hook}" 지금 게시할까요?`))return;const r=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:x.body,image_url:x.image_url,topic_tag:String(x.topic_tag||'').replace(/^#+/,'').trim(),topic_tag_verified:x.topic_tag_verified===true})}),j=await r.json();if(!r.ok)return alert('게시 실패: '+(j.detail||j.error));const follower_at_publish=await followerBaseline();const p=read(P);p.unshift({thread_id:j.id,category:x.category,topic:x.topic,topic_tag:String(x.topic_tag||'').replace(/^#+/,'').trim(),hook:x.hook,published_at:Date.now(),image_url:x.image_url,follower_at_publish});write(P,p.slice(0,100));fb(x,'PUBLISHED');a.splice(i,1);write(Q,a);renderQueue();alert('게시 완료 ✅')}
 function drop(i){const a=read(Q);a.splice(i,1);write(Q,a);renderQueue()}

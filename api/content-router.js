@@ -263,17 +263,18 @@ function aiPromptMoodRule(mood='RANDOM'){
 }
 
 function pillarPrompt({pillar,research='',feedback='',performance='',mood='RANDOM'}){
-  const common=`너는 한국 Threads 계정을 팔로워 성장시키는 콘텐츠 편집장이다.\n목표는 광고가 아니라 저장, 공유, 댓글, 팔로우를 부르는 원본 콘텐츠다.\n본문은 스레드에서 실제 사람이 말하듯 자연스러운 반말로 쓴다. 딱딱한 기사체, 보도자료체, 존댓말, 교과서식 설명은 피한다.\n짧은 문장과 줄바꿈을 활용하고, 귀엽고 친근한 리액션을 자연스럽게 섞는다. 이모지는 보통 1~3개만 사용하고 과하게 도배하지 않는다.\n사건사고·재난·피해자가 있는 내용에서는 장난스러운 표현을 피하고 친근하지만 차분한 반말을 사용한다.\n후킹은 6~10자 우선, 최대 14자. 기사 제목이나 흔한 문구를 복사하지 않는다.\nThreads 주제 태그도 함께 추천한다. 내부 소재명 topic과 Threads 주제 태그 topic_tag는 절대 같은 필드로 취급하지 않는다. topic_tag_candidates는 게시물 내용과 직접 관련된 후보 3개를 만든다. 한국 계정이므로 자연스럽고 실제 사람들이 찾을 법한 한글 Topic을 우선하되, AI Art처럼 영어명이 더 보편적인 주제는 영어도 허용한다. # 기호는 넣지 않는다. 너무 길거나 문장형인 태그, 광고 문구, 억지 신조어는 금지한다. topic_tag에는 후보 중 가장 적합한 하나를 넣는다.\n이미지는 4:5 세로형이며 글자/로고/워터마크 없이 프레임 전체를 하나의 자연스럽고 완성된 장면으로 채운다. 제목 공간을 위한 빈 영역, 상단 여백, 블러 띠, 검은 띠, 반투명 오버레이, 그라데이션 패널을 만들지 않는다. 후킹 제목과 VOA 워터마크는 이미지 생성 후 프로그램이 별도로 합성한다.\n최근 피드백: ${feedback||'없음'}\n실제 성과: ${performance||'없음'}`;
+  const common=`너는 한국 Threads 계정을 팔로워 성장시키는 콘텐츠 편집장이다.\n목표는 광고가 아니라 저장, 공유, 댓글, 팔로우를 부르는 원본 콘텐츠다.\n본문은 스레드에서 실제 사람이 말하듯 자연스러운 반말로 쓴다. 딱딱한 기사체, 보도자료체, 존댓말, 교과서식 설명은 피한다.\n짧은 문장과 줄바꿈을 활용하고, 귀엽고 친근한 리액션을 자연스럽게 섞는다. 이모지는 보통 1~3개만 사용하고 과하게 도배하지 않는다.\n사건사고·재난·피해자가 있는 내용에서는 장난스러운 표현을 피하고 친근하지만 차분한 반말을 사용한다.\n후킹은 6~10자 우선, 최대 14자. 기사 제목이나 흔한 문구를 복사하지 않는다.\nThreads 주제 태그도 함께 추천한다. 내부 소재명 topic과 Threads 주제 태그 topic_tag는 절대 같은 필드로 취급하지 않는다. topic_tag_candidates는 게시물 내용과 직접 관련된 후보 3개를 만든다. 한국 계정이므로 자연스럽고 실제 사람들이 찾을 법한 한글 Topic을 우선하되, AI Art처럼 영어명이 더 보편적인 주제는 영어도 허용한다. # 기호는 넣지 않는다. 너무 길거나 문장형인 태그, 광고 문구, 억지 신조어는 금지한다. topic_tag에는 후보 중 가장 적합한 하나를 넣는다.\nimage_brief는 본문과 직접 연결되는 시각적 핵심만 설명한다. 실제 썸네일 문구와 타이포그래피 구성은 카테고리별 이미지 생성 단계가 별도로 결정한다.\n최근 피드백: ${feedback||'없음'}\n실제 성과: ${performance||'없음'}`;
 
   const rules={
     AI_TIP:`AI_TIP 하나만 만든다. 일반인이 잘 모르는 짧은 전문 개념/명령어를 오늘의 명령어처럼 소개한다. RED TEAM, STEELMAN, PRE-MORTEM, EDGE CASES, COUNTEREXAMPLE, RUBRIC, FIRST PRINCIPLES 같은 수준이지만 예시를 재탕하지 말고 더 넓게 발굴한다. '전문가처럼 답해줘', '결론부터', '예시 2개' 같은 초급 팁은 금지. 본문은 ① 낯선 용어 ② 복붙 가능한 짧은 영어 명령어 ③ 쉬운 한국어 설명 ④ 언제 쓰면 좋은지. 영어 명령어 필수. 말투는 '이거 한번 써봐 👀', '생각보다 꽤 쓸만해'처럼 짧고 영리한 반말로 쓴다.`,
-    AI_PROMPT:`AI_PROMPT 하나만 만든다. ${aiPromptMoodRule(mood)} 반드시 body와 reply_prompt를 완전히 분리한다. body는 Threads에 실제 게시되는 한국어 설명문이다. 결과 이미지의 매력, 빛/질감/분위기/촬영 느낌 중 핵심을 3~5문장으로 충분히 설명한다. 자연스러운 반말과 가벼운 이모지 1~2개를 사용한다. 영문 이미지 프롬프트 문장이나 영어 프롬프트 일부를 body에 절대 넣지 않는다. body 마지막은 반드시 '프롬프트는 첫 댓글에 남겨둘게 👇'처럼 첫 댓글을 안내한다. reply_prompt는 복붙용 영문 이미지 프롬프트만 넣는다. 한국어 설명, 번역, Prompt:, 따옴표, Markdown 금지. 피사체/행동/환경/시간/카메라/렌즈/구도/조명/색감/질감/현실성/금지요소 중 필요한 요소를 상세하게 구성한다. 길이 때문에 핵심 디테일을 억지로 삭제하지 않는다. 흔한 cinematic, warm lighting 단순 나열 수준은 금지.`,
+    AI_PROMPT:`AI_PROMPT 하나만 만든다. ${aiPromptMoodRule(mood)} 반드시 body와 reply_prompt를 완전히 분리한다. body는 Threads에 실제 게시되는 한국어 설명문이다. 결과 이미지의 매력, 빛/질감/분위기/촬영 느낌 중 핵심을 3~5문장으로 충분히 설명한다. 자연스러운 반말과 가벼운 이모지 1~2개를 사용한다. 영문 이미지 프롬프트 문장이나 영어 프롬프트 일부를 body에 절대 넣지 않는다. body 마지막은 반드시 '프롬프트는 첫 댓글에 남겨둘게 👇'처럼 첫 댓글을 안내한다. reply_prompt는 복붙용 영문 이미지 프롬프트만 넣는다. 한국어 설명, 번역, Prompt:, 따옴표, Markdown 금지. 피사체/행동/환경/시간/카메라/렌즈/구도/조명/색감/질감/현실성/금지요소 중 필요한 요소를 상세하게 구성한다. 길이 때문에 핵심 디테일을 억지로 삭제하지 않는다. 흔한 cinematic, warm lighting 단순 나열 수준은 금지. image_brief는 reply_prompt 결과 이미지의 구도와 시각적 매력을 보충하되 별도의 텍스트 중심 썸네일로 바꾸지 않는다.`,
 
 AI_TIP:`AI 활용 팁은 반드시 body와 reply_prompt를 완전히 분리한다.
 핵심은 '짧은 전문 명령어/기법 이름' 하나를 소개하는 것이다. RED TEAM, STEELMAN, PRE-MORTEM, EDGE CASES, COUNTEREXAMPLE, RUBRIC, FIRST PRINCIPLES, DECOMPOSITION처럼 1~3단어 수준의 짧고 기억하기 쉬운 개념을 우선한다. 단, 같은 용어를 반복 재탕하지 말고 매번 다른 전문 개념을 발굴한다.
 body에는 해당 짧은 명령어 이름을 눈에 띄게 소개하고, 그게 무엇인지 / 언제 쓰는지 / 어떤 효과가 있는지를 한국어 반말로 3~5문장 설명한다. 실제 복붙 명령문은 body에 절대 넣지 않는다. body 마지막은 반드시 '프롬프트는 첫 댓글에 남겨둘게 👇'처럼 안내한다.
 reply_prompt에는 사용자가 그대로 복사해 AI에 넣을 실제 프롬프트만 넣는다. 반드시 영어로 작성한다. 한국어 문장, 한국어 설명, 번역, Markdown, 코드블록, 장식 문구 금지. 길게 장황하게 쓰지 말고 보통 1~3문장의 짧고 강한 명령형 영어 프롬프트로 작성한다.
-예시 방향: "Red-team this plan. Identify hidden assumptions, failure modes, and the strongest counterarguments."처럼 짧고 전문적이어야 한다.`,
+예시 방향: "Red-team this plan. Identify hidden assumptions, failure modes, and the strongest counterarguments."처럼 짧고 전문적이어야 한다.
+image_brief는 본문 핵심을 한눈에 이해시키는 보조 장면을 설명한다. 최종 이미지에서는 이미지 생성 단계가 본문 전체를 다시 분석해 썸네일 전용 문구를 별도로 만들며, 그 문구가 주인공이 된다.`,
     FOOD_PICK:`FOOD_PICK 하나만 만든다. 현재 한국 시간대를 반영해서 지금 먹기 가장 자연스러운 상황을 먼저 정한다. 점심 시간에는 점심, 저녁에는 저녁, 밤 9시 이후에는 야식/술안주 성격을 우선한다. '오늘 점심은 내가 정해줄게 😋', '오늘 저녁은 이거 먹자', '오늘 술안주는 이걸로 가자'처럼 우리가 먼저 결론을 준다. 아래 검색 결과에서 실제 확인된 전국 식당 하나를 고른다. 최근 생성 이력으로 제외된 업장은 절대 선택하지 않는다. 같은 지역/같은 장르/같은 업장을 연속 반복하지 말고 다양성을 우선한다. 식당명/지역/대표 메뉴/추천 이유를 간결하게 쓴다. 존재, 지역, 메뉴를 지어내지 않는다. 음식은 먹고 싶게 느껴지는 가볍고 맛깔나는 반말로 추천한다. 마지막에 '※ 이미지는 메뉴 이해를 돕는 AI 연출 이미지'를 넣는다.\n검색 결과:\n${research}`,
     HOT_ISSUE:`HOT_ISSUE 하나만 만든다. AI에 편향하지 말고 오늘 실제 뉴스 중 대화 가치와 화제성이 가장 큰 하나를 고른다. 환율/증시/정책/사회/사건사고/전쟁/국제/날씨/태풍/스포츠/연예/자동차/부동산/과학/테크 모두 동등하게 본다. 아래 검색 결과만 사실 재료로 사용한다. 검색 결과 안에 '최근 이미 다룬 핫이슈'와 중복 금지 규칙이 포함되어 있으면 반드시 따른다. 같은 사건을 제목/후킹/표현만 바꿔 재사용하지 않는다. 기사 제목 복사 금지. 본문은 '무슨 일인데? → 쉽게 말하면 왜 중요한데? → 앞으로 뭘 보면 돼?' 흐름으로 친근한 반말로 풀어준다. 뉴스 앵커처럼 딱딱하게 쓰지 않는다. 다만 재난·전쟁·피해자가 있는 사건은 가벼운 농담 없이 차분하게 쓴다. 루머와 확인 안 된 숫자 금지.\n검색 결과:\n${research}`
   };
@@ -321,7 +322,80 @@ async function actionGenerate(req,res){
   }
 }
 
-async function imageDirector(key,candidate,variation){
+async function aiTipImageDirector(key,candidate,variation){
+  const plan=await generateJson(key,`AI 활용 팁 Threads 본문 전체를 분석해서 썸네일 전용 한국어 후킹 문구를 새로 만들어.
+기존 게시물 제목이나 hook 필드는 참고하거나 재사용하지 않는다.
+
+소재: ${candidate.topic}
+본문 전체: ${candidate.body}
+시각 브리프: ${candidate.image_brief}
+
+규칙:
+- 문구는 6~12자 우선, 최대 14자이며 한눈에 읽혀야 한다.
+- 본문 핵심과 직접 연결되고 답을 전부 말하지 않아 궁금증이 남아야 한다.
+- 문구 자체가 썸네일의 주인공이어야 한다.
+- "미쳤다", "충격", "모르면 손해" 같은 반복적 과장 표현은 쓰지 않는다.
+- 장면은 문구를 이해시키는 하나의 명확한 시각적 은유로 정한다.
+
+JSON만 반환:
+{"thumbnail_hook":"...","visual_direction":"..."}`,.75);
+  const thumbnailHook=clampHook(plan?.thumbnail_hook);
+  if(!thumbnailHook)throw new Error('AI_TIP_THUMBNAIL_HOOK_EMPTY');
+
+  return {
+    thumbnailHook,
+    useReference:true,
+    prompt:`Create a finished 4:5 portrait Threads thumbnail, not a text-free base image.
+
+EXACT KOREAN HEADLINE: "${thumbnailHook}"
+Visual direction: ${String(plan?.visual_direction||candidate.image_brief||'').slice(0,1200)}
+Source topic: ${candidate.topic}
+Variation: ${variation}
+
+The exact Korean headline is the visual hero. Render it once, accurately and legibly, using bold premium Korean typography, a mobile-readable size, strong natural contrast, and an intentional position integrated into the composition. Keep it to one or two short lines. Do not paraphrase, translate, misspell, duplicate, or add any other text.
+The person, environment, and objects only support the idea behind the headline. Use one immediately understandable scene rather than generic AI robots, neon circuitry, hologram brains, or fake UI. If a person improves comprehension, use the attached Character Master as the same adult Korean woman, VOA, with context-appropriate styling and a natural expression.
+Use a full-bleed premium editorial composition with realistic materials, skin, light, and depth. Do not create a black bar, gradient band, blur band, translucent panel, header box, logo, or watermark. Ensure readability through composition, local contrast, restrained outline, or shadow rather than covering the image with a panel.
+The final output must already contain the complete headline and artwork. No later typography or overlay step will be used.`
+  };
+}
+
+async function aiPromptImageDirector(key,candidate,variation){
+  const sourcePrompt=String(candidate.reply_prompt||'').trim();
+  if(!sourcePrompt)throw new Error('AI_PROMPT_SOURCE_PROMPT_EMPTY');
+
+  const plan=await generateJson(key,`다음 이미지 프롬프트와 게시물 설명을 보고 결과 이미지의 매력을 궁금하게 만드는 보조용 한국어 썸네일 문구를 새로 만들어.
+기존 게시물 제목이나 hook 필드는 참고하거나 재사용하지 않는다.
+
+게시물 설명: ${candidate.body}
+입력 이미지 프롬프트: ${sourcePrompt.slice(0,5000)}
+
+규칙:
+- 6~12자 우선, 최대 14자.
+- 결과 이미지가 주인공이고 문구는 클릭을 돕는 보조 역할이다.
+- 프롬프트의 결과를 가리거나 내용을 과장하지 않는다.
+- "미쳤다", "충격", "모르면 손해" 같은 반복적 표현은 피한다.
+
+JSON만 반환:
+{"thumbnail_hook":"..."}`,.7);
+  const thumbnailHook=clampHook(plan?.thumbnail_hook);
+  if(!thumbnailHook)throw new Error('AI_PROMPT_THUMBNAIL_HOOK_EMPTY');
+
+  return {
+    thumbnailHook,
+    useReference:false,
+    prompt:`Create a finished 4:5 portrait image by faithfully following the SOURCE IMAGE PROMPT below. Its subject, people, action, environment, era, style, lighting, camera, composition, colors, textures, and mood have absolute visual priority.
+
+SOURCE IMAGE PROMPT:
+${sourcePrompt}
+
+Add this exact Korean supporting hook as part of the original generated image: "${thumbnailHook}"
+Render the hook once, accurately and legibly. Keep it visually restrained and secondary, placed where it does not cover a face, focal subject, important object, or defining prompt detail. Do not turn the image into a text-led poster, rearrange the requested scene around the text, paraphrase the hook, or add any other text, logo, or watermark.
+The final output must already contain both the faithful prompt result and the supporting hook. No later typography or overlay step will be used.
+Variation: ${variation}`
+  };
+}
+
+async function editorialImageDirector(key,candidate,variation){
   const prompt=`너는 세계적 소셜미디어 아트디렉터다.
 다음 Threads 후보에 맞는 Gemini 이미지 생성용 영어 프롬프트 하나만 작성해.
 
@@ -331,8 +405,6 @@ async function imageDirector(key,candidate,variation){
 후킹(이미지에 직접 쓰지 않음): ${candidate.hook}
 브리프: ${candidate.image_brief}
 재생성 번호: ${variation}
-AI 프롬프트 무드 지시: ${candidate.category==='AI_PROMPT'?aiPromptMoodRule(String(candidate.mood||'RANDOM').toUpperCase()):'해당 없음'}
-
 절대 규칙:
 4:5 portrait, premium social editorial thumbnail quality.
 이미지 안에 글자/숫자/로고/워터마크/가짜 UI를 생성하지 않는다. 정확한 제목과 VOA 워터마크는 후처리 코드가 담당한다.
@@ -343,8 +415,6 @@ AI 프롬프트 무드 지시: ${candidate.category==='AI_PROMPT'?aiPromptMoodRu
 인물을 사용하는 경우 첨부된 Character Master의 여성은 '보아(VOA)'다. 반드시 그 참조 인물의 동일한 정체성으로 생성한다. 얼굴형, 눈·코·입 비율, 피부톤, 연령대, 기본 머리색과 전체 인상은 바꾸지 않는다. Character Master는 얼굴/정체성 참조용이며 의상 참조용이 아니다. 참조 이미지의 옷을 기본 복장처럼 반복 복제하지 않는다. 보아가 등장할 때마다 장소, 계절, 날씨, 시대, 활동, 직업/역할, 무드에 맞는 자연스럽고 세련된 의상을 새로 스타일링한다. 예: 해변은 리조트웨어, 겨울 도시는 코트/니트, 운동 장면은 스포츠웨어, 업무 장면은 스마트 캐주얼, 판타지는 해당 세계관 복식처럼 장면 논리에 맞춘다. 동일 장면의 연속성이 필요한 경우에만 같은 옷을 유지한다. 표정, 포즈, 헤어 연출, 앵글과 배경도 장면에 맞게 바꿀 수 있다. 다른 여성으로 재해석하거나 얼굴을 랜덤화하지 않는다. 과도한 노출이나 성적 연출은 금지.
 표정은 과장된 충격 표정보다 호기심, 미소, 놀람, 만족, 집중 같은 자연스러운 감정을 우선한다.
 뻔한 AI 로봇, 푸른 회로판, 홀로그램 뇌, 의미 없는 네온을 기본값으로 쓰지 않는다.
-AI_PROMPT: 제공 프롬프트의 '완성 결과' 자체가 저장 욕구를 만들 정도로 고급스럽게. 인물이 어울리는 주제라면 첨부 Character Master의 보아(VOA)를 자연스럽게 활용한다.
-AI_TIP: 낯선 개념을 한 장면으로 직관화한다. 사람이 어울리면 첨부 Character Master의 보아(VOA)가 화면/오브젝트와 자연스럽게 상호작용하게 한다. 실제 읽을 수 있는 UI나 텍스트는 만들지 않는다.
 FOOD_PICK: 음식이 가장 큰 주인공. 윤기, 김, 질감, 단면 등 식욕을 자극하는 디테일을 강조하고, 필요할 때만 실제 식사 중인 성인 여성/친구들을 보조 피사체로 사용한다. 특정 식당 사진을 복제하지 않는다.
 HOT_ISSUE: 핵심 사물/상징/장소가 주인공인 프리미엄 편집기사형 비주얼. 인물은 맥락상 자연스러울 때만 사용하며 실제 보도사진, 피해자, 특정 현장 사진으로 오인되지 않게 한다.
 재생성 번호가 달라지면 카메라 앵글, 인물 유무, 구도, 시각적 은유 중 최소 2가지를 확실히 바꾼다.
@@ -382,16 +452,26 @@ async function actionImage(req,res){
   const variation=Number(req.body?.variation)||1;
 
   try{
-    const prompt=await imageDirector(key,candidate,variation);
+    let imagePlan;
+    if(candidate.category==='AI_TIP')imagePlan=await aiTipImageDirector(key,candidate,variation);
+    else if(candidate.category==='AI_PROMPT')imagePlan=await aiPromptImageDirector(key,candidate,variation);
+    else imagePlan={
+      prompt:await editorialImageDirector(key,candidate,variation),
+      thumbnailHook:'',
+      useReference:true
+    };
+    const prompt=imagePlan.prompt;
     if(!prompt)throw new Error('IMAGE_DIRECTOR_EMPTY');
 
     let referenceImage=null;
-    try{
-      const master=await readFile(join(process.cwd(),'voa-character-master.png'));
-      referenceImage={mimeType:'image/png',data:master.toString('base64')};
-    }catch(e){
-      console.error('[VOA_MASTER_LOAD_FAILED]',e?.message||String(e));
-      throw new Error('VOA_CHARACTER_MASTER_MISSING');
+    if(imagePlan.useReference){
+      try{
+        const master=await readFile(join(process.cwd(),'voa-character-master.png'));
+        referenceImage={mimeType:'image/png',data:master.toString('base64')};
+      }catch(e){
+        console.error('[VOA_MASTER_LOAD_FAILED]',e?.message||String(e));
+        throw new Error('VOA_CHARACTER_MASTER_MISSING');
+      }
     }
 
     const j=await geminiGenerate(key,{
@@ -417,7 +497,9 @@ async function actionImage(req,res){
     return send(res,200,{
       ok:true,
       ...img,
-      director_prompt:prompt
+      director_prompt:prompt,
+      thumbnail_hook:imagePlan.thumbnailHook||null,
+      complete_thumbnail:['AI_TIP','AI_PROMPT'].includes(candidate.category)
     });
   }catch(e){
     console.error('[CONTENT_IMAGE_FAILED]',JSON.stringify({
