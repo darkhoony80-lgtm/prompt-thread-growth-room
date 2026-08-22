@@ -288,7 +288,8 @@ async function geminiGenerate(key,{
   json=false,
   googleSearch=false,
   image=false,
-  referenceImage=null
+  referenceImage=null,
+  maxAttempts=3
 }){
   const url=model===IMAGE_MODEL?IMAGE_URL:TEXT_URL;
   const parts=[];
@@ -318,8 +319,9 @@ async function geminiGenerate(key,{
     };
   }
 
+  const attemptLimit=Math.max(1,Math.min(3,Number(maxAttempts)||3));
   let lastError=null;
-  for(let attempt=0;attempt<3;attempt++){
+  for(let attempt=0;attempt<attemptLimit;attempt++){
     const r=await fetch(url,{
       method:'POST',
       headers:{'Content-Type':'application/json','x-goog-api-key':key},
@@ -328,7 +330,7 @@ async function geminiGenerate(key,{
     const j=await r.json().catch(()=>({}));
     if(r.ok)return j;
     lastError=new Error(j?.error?.message||`GEMINI_HTTP_${r.status}`);
-    if(![429,500,502,503,504].includes(r.status)||attempt===2)break;
+    if(![429,500,502,503,504].includes(r.status)||attempt===attemptLimit-1)break;
     await new Promise(resolve=>setTimeout(resolve,1200*Math.pow(2,attempt)));
   }
   throw lastError||new Error('GEMINI_REQUEST_FAILED');
@@ -1190,7 +1192,238 @@ function minimizeAiTipTextBearingSurfaces(scene){
   return source;
 }
 
+const AI_TIP_WEBTOON_PANEL_SIZES=new Set([
+  'establishing_tall','wide','medium','reaction_close_up','object_detail','action_tall','narrow_bridge'
+]);
+const AI_TIP_TEXT_SAFE_AREAS=new Set(['top_left','top_right','bottom_left','bottom_right','top','bottom','none']);
+const AI_TIP_LAYOUT_TEMPLATES=['HERO_REACTION','ASYMMETRIC_PAIR','SPLIT_EMPHASIS','STACKED_TRIO'];
+const AI_TIP_WEBTOON_FORBIDDEN=[
+  'duplicate character','clone','reflection as another person','extra unlisted person',
+  'unlisted dialogue','unlisted narration','readable UI text','pseudo-text','logo','watermark',
+  'sunglasses','goggles','mask','veil','face-covering hat','hand covering face','hair covering eyes','heavy face shadow'
+];
+
+function aiTipWebtoonString(value,max=500){
+  return String(value||'').replace(/\s+/g,' ').trim().slice(0,max);
+}
+
+function aiTipWebtoonStringArray(value,{maxItems=8,maxLength=120}={}){
+  return (Array.isArray(value)?value:[])
+    .map(item=>aiTipWebtoonString(item,maxLength)).filter(Boolean).slice(0,maxItems);
+}
+
+function aiTipWebtoonVisibleText(value){
+  const text=String(value||'').split(/\r?\n|\\n/)
+    .map(line=>line.replace(/\s+/g,' ').trim()).filter(Boolean).join('\n');
+  const lines=text.split('\n').filter(Boolean);
+  if(!text||lines.length>2||[...text.replace(/\s/g,'')].length>32){
+    throw new Error('AI_TIP_WEBTOON_VISIBLE_TEXT_INVALID');
+  }
+  return text;
+}
+
+function normalizeAiTipCharacterBible(input){
+  const protagonistId=aiTipWebtoonString(input?.protagonist_id,40).toUpperCase();
+  const characters=(Array.isArray(input?.characters)?input.characters:[]).slice(0,4).map(item=>({
+    character_id:aiTipWebtoonString(item?.character_id,40).toUpperCase(),
+    name:aiTipWebtoonString(item?.name,80),
+    role:aiTipWebtoonString(item?.role,120),
+    age:aiTipWebtoonString(item?.age,80),
+    face:aiTipWebtoonString(item?.face,500),
+    eyes:aiTipWebtoonString(item?.eyes,300),
+    nose:aiTipWebtoonString(item?.nose,180),
+    mouth:aiTipWebtoonString(item?.mouth,180),
+    skin_tone:aiTipWebtoonString(item?.skin_tone,180),
+    hair:aiTipWebtoonString(item?.hair,500),
+    body:aiTipWebtoonString(item?.body,300),
+    outfit:aiTipWebtoonString(item?.outfit,600),
+    outfit_colors:aiTipWebtoonString(item?.outfit_colors,250),
+    accessories:aiTipWebtoonString(item?.accessories,300)
+  }));
+  if(protagonistId!=='HANAREUM'||characters.length<1)throw new Error('AI_TIP_CHARACTER_BIBLE_INVALID');
+  const ids=new Set();
+  for(const character of characters){
+    if(!/^[A-Z][A-Z0-9_]{1,39}$/.test(character.character_id)||ids.has(character.character_id)){
+      throw new Error('AI_TIP_CHARACTER_ID_INVALID');
+    }
+    if(Object.values(character).some(value=>!value))throw new Error(`AI_TIP_CHARACTER_FIELDS_REQUIRED_${character.character_id}`);
+    ids.add(character.character_id);
+  }
+  const protagonist=characters.find(character=>character.character_id===protagonistId);
+  if(!protagonist||!/(?:blond|golden)/i.test(protagonist.hair)||!/(?:bob|short)/i.test(protagonist.hair)||!/(?:turquoise|teal)/i.test(protagonist.eyes)){
+    throw new Error('AI_TIP_SIGNATURE_CHARACTER_DIRECTION_INVALID');
+  }
+  return {protagonist_id:protagonistId,characters};
+}
+
+function normalizeAiTipWebtoonPanel(input,{pageNumber,panelIndex,characterIds}){
+  const panelId=aiTipWebtoonString(input?.cut_id||input?.panel_id,50).toUpperCase();
+  const panelSize=aiTipWebtoonString(input?.panel_size,50).toLowerCase();
+  const characters=aiTipWebtoonStringArray(input?.characters,{maxItems:4,maxLength:40}).map(value=>value.toUpperCase());
+  const characterCount=Number(input?.character_count);
+  const textSafeArea=aiTipWebtoonString(input?.text_safe_area,30).toLowerCase();
+  const importance=Math.max(1,Math.min(10,Math.round(Number(input?.importance)||5)));
+  if(!panelId||!AI_TIP_WEBTOON_PANEL_SIZES.has(panelSize))throw new Error(`AI_TIP_PANEL_STRUCTURE_INVALID_${pageNumber}_${panelIndex}`);
+  if(!AI_TIP_TEXT_SAFE_AREAS.has(textSafeArea))throw new Error(`AI_TIP_CUT_TEXT_SAFE_AREA_INVALID_${panelId}`);
+  if(new Set(characters).size!==characters.length||characters.some(id=>!characterIds.has(id))){
+    throw new Error(`AI_TIP_PANEL_CHARACTER_UNKNOWN_${panelId}`);
+  }
+  if(!Number.isInteger(characterCount)||characterCount!==characters.length){
+    throw new Error(`AI_TIP_PANEL_CHARACTER_COUNT_LOCK_${panelId}`);
+  }
+  const dialogue=(Array.isArray(input?.dialogue)?input.dialogue:[]).slice(0,2).map(item=>{
+    const speaker=aiTipWebtoonString(item?.speaker,40).toUpperCase();
+    if(!characters.includes(speaker))throw new Error(`AI_TIP_DIALOGUE_SPEAKER_INVALID_${panelId}`);
+    return {speaker,text:aiTipWebtoonVisibleText(item?.text)};
+  });
+  const narration=aiTipWebtoonStringArray(input?.narration,{maxItems:1,maxLength:80}).map(aiTipWebtoonVisibleText);
+  const soundEffect=aiTipWebtoonStringArray(input?.sound_effect,{maxItems:1,maxLength:40}).map(aiTipWebtoonVisibleText);
+  const lockedText=[...dialogue.map(item=>item.text),...narration,...soundEffect];
+  if(lockedText.length>2)throw new Error(`AI_TIP_CUT_VISIBLE_TEXT_COUNT_INVALID_${panelId}`);
+  if(lockedText.length&&textSafeArea==='none')throw new Error(`AI_TIP_CUT_TEXT_SAFE_AREA_REQUIRED_${panelId}`);
+  const allowedVisibleText=[...lockedText];
+  let props=aiTipWebtoonString(input?.props,600);
+  let camera=aiTipWebtoonString(input?.camera,500);
+  const treated=minimizeAiTipTextBearingSurfaces({props,camera});
+  props=treated.props;camera=treated.camera;
+  if(findAiTipVisualTextRisk(props)){
+    props='abstract non-linguistic geometric objects and solid color blocks with no letters, numbers, labels, interface chrome, logos, or text-bearing surfaces';
+  }
+  if(findAiTipVisualTextRisk(camera)){
+    camera='cinematic oblique composition preserving the specified panel size; crop or turn away every text-bearing surface and show only large abstract non-linguistic shapes';
+  }
+  const risk=findAiTipVisualTextRisk(`${props} ${camera}`);
+  if(risk)throw new Error(`AI_TIP_PANEL_VISUAL_TEXT_RISK_${panelId}_${risk.rule}`);
+  const panel={
+    panel_id:panelId,
+    cut_id:panelId,
+    purpose:aiTipWebtoonString(input?.purpose,180)||`STORY BEAT ${pageNumber}.${panelIndex}`,
+    panel_size:panelSize,
+    location:aiTipWebtoonString(input?.location,300)||'the same continuous Korean everyday environment',
+    time:aiTipWebtoonString(input?.time,160)||'continuous time from the previous panel',
+    characters,
+    character_count:characterCount,
+    importance,
+    text_safe_area:textSafeArea,
+    character_action:aiTipWebtoonString(input?.character_action,600)||(characters.length?'performing the practical story action for this beat':'no character visible in this panel'),
+    facial_expression:aiTipWebtoonString(input?.facial_expression,400)||(characters.length?'a clear expressive reaction appropriate to this story beat':'not applicable because no character is visible'),
+    camera:camera||'cinematic oblique composition with clear vertical reading order',
+    props:props||'non-text-bearing everyday objects and abstract geometric shapes',
+    surreal_element:aiTipWebtoonString(input?.surreal_element,600)||'an oversized visual metaphor directly tied to the source problem',
+    dialogue,
+    narration,
+    sound_effect:soundEffect,
+    allowed_visible_text:allowedVisibleText,
+    forbidden_elements:[...new Set([
+      ...aiTipWebtoonStringArray(input?.forbidden_elements,{maxItems:12,maxLength:100}),
+      ...AI_TIP_WEBTOON_FORBIDDEN
+    ])],
+    transition_to_next:aiTipWebtoonString(input?.transition_to_next,400)||'visual motion continues downward into the next panel'
+  };
+  const required=['purpose','location','time','character_action','facial_expression','camera','props','surreal_element','transition_to_next'];
+  if(required.some(field=>!panel[field]))throw new Error(`AI_TIP_PANEL_FIELDS_REQUIRED_${panelId}`);
+  return panel;
+}
+
+function selectAiTipLayoutTemplate(cuts,pageIndex){
+  if(cuts.length>=3)return 'STACKED_TRIO';
+  if(cuts.length===1)return 'HERO_REACTION';
+  if(pageIndex===0&&cuts[0].importance>=8)return 'HERO_REACTION';
+  return pageIndex%2===0?'ASYMMETRIC_PAIR':'SPLIT_EMPHASIS';
+}
+
+function normalizeAiTipWebtoonPlan(raw,source){
+  const characterBible=normalizeAiTipCharacterBible(raw?.character_bible);
+  const characterIds=new Set(characterBible.characters.map(character=>character.character_id));
+  const slides=(Array.isArray(raw?.slides)?raw.slides:[]).slice(0,5).map((slide,index)=>{
+    const panels=(Array.isArray(slide?.cuts)?slide.cuts:Array.isArray(slide?.panels)?slide.panels:[]).slice(0,3).map((panel,panelIndex)=>
+      normalizeAiTipWebtoonPanel(panel,{pageNumber:index+1,panelIndex:panelIndex+1,characterIds})
+    );
+    if(!panels.length)throw new Error(`AI_TIP_WEBTOON_PAGE_EMPTY_${index+1}`);
+    const transition={
+      type:aiTipWebtoonString(slide?.transition?.type,80),
+      object:aiTipWebtoonString(slide?.transition?.object,160),
+      motion:aiTipWebtoonString(slide?.transition?.motion,240),
+      meaning:aiTipWebtoonString(slide?.transition?.meaning,240)
+    };
+    if(transition.type!=='vertical_whitespace'||Object.values(transition).some(value=>!value)){
+      throw new Error(`AI_TIP_WEBTOON_TRANSITION_INVALID_${index+1}`);
+    }
+    const visible=panels.flatMap(panel=>panel.allowed_visible_text);
+    return {
+      number:index+1,
+      role:index===0?'HOOK':aiTipWebtoonString(slide?.role,80),
+      message:visible.slice(0,3).join(' / ')||'NO VISIBLE TEXT',
+      visual:panels.map(panel=>panel.purpose).join(' → ').slice(0,900),
+      composition:panels.map(panel=>panel.panel_size).join(' → ').slice(0,700),
+      page_layout:selectAiTipLayoutTemplate(panels,index),
+      layout_template:selectAiTipLayoutTemplate(panels,index),
+      cut_ids:panels.map(panel=>panel.cut_id),
+      transition,
+      panels
+    };
+  });
+  if(slides.length<2||slides.length>4)throw new Error('AI_TIP_WEBTOON_PAGE_COUNT_INVALID');
+  const panels=slides.flatMap(slide=>slide.panels);
+  if(panels.length<4||panels.length>6)throw new Error('AI_TIP_WEBTOON_PANEL_COUNT_INVALID');
+  const panelIds=new Set(),visibleTexts=new Set(),sizes=new Set();
+  for(const panel of panels){
+    if(panelIds.has(panel.panel_id))throw new Error('AI_TIP_WEBTOON_PANEL_ID_DUPLICATE');
+    panelIds.add(panel.panel_id);sizes.add(panel.panel_size);
+    for(const text of panel.allowed_visible_text){
+      const key=text.replace(/\s+/g,'').toLocaleLowerCase('ko-KR');
+      if(visibleTexts.has(key))throw new Error('AI_TIP_WEBTOON_VISIBLE_TEXT_DUPLICATE');
+      visibleTexts.add(key);
+    }
+  }
+  if(sizes.size<3||!slides.some(slide=>new Set(slide.panels.map(panel=>panel.panel_size)).size>1)){
+    throw new Error('AI_TIP_WEBTOON_DYNAMIC_PANEL_REQUIRED');
+  }
+  if(!/HOOK/i.test(panels[0].purpose))panels[0].purpose=`HOOK: ${panels[0].purpose}`.slice(0,180);
+  const caption=String(raw?.caption||'').trim().slice(0,2200);
+  if(!caption)throw new Error('INSTAGRAM_CAROUSEL_CAPTION_EMPTY');
+  const allCopy=`${panels.flatMap(panel=>panel.allowed_visible_text).join(' ')} ${caption}`;
+  if(/저요|DM|첫\s*댓글|고정\s*댓글|댓글.{0,20}프롬프트|프롬프트.{0,20}댓글/i.test(allCopy)){
+    throw new Error('INSTAGRAM_STORY_BODY_CTA_FORBIDDEN');
+  }
+  const promptPrefix=source.reply_prompt.replace(/\s+/g,' ').trim().slice(0,60);
+  if(promptPrefix.length>=20&&allCopy.replace(/\s+/g,' ').includes(promptPrefix)){
+    throw new Error('INSTAGRAM_CAROUSEL_PROMPT_IN_CAPTION_FORBIDDEN');
+  }
+  const visualConcept=aiTipWebtoonString(raw?.visual_concept,900);
+  const masterScene=aiTipWebtoonString(raw?.master_scene,1600);
+  const colorPalette=aiTipWebtoonString(raw?.color_palette,400);
+  const artDirection=aiTipWebtoonString(raw?.art_direction,1000);
+  const characterDirection=aiTipWebtoonString(raw?.character_direction,600);
+  if(!visualConcept||!masterScene||!colorPalette||!artDirection||!characterDirection){
+    throw new Error('AI_TIP_WEBTOON_VISUAL_DIRECTION_INVALID');
+  }
+  return {
+    category:'AI_TIP',
+    format:'cut_composed_webtoon',
+    episode_id:aiTipWebtoonString(raw?.episode_id,80)||`AI_TIP_${Date.now()}`,
+    theme:aiTipWebtoonString(raw?.theme,240)||source.topic,
+    hook:aiTipWebtoonString(raw?.hook,160)||panels[0].allowed_visible_text[0]||panels[0].purpose,
+    environment_bible:masterScene,
+    overall_visual_direction:artDirection,
+    slide_count:slides.length,
+    total_panel_count:panels.length,
+    total_cuts:panels.length,
+    cuts:panels,
+    layout_templates:[...AI_TIP_LAYOUT_TEMPLATES],
+    visual_concept:visualConcept,
+    master_scene:masterScene,
+    color_palette:colorPalette,
+    art_direction:artDirection,
+    character_direction:characterDirection,
+    character_bible:characterBible,
+    caption,
+    slides
+  };
+}
+
 function normalizeInstagramPlan(raw,source){
+  if(source.category==='AI_TIP')return normalizeAiTipWebtoonPlan(raw,source);
   const slides=(Array.isArray(raw?.slides)?raw.slides:[]).slice(0,5).map((slide,index)=>{
     const lines=String(slide?.message||'').split(/\r?\n|\\n/).map(v=>v.replace(/\s+/g,' ').trim()).filter(Boolean);
     if(!lines.length||lines.length>3)throw new Error('INSTAGRAM_STORY_TEXT_LINES_INVALID');
@@ -1202,8 +1435,7 @@ function normalizeInstagramPlan(raw,source){
       role:index===0?'HOOK':String(slide?.role||'').trim().slice(0,80),
       message,
       visual:String(slide?.visual||'').trim().slice(0,900),
-      composition:String(slide?.composition||'').trim().slice(0,700),
-      ...(source.category==='AI_TIP'?{scene:minimizeAiTipTextBearingSurfaces(normalizeAiTipVisualScene(slide?.scene,index+1))}:{})
+      composition:String(slide?.composition||'').trim().slice(0,700)
     };
   }).filter(slide=>slide.message&&slide.visual&&slide.composition);
   if(slides.length<2||slides.length>5)throw new Error('INSTAGRAM_CAROUSEL_SLIDE_COUNT_INVALID');
@@ -1322,6 +1554,84 @@ function instagramCarouselRules(category){
   return `HOT_ISSUE는 단순 로고 포스터나 본문 요약 카드가 아니라 사건·기업·산업을 상징하는 강한 서로 다른 장면으로 전개한다. 첫 장은 사실을 훼손하지 않는 비유·질문·반전으로 멈추게 하고, 뒤 장에서 무슨 일→왜 중요한지→핵심 의미를 점진적으로 공개한다. source_notes 밖의 숫자·발언·사건, 실제 인물에 대한 근거 없는 주장은 만들지 않는다. "저요", 프롬프트, DM CTA는 절대 넣지 않는다.`;
 }
 
+function aiTipDynamicWebtoonPlannerPrompt(sourceMaterial){
+  return `다음 AI_TIP 본문을 이미지보다 먼저 완전히 잠긴 VOARA AI_TIP Signature Character 웹툰 Story Board로 설계해.
+
+원본 콘텐츠: ${sourceMaterial}
+
+이 단계에서 Story, Character Bible, 모든 PANEL, 대사와 화면 텍스트를 최종 확정한다. 이후 이미지 모델은 판단하거나 다시 쓰지 않고 이 JSON만 렌더링한다.
+
+고정 Visual Direction:
+- 얇고 깔끔한 2D 선화, 부드러운 평면 채색, 밝고 따뜻한 색감, 표현력이 큰 눈과 명확한 표정, 생활감 있는 한국 배경
+- 카드뉴스, 인포그래픽, 포스터, 동일 크기 Grid, 과도한 실사·3D, 교육용 생활만화 금지
+- 주인공 HANAREUM은 성인 여성 VOARA AI_TIP Signature Character다. 황금빛 금발 계열 짧은 보브, 큰 청록색 눈, 밝고 친근한 얼굴, 상아색 블라우스, 청록색 카디건, 겨자색 스커트, 작은 금색 별 브로치를 고정한다. 특정 동화·코스프레 표현 금지
+- Character Bible에서 얼굴·눈·코·입·피부·헤어·체형·의상·색상·액세서리를 영어로 구체적으로 한 번 확정하고 모든 패널에서 바꾸지 않는다
+- 얼굴과 양쪽 눈은 sunglasses, goggles, mask, veil, hat, hand, prop, hair, heavy shadow로 가리지 않는다
+
+Story 원칙:
+- REAL KOREAN LIFE + VOARA AI_TIP SIGNATURE CHARACTER + 본문 문제와 직접 연결된 SURREAL OVERSIZED PROBLEM + USEFUL AI TIP
+- HOOK → DISCOVERY → AI 활용 → HUMAN CHECK → PAYOFF 흐름을 정보량에 맞게 4~6개 CUT으로 압축한다. 기본 4~5컷이며 꼭 필요할 때만 6컷이다
+- AI는 초안·분석·정리·반복 작업을 돕고 사람이 확인·수정해 실제로 활용한다. 마법 수익, 확정 수익, 돈 자동 생성 금지
+- 첫 PANEL은 결론을 말하지 않는 Scroll Stopper다. 설명보다 비정상적으로 거대한 현실 문제를 먼저 보여준다
+- 2~4 PAGE로 자연스럽게 나눈다. PAGE당 1~3 CUT이며 panel_size는 다음 값만 사용한다: establishing_tall, wide, medium, reaction_close_up, object_detail, action_tall, narrow_bridge
+- 전체에서 최소 3가지 panel_size를 사용하고 같은 크기 Grid를 만들지 않는다. establishing, reaction close-up, object detail, action을 Story에 맞게 섞는다
+- PAGE grouping만 정하고 최종 좌표와 크기는 코드 Composer가 4개 고정 템플릿에서 선택한다
+- 모든 PAGE transition.type은 정확히 vertical_whitespace다. transition.object는 종이비행기로 고정하지 말고 본문 소재에 맞는 사물 또는 none을 선택한다. motion과 meaning으로 시간·공간 이동을 설명한다
+
+CUT LOCK:
+- cut_id는 C1, C2처럼 전체 Story에서 고유하다
+- characters에는 Character Bible의 ID만 넣고 중복 금지. character_count는 characters 길이와 정확히 같아야 한다
+- 해당 컷에 HANAREUM 1명이면 characters:["HANAREUM"], character_count:1이다. 한 컷은 ONE IMAGE, ONE MOMENT, ONE COMPOSITION이며 복제, 거울 속 두 번째 인물, 다른 포즈의 같은 인물, 임의 배경 인물을 만들지 않는다
+- location, time, character_action, facial_expression, camera, props, surreal_element, transition_to_next를 영어로 실제 촬영 가능한 수준으로 확정한다
+- 문서와 화면이 필요하면 정면의 읽을 수 있는 표면을 피하고 비스듬한 폴더·접힌 모서리·추상 도형만 사용한다
+- text_safe_area는 top_left, top_right, bottom_left, bottom_right, top, bottom, none 중 하나다. 문구가 있으면 none 금지다
+- importance는 1~10 정수다. HOOK와 핵심 AI 활용/HUMAN CHECK 장면을 높게 준다
+
+VISIBLE TEXT LOCK:
+- dialogue는 speaker와 확정 한국어 text 객체다. 한 패널 최대 2개
+- narration 최대 1개, sound_effect 최대 1개이며 dialogue까지 합친 한 CUT의 전체 문구는 최대 2개다. 각 문구는 1~2줄, 공백 제외 최대 32자다
+- allowed_visible_text는 dialogue.text + narration + sound_effect의 정확한 합집합이어야 한다. 순서·철자·문구를 바꾸지 않는다
+- 텍스트가 없는 CUT은 dialogue, narration, sound_effect, allowed_visible_text를 모두 []로 둔다
+- 같은 visible text를 다른 CUT에서 반복하지 않는다
+- 본문 복사, 장문 설명, 임의 대사·내레이션·라벨·캡션·장식 문자 금지
+- laptop, phone, monitor는 no readable UI text, no fake website text, no random letters, no labels, no logo, no pseudo-text. 필요한 정보는 텍스트 없는 큰 추상 블록과 아이콘으로만 표현한다
+
+Caption은 순수 콘텐츠 문장으로 작성하고 reply_prompt 전문, 댓글 작성, 첫 댓글, DM CTA를 넣지 않는다.
+
+JSON만 반환:
+{
+  "episode_id":"...","theme":"...","hook":"...",
+  "visual_concept":"...",
+  "master_scene":"...",
+  "color_palette":"...",
+  "art_direction":"...",
+  "character_direction":"...",
+  "character_bible":{
+    "protagonist_id":"HANAREUM",
+    "characters":[{
+      "character_id":"HANAREUM","name":"한아름","role":"protagonist","age":"adult, exact age range",
+      "face":"...","eyes":"large turquoise eyes...","nose":"...","mouth":"...","skin_tone":"...",
+      "hair":"short golden-blonde bob...","body":"...","outfit":"...","outfit_colors":"...","accessories":"..."
+    }]
+  },
+  "caption":"...",
+  "slides":[{
+    "role":"Story page role",
+    "transition":{"type":"vertical_whitespace","object":"story-specific object or none","motion":"...","meaning":"..."},
+    "cuts":[{
+      "cut_id":"C1","purpose":"HOOK ...","panel_size":"establishing_tall","location":"...","time":"...",
+      "characters":["HANAREUM"],"character_count":1,"character_action":"...","facial_expression":"...","camera":"...",
+      "props":"...","surreal_element":"...",
+      "importance":9,"text_safe_area":"top_left",
+      "dialogue":[{"speaker":"HANAREUM","text":"짧은 대사"}],"narration":[],"sound_effect":[],
+      "allowed_visible_text":["짧은 대사"],
+      "forbidden_elements":["duplicate character","extra people","unlisted text","readable UI text"],
+      "transition_to_next":"..."
+    }]
+  }]
+}`;
+}
+
 async function actionInstagramCarouselPrepare(req,res){
   const key=process.env.GEMINI_API_KEY;
   const source=instagramSource(req.body?.candidate);
@@ -1332,7 +1642,7 @@ async function actionInstagramCarouselPrepare(req,res){
   }
   const sourceMaterial=JSON.stringify(source).slice(0,11000);
   try{
-    const raw=await generateJson(key,`다음 공통 본문을 2~5장의 AI IMAGE STORY 하나로 기획해. 기존 hook 필드나 기존 한 장 이미지를 사용하지 않는다. 이미지 생성 전에 Story Board를 완성하는 단계다.
+    const plannerPrompt=source.category==='AI_TIP'?aiTipDynamicWebtoonPlannerPrompt(sourceMaterial):`다음 공통 본문을 2~5장의 AI IMAGE STORY 하나로 기획해. 기존 hook 필드나 기존 한 장 이미지를 사용하지 않는다. 이미지 생성 전에 Story Board를 완성하는 단계다.
 
 원본 콘텐츠: ${sourceMaterial}
 
@@ -1355,9 +1665,9 @@ ${instagramCarouselRules(source.category)}
 - HOT_ISSUE와 FOOD는 제공된 사실 밖의 내용을 만들지 않는다.
 
 JSON만 반환:
-{"visual_concept":"...","master_scene":"시리즈에서 고정할 인물·장소·시간·의상·소품·색감·촬영 세계관","color_palette":"...","art_direction":"타이포그래피·가독성 영역·graphic language 포함","character_direction":"...","caption":"...","slides":[{"role":"첫 장은 HOOK, 이후 장별 정보 공개 역할","message":"이미지에 정확히 한 번 표시할 최종 문구, 줄바꿈은 \\n","visual":"이 장의 실제 장면","composition":"카메라·피사체·텍스트 안전 영역","scene":{"setting":"nonverbal setting in English","subjects":"physical subjects only","action":"physical action only","props":"objects and abstract non-linguistic symbols only; use folders, envelopes, cropped paper edges, oblique solid-color screens instead of exposed text-bearing surfaces","camera":"camera framing that crops or occludes all document headers and frontal screens","lighting":"lighting only","negative_space":"empty placement area only"}}]}`,.72);
+{"visual_concept":"...","master_scene":"시리즈에서 고정할 인물·장소·시간·의상·소품·색감·촬영 세계관","color_palette":"...","art_direction":"타이포그래피·가독성 영역·graphic language 포함","character_direction":"...","caption":"...","slides":[{"role":"첫 장은 HOOK, 이후 장별 정보 공개 역할","message":"이미지에 정확히 한 번 표시할 최종 문구, 줄바꿈은 \\n","visual":"이 장의 실제 장면","composition":"카메라·피사체·텍스트 안전 영역"}]}`;
+    const raw=await generateJson(key,plannerPrompt,.72);
     let plan=normalizeInstagramPlan(raw,source);
-    if(source.category==='AI_TIP')plan=await compactAiTipStoryPlan(key,plan,source);
     return send(res,200,{ok:true,plan});
   }catch(e){
     const diagnostic=e?.aiTipVisualSceneDiagnostic||null;
@@ -1366,21 +1676,61 @@ JSON만 반환:
   }
 }
 
-function instagramCarouselImagePrompt(source,plan,slide,variation){
-  const safeReplyPrompt=identitySafePrompt(source.reply_prompt);
-  const fixedCta=source.category==='AI_TIP'||source.category==='AI_PROMPT'?aiImageCtaInstruction():'';
-  if(source.category==='AI_TIP'){
-    const scene=minimizeAiTipTextBearingSurfaces(normalizeAiTipVisualScene(slide?.scene,slide?.number));
-    return `Create one finished 4:5 portrait editorial image for an AI_TIP visual story. Keep the established palette (${plan.color_palette}) and a coherent premium realistic style across the series while making this physical scene distinct. Variation ${variation}.
+const AI_TIP_IMAGE_PROMPT_META_RISKS=[
+  /\bPAGE\s*(?:\d+|OF)\b/i,/\bPANEL\s*\d*\b/i,/\bP\d+\b/i,/\bAI_TIP\b/i,
+  /\b(?:HOOK|DISCOVERY|HOW|TRY|PAYOFF|FINISHED)\b/i,/\b4:5\b/,
+  /\bDYNAMIC VERTICAL WEBTOON\b/i,/\bSTORY\s*BOARD\b/i,
+  /\b(?:CHARACTER COUNT|DIALOGUE|VISIBLE TEXT|PAGE LAYOUT)\s+LOCK\b/i,
+  /\b(?:CURRENT PANEL PLAN|PREVIOUS PAGE CONTEXT)\b/i
+];
 
-Build a purely nonverbal scene in ${scene.setting}. Show ${scene.subjects} physically ${scene.action}. Include only these visual props and non-linguistic symbols: ${scene.props}. Use ${scene.camera}, with ${scene.lighting}. Preserve ${scene.negative_space} as clean breathing room for the confirmed headline. Every detail in this paragraph is visual direction only and must be depicted through people, objects, posture, color, light, and composition—not written language.
+function aiTipCharacterPrompt(character,label){
+  return `${label} is an adult with ${character.face}, ${character.eyes}, ${character.nose}, ${character.mouth}, ${character.skin_tone}, ${character.hair}, ${character.body}, wearing ${character.outfit} in ${character.outfit_colors}, with ${character.accessories}.`;
+}
 
-The one and only readable story phrase permitted anywhere in the generated image is exactly ${JSON.stringify(slide.message)}. Preserve its authored newline, render it exactly once without quotation marks, and keep both short lines large and immediately readable. Give the phrase at least 55% of the canvas width so neither line wraps again. Do not rewrite, expand, explain, translate, duplicate, prefix, or suffix it.
+function aiTipImagePromptMetaRisk(prompt){
+  return AI_TIP_IMAGE_PROMPT_META_RISKS.find(pattern=>pattern.test(prompt))||null;
+}
 
-Never render prompt labels or production notes such as MASTER SCENE, SLIDE, DISPLAY TEXT, ROLE, HOOK, VARIATION, caption, image prompt, or numbering. Do not render any other readable letters or words on documents, contracts, screens, phones, signs, labels, stamps, interfaces, or props; represent their contents only as abstract illegible marks and visual symbols. Do not add subtitles, explanatory copy, logos, watermarks, fake UI copy, or extra facts.
-
-If a person is useful, use the attached Character Master as the same adult Korean woman VOA; otherwise do not force a person into the scene. Keep all typography fully outside faces, bodies, and essential subjects with visible breathing room. ${aiImageCtaInstruction()} The fixed CTA is added afterward and must not be rendered now. Design the scene and the exact two-line phrase together in this single generation pass.`;
+function assertAiTipImagePromptSafe(prompt,allowedVisibleText){
+  const risk=aiTipImagePromptMetaRisk(prompt);
+  if(risk)throw new Error(`AI_TIP_IMAGE_PROMPT_META_TEXT_RISK_${risk.source}`);
+  for(const text of allowedVisibleText){
+    if(!prompt.includes(JSON.stringify(text)))throw new Error('AI_TIP_IMAGE_PROMPT_WHITELIST_MISSING');
   }
+  return prompt;
+}
+
+function aiTipCutImagePrompt(source,plan,cut){
+  const lockedPlan=normalizeAiTipWebtoonPlan(plan,source);
+  const current=lockedPlan.cuts.find(item=>item.cut_id===String(cut?.cut_id||cut?.panel_id||'').toUpperCase());
+  if(!current)throw new Error('AI_TIP_WEBTOON_CUT_NOT_FOUND');
+  const protagonistId=lockedPlan.character_bible.protagonist_id;
+  const characterLabels=new Map();
+  lockedPlan.character_bible.characters.forEach((character,index)=>{
+    characterLabels.set(character.character_id,character.character_id===protagonistId?'the recurring protagonist':`the supporting adult ${index+1}`);
+  });
+  const characterDescriptions=lockedPlan.character_bible.characters
+    .filter(character=>current.characters.includes(character.character_id))
+    .map(character=>aiTipCharacterPrompt(character,characterLabels.get(character.character_id))).join(' ');
+  const cast=current.character_count===0
+    ?'No person appears in the artwork.'
+    :`Show exactly ${current.character_count===1?'one person':`${current.character_count} people`}: ${current.characters.map(id=>characterLabels.get(id)).join(' and ')}. Each person appears once in one pose at one position.`;
+  const safeArea=current.text_safe_area==='none'?'Keep balanced breathing room around the subject.':`Keep the ${current.text_safe_area.replace(/_/g,' ')} area visually quiet for later lettering.`;
+  const prompt=`Create one clean portrait-oriented comic cut as a single image, a single moment in time and a single composition. Do not divide it into multiple frames, montage, before-and-after views or inset portraits.
+
+Use clean thin two-dimensional line art, soft flat coloring, a bright warm palette, expressive facial acting and a polished modern webtoon illustration style in a believable Korean everyday environment. Avoid photorealism, three-dimensional rendering, fan art, information graphics, card news and poster design. ${characterDescriptions} Keep these exact physical details, outfit colors and accessories unchanged. Keep every face and both eyes clear and unobstructed.
+
+The setting is ${current.location} at ${current.time}. ${cast} Show ${current.character_action}, with ${current.facial_expression}. Use ${current.camera}. Include ${current.props}. Express the real problem through ${current.surreal_element}. ${safeArea}
+
+The artwork is completely text-free. Do not draw speech balloons, narration boxes, sound effects, letters, words, numbers, captions, labels, logos or watermarks. Documents and electronic displays contain only abstract colored rectangles, simple check icons, bars and non-linguistic geometric shapes viewed from an angle or readable only as shapes.`;
+  return assertAiTipImagePromptSafe(prompt,[]);
+}
+
+function instagramCarouselImagePrompt(source,plan,slide,variation){
+  if(source.category==='AI_TIP')throw new Error('AI_TIP_CUT_MODE_REQUIRED');
+  const safeReplyPrompt=identitySafePrompt(source.reply_prompt);
+  const fixedCta=source.category==='AI_PROMPT'?aiImageCtaInstruction():'';
   const aiPromptRule=source.category==='AI_PROMPT'
     ?`Use the attached reference image as the PRIMARY IDENTITY REFERENCE. Preserve the exact identity of that person throughout every slide: the same facial structure, proportions, eyes, nose, lips, jawline, skin characteristics, apparent age and recognizable identity. Do not reinterpret, replace, beautify, randomize, blend or generate a different person. Every human protagonist is VOA, the exact same person across the full carousel; only pose, gaze, framing and camera distance may vary. Keep the face and eyes fully visible and unobstructed. Never use sunglasses, goggles, masks, veils, face-covering hats, hands, hair, props or heavy shadows over the eyes or face. Remove any conflicting face-obscuring instruction from SOURCE REPLY_PROMPT and preserve its era or styling through non-face elements. Identity Lock overrides the source prompt. Faithfully apply the remaining world, wardrobe, location, lighting, camera and mood. IDENTITY-SAFE SOURCE REPLY_PROMPT: ${safeReplyPrompt}`
     :'If a person is useful, use the attached Character Master as the same adult Korean woman VOA; otherwise do not force a person into the scene.';
@@ -1411,45 +1761,176 @@ Continue the same coherent MASTER SCENE, palette, subject identity, typography f
 Give DISPLAY TEXT one deliberate readable area chosen for this scene: authentic negative space, a restrained translucent panel, a compact solid editorial card, or a natural gradient field. Keep every pixel of DISPLAY TEXT above the strict bottom 14% CTA exclusion zone; a lower-third caption or baseline inside that zone is forbidden. Do not turn the full image into a giant text card. Reserve a generous no-text safety zone around every face, body and essential food/product/event subject. Typography and its readability treatment must remain fully outside those silhouettes with visible breathing room. Reposition the subject or camera to create the space; never cover the subject. Design the scene and its exact text together in the first generation pass. No Canvas, pasted headline or later story-text overlay is used; only the fixed text-only CTA footer is composited afterward.`;
 }
 
+function aiTipLayoutRects(template,count){
+  const layouts={
+    HERO_REACTION:[{left:30,top:30,width:1020,height:650},{left:290,top:790,width:760,height:280}],
+    ASYMMETRIC_PAIR:[{left:30,top:30,width:690,height:500},{left:400,top:650,width:650,height:420}],
+    SPLIT_EMPHASIS:[{left:30,top:30,width:1020,height:430},{left:30,top:620,width:1020,height:450}],
+    STACKED_TRIO:[{left:30,top:30,width:1020,height:350},{left:30,top:500,width:650,height:290},{left:360,top:850,width:690,height:230}]
+  };
+  const selected=layouts[template]||layouts.ASYMMETRIC_PAIR;
+  if(count===1)return [{left:40,top:40,width:1000,height:980}];
+  return selected.slice(0,count);
+}
+
+function aiTipCutTextItems(cut){
+  return [
+    ...cut.dialogue.map(item=>({type:'speech',text:item.text})),
+    ...cut.narration.map(text=>({type:'narration',text})),
+    ...cut.sound_effect.map(text=>({type:'sound',text}))
+  ];
+}
+
+function wrapAiTipKorean(value,max=13){
+  const text=String(value||'').replace(/\s+/g,' ').trim(),chars=[...text];
+  if(chars.length<=max)return text;
+  const midpoint=Math.ceil(chars.length/2),searchStart=Math.max(1,midpoint-4),searchEnd=Math.min(chars.length-1,midpoint+4);
+  let split=-1;
+  for(let distance=0;distance<=4;distance++){
+    const left=midpoint-distance,right=midpoint+distance;
+    if(left>=searchStart&&chars[left]===' '){split=left;break}
+    if(right<=searchEnd&&chars[right]===' '){split=right;break}
+  }
+  if(split<1)split=midpoint;
+  return `${chars.slice(0,split).join('').trim()}\n${chars.slice(split).join('').trim()}`;
+}
+
+function aiTipBubblePosition(area,rect,width,height,index){
+  const inset=22,shift=index*(height+12);
+  const positions={
+    top_left:[rect.left+inset,rect.top+inset+shift],top_right:[rect.left+rect.width-width-inset,rect.top+inset+shift],
+    bottom_left:[rect.left+inset,rect.top+rect.height-height-inset-shift],bottom_right:[rect.left+rect.width-width-inset,rect.top+rect.height-height-inset-shift],
+    top:[rect.left+Math.round((rect.width-width)/2),rect.top+inset+shift],bottom:[rect.left+Math.round((rect.width-width)/2),rect.top+rect.height-height-inset-shift]
+  };
+  return positions[area]||positions.top;
+}
+
+async function aiTipBubbleLayer(item,area,rect,index){
+  const {default:sharp}=await import('sharp');
+  const width=Math.min(430,Math.max(260,Math.round(rect.width*.52))),height=118;
+  const tail=item.type==='speech'?`<path d="M58 104 L42 117 L86 103" fill="#fff" stroke="#20252b" stroke-width="3"/>`:'';
+  const fill=item.type==='narration'?'#fff9df':'#ffffff';
+  const base=Buffer.from(`<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="${width-4}" height="102" rx="${item.type==='narration'?12:48}" fill="${fill}" stroke="#20252b" stroke-width="3"/>${tail}</svg>`);
+  const fontfile=join(process.cwd(),'assets','fonts','NanumGothic-Regular.ttf');
+  const text=await sharp({text:{text:wrapAiTipKorean(item.text),font:'Nanum Gothic 34',fontfile,width:width-42,height:82,align:'centre',rgba:true}}).png().toBuffer();
+  const bubble=await sharp(base).composite([{input:text,left:21,top:13}]).png().toBuffer();
+  const [left,top]=aiTipBubblePosition(area,rect,width,height,index);
+  return {input:bubble,left,top};
+}
+
+function aiTipTransitionLayer(page,rects){
+  if(rects.length<2)return null;
+  const first=rects[0],second=rects[1],top=first.top+first.height,bottom=second.top;
+  if(bottom-top<60)return null;
+  const object=String(page.transition?.object||'').toLowerCase();
+  const shape=/(?:coin|동전)/.test(object)
+    ?'<circle cx="42" cy="42" r="27" fill="#f4c85b" stroke="#9b6a18" stroke-width="5"/>'
+    :/(?:clip|클립)/.test(object)
+      ?'<path d="M28 16 C8 36 10 72 34 74 C58 76 72 52 69 29 C67 10 42 9 34 26 L25 50 C20 66 43 70 50 54 L59 31" fill="none" stroke="#c58d2b" stroke-width="6" stroke-linecap="round"/>'
+      :'<path d="M12 18 L72 42 L17 70 L28 47 Z" fill="#fff" stroke="#7c8792" stroke-width="4"/>';
+  return {input:Buffer.from(`<svg width="84" height="84" xmlns="http://www.w3.org/2000/svg">${shape}</svg>`),left:498,top:top+Math.max(0,Math.round((bottom-top-84)/2))};
+}
+
+async function fetchAiTipCutImage(value){
+  const url=instagramBlobUrl(value);
+  if(!url)throw new Error('AI_TIP_CUT_URL_INVALID');
+  const response=await fetch(url);
+  if(!response.ok)throw new Error(`AI_TIP_CUT_HTTP_${response.status}`);
+  const buffer=Buffer.from(await response.arrayBuffer());
+  if(!buffer.length||buffer.length>4_000_000)throw new Error('AI_TIP_CUT_SIZE_INVALID');
+  return buffer;
+}
+
+async function composeAiTipWebtoonPage(page,cutBuffers){
+  const {default:sharp}=await import('sharp');
+  const rects=aiTipLayoutRects(page.layout_template,cutBuffers.length);
+  if(rects.length!==cutBuffers.length)throw new Error('AI_TIP_COMPOSER_LAYOUT_MISMATCH');
+  const layers=[];
+  for(let index=0;index<cutBuffers.length;index++){
+    const rect=rects[index],cut=page.panels[index];
+    const image=await sharp(cutBuffers[index]).rotate().resize(rect.width,rect.height,{fit:'cover',position:'north'}).jpeg({quality:92}).toBuffer();
+    layers.push({input:image,left:rect.left,top:rect.top});
+    layers.push({input:Buffer.from(`<svg width="${rect.width}" height="${rect.height}" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="${rect.width-4}" height="${rect.height-4}" fill="none" stroke="#22272d" stroke-width="4"/></svg>`),left:rect.left,top:rect.top});
+    const textItems=aiTipCutTextItems(cut);
+    for(let textIndex=0;textIndex<textItems.length;textIndex++)layers.push(await aiTipBubbleLayer(textItems[textIndex],cut.text_safe_area,rect,textIndex));
+  }
+  const transition=aiTipTransitionLayer(page,rects);if(transition)layers.push(transition);
+  return sharp({create:{width:1080,height:1350,channels:3,background:'#fffdf8'}}).composite(layers).jpeg({quality:92,mozjpeg:true}).toBuffer();
+}
+
 async function actionInstagramCarouselImage(req,res){
   const key=process.env.GEMINI_API_KEY;
   const source=instagramSource(req.body?.candidate);
   const plan=req.body?.plan;
   const slide=req.body?.slide;
+  const cut=req.body?.cut;
+  const mode=String(req.body?.mode||'').trim().toLowerCase();
   const variation=Math.max(1,Math.min(20,Number(req.body?.variation)||1));
   if(!key)return send(res,503,{ok:false,error:'GEMINI_NOT_CONFIGURED'});
-  if(!source||!plan||!slide)return send(res,400,{ok:false,error:'INSTAGRAM_CAROUSEL_IMAGE_INPUT_REQUIRED'});
-  if(!Number.isInteger(slide.number)||slide.number<1||slide.number>5){
+  if(!source||!plan)return send(res,400,{ok:false,error:'INSTAGRAM_CAROUSEL_IMAGE_INPUT_REQUIRED'});
+  if(source.category!=='AI_TIP'&&(!slide||!Number.isInteger(slide.number)||slide.number<1||slide.number>5)){
     return send(res,400,{ok:false,error:'INSTAGRAM_CAROUSEL_SLIDE_INVALID'});
   }
+  let lockedAiTipPlan=null;
   if(source.category==='AI_TIP'){
-    try{assertCompactAiTipStory({slides:[slide]})}
-    catch(e){return send(res,400,{ok:false,error:'AI_TIP_STORY_TEXT_NOT_COMPACT',detail:e?.message||String(e)})}
+    try{lockedAiTipPlan=normalizeAiTipWebtoonPlan(plan,source)}
+    catch(e){return send(res,400,{ok:false,error:'AI_TIP_WEBTOON_PLAN_INVALID',detail:e?.message||String(e)})}
+    if(!['cut','compose'].includes(mode))return send(res,400,{ok:false,error:'AI_TIP_IMAGE_MODE_INVALID'});
   }
   try{
+    const id=String(req.body?.candidate_id||source.category)
+      .replace(/[^a-zA-Z0-9_-]/g,'').slice(0,60)||source.category;
+    if(source.category==='AI_TIP'&&mode==='cut'){
+      const current=lockedAiTipPlan.cuts.find(item=>item.cut_id===String(cut?.cut_id||cut?.panel_id||'').toUpperCase());
+      if(!current)throw new Error('AI_TIP_WEBTOON_CUT_NOT_FOUND');
+      const prompt=aiTipCutImagePrompt(source,lockedAiTipPlan,current);
+      const generated=await geminiGenerate(key,{model:IMAGE_MODEL,prompt,image:true,maxAttempts:2});
+      const image=extractInlineImage(generated);
+      if(!image)throw new Error('GEMINI_IMAGE_MISSING');
+      const {default:sharp}=await import('sharp');
+      const jpeg=await sharp(Buffer.from(image.data,'base64')).rotate().resize(1024,1024,{fit:'cover',position:'attention'}).jpeg({quality:92,mozjpeg:true}).toBuffer();
+      const blob=await put(`instagram-webtoon-cuts/${Date.now()}-${id}-${current.cut_id}.jpg`,jpeg,{access:'public',addRandomSuffix:true,contentType:'image/jpeg',cacheControlMaxAge:31536000});
+      return send(res,200,{ok:true,mode:'cut',cut_id:current.cut_id,url:blob.url,mime_type:'image/jpeg'});
+    }
+    if(source.category==='AI_TIP'&&mode==='compose'){
+      const page=lockedAiTipPlan.slides.find(item=>item.number===Number(slide?.number));
+      if(!page)throw new Error('AI_TIP_WEBTOON_PAGE_NOT_FOUND');
+      const cutImages=Array.isArray(req.body?.cut_images)?req.body.cut_images:[];
+      if(cutImages.length!==page.cut_ids.length)throw new Error('AI_TIP_COMPOSER_CUT_COUNT_INVALID');
+      const buffers=[];
+      for(let index=0;index<page.cut_ids.length;index++){
+        const item=cutImages[index];
+        if(String(item?.cut_id||'').toUpperCase()!==page.cut_ids[index])throw new Error('AI_TIP_COMPOSER_CUT_ORDER_INVALID');
+        buffers.push(await fetchAiTipCutImage(item?.url));
+      }
+      const composed=await composeAiTipWebtoonPage(page,buffers);
+      const jpeg=await applyAiImageCta(composed);
+      const blob=await put(`instagram-carousel/${Date.now()}-${id}-slide-${page.number}.jpg`,jpeg,{access:'public',addRandomSuffix:true,contentType:'image/jpeg',cacheControlMaxAge:31536000});
+      return send(res,200,{ok:true,mode:'compose',slide_number:page.number,url:blob.url,mime_type:'image/jpeg',layout_template:page.layout_template});
+    }
     let referenceImage=null;
     if(source.category==='AI_PROMPT'){
       const master=await readFile(join(process.cwd(),'voa-character-master.png'));
       referenceImage={mimeType:'image/png',data:master.toString('base64')};
     }
+    const imagePrompt=instagramCarouselImagePrompt(source,plan,slide,variation);
     const generated=await geminiGenerate(key,{
       model:IMAGE_MODEL,
-      prompt:instagramCarouselImagePrompt(source,plan,slide,variation),
+      prompt:imagePrompt,
       image:true,
-      referenceImage
+      referenceImage,
+      maxAttempts:3
     });
     const image=extractInlineImage(generated);
     if(!image)throw new Error('GEMINI_IMAGE_MISSING');
     const sourceBuffer=Buffer.from(image.data,'base64');
     let jpeg;
-    if(source.category==='AI_TIP'||source.category==='AI_PROMPT')jpeg=await applyAiImageCta(sourceBuffer);
+    if(source.category==='AI_PROMPT')jpeg=await applyAiImageCta(sourceBuffer);
     else{
       const {default:sharp}=await import('sharp');
       jpeg=await sharp(sourceBuffer).rotate().jpeg({quality:92,mozjpeg:true}).toBuffer();
     }
     if(jpeg.length>4_000_000)throw new Error('INSTAGRAM_CAROUSEL_IMAGE_TOO_LARGE');
-    const id=String(req.body?.candidate_id||source.category)
-      .replace(/[^a-zA-Z0-9_-]/g,'').slice(0,60)||source.category;
     const blob=await put(
       `instagram-carousel/${Date.now()}-${id}-slide-${slide.number}.jpg`,
       jpeg,

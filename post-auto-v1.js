@@ -47,6 +47,7 @@ function persistInstagramCarousel(state=instagramCarousel){
   version:1,content_id:state.candidateId,content_type:state.candidate.category,
   candidate:state.candidate,plan:state.plan,
   images:state.images.map((url,index)=>({order:index+1,url:url||null,variation:state.variations[index]||1})),
+  cut_images:(state.cutImages||[]).map((item,index)=>({order:index+1,cut_id:item?.cut_id||null,url:item?.url||null})),
   caption:state.caption,reply_prompt:state.replyPrompt||'',
   status:state.recordStatus||(state.published?'published':state.generating?'generating':state.images.filter(Boolean).length===state.plan.slide_count?'ready':'incomplete'),
   generated_at:state.generatedAt||previous.generated_at||null,created_at:previous.created_at||state.createdAt||now,updated_at:now,
@@ -57,12 +58,14 @@ function persistInstagramCarousel(state=instagramCarousel){
  write(IGC,records);
 }
 function restoreInstagramCarousel(record,index,candidate){
- const plan=record?.plan,items=Array.isArray(record?.images)?record.images.slice().sort((a,b)=>Number(a.order)-Number(b.order)):[];
+ const plan=record?.plan,items=Array.isArray(record?.images)?record.images.slice().sort((a,b)=>Number(a.order)-Number(b.order)):[],cutItems=Array.isArray(record?.cut_images)?record.cut_images.slice().sort((a,b)=>Number(a.order)-Number(b.order)):[];
  if(!plan||!Array.isArray(plan.slides)||plan.slides.length<2||plan.slides.length>5)return null;
+ if(candidate?.category==='AI_TIP'&&(plan.format!=='cut_composed_webtoon'||!Array.isArray(plan.cuts)||plan.cuts.length<4))return null;
  return {
   candidate:record.candidate||candidate,candidateId:record.content_id,plan,caption:String(record.caption||plan.caption||''),
   replyPrompt:String(record.reply_prompt??record.candidate?.reply_prompt??candidate?.reply_prompt??''),
   images:new Array(plan.slide_count).fill(null).map((_,i)=>items[i]?.url||null),
+  cutImages:new Array(Number(plan.total_cuts)||0).fill(null).map((_,i)=>cutItems[i]?.url?{cut_id:cutItems[i].cut_id,url:cutItems[i].url}:null),
   variations:new Array(plan.slide_count).fill(1).map((_,i)=>Number(items[i]?.variation)||1),selected:0,
   status:record.status==='published'?'Instagram 게시 완료':'게시 전 검토',generating:false,published:record.status==='published',
   mediaId:record.media_id||null,publishedAt:record.published_at||null,generatedAt:record.generated_at||null,
@@ -301,19 +304,32 @@ async function instagramApi(action,payload){
 async function generateInstagramSlide(index){
  const state=instagramCarousel,slide=state?.plan?.slides?.[index];if(!state||!slide)return;
  const variation=state.variations[index]||1;
- const j=await instagramApi('instagram_carousel_image',{candidate:state.candidate,candidate_id:state.candidateId,plan:state.plan,slide,variation});
+ const payload=state.candidate.category==='AI_TIP'
+  ?{candidate:state.candidate,candidate_id:state.candidateId,plan:state.plan,slide,mode:'compose',cut_images:slide.cut_ids.map(id=>state.cutImages.find(item=>item?.cut_id===id)).filter(Boolean)}
+  :{candidate:state.candidate,candidate_id:state.candidateId,plan:state.plan,slide,variation};
+ const j=await instagramApi('instagram_carousel_image',payload);
  if(state!==instagramCarousel)return;
  state.images[index]=j.url;
  appendMasterMedia(state.candidateIndex,{id:mediaId('ig-ai'),type:'image',source:'ai',url:j.url,previewUrl:j.url,mime_type:'image/jpeg'});
  persistInstagramCarousel(state);
+}
+async function generateAiTipCuts(state){
+ for(let index=0;index<state.plan.cuts.length;index++){
+  if(state!==instagramCarousel)return;
+  const cut=state.plan.cuts[index];if(state.cutImages[index]?.url)continue;
+  state.status=`웹툰 컷 생성 중 ${index+1}/${state.plan.total_cuts}`;renderInstagramCarousel();
+  const j=await instagramApi('instagram_carousel_image',{candidate:state.candidate,candidate_id:state.candidateId,plan:state.plan,cut,mode:'cut',variation:1});
+  state.cutImages[index]={cut_id:j.cut_id,url:j.url};persistInstagramCarousel(state);
+ }
 }
 async function completeInstagramCarousel(state,createPlan=false){
  try{
   if(createPlan||!state.plan){
    const prepared=await instagramApi('instagram_carousel_prepare',{candidate:state.candidate});
    if(state!==instagramCarousel)return;
-    state.plan=prepared.plan;state.caption=prepared.plan.caption;state.images=new Array(prepared.plan.slide_count).fill(null);state.variations=new Array(prepared.plan.slide_count).fill(1);persistInstagramCarousel(state);
+    state.plan=prepared.plan;state.caption=prepared.plan.caption;state.images=new Array(prepared.plan.slide_count).fill(null);state.cutImages=new Array(Number(prepared.plan.total_cuts)||0).fill(null);state.variations=new Array(prepared.plan.slide_count).fill(1);persistInstagramCarousel(state);
   }
+  if(state.candidate.category==='AI_TIP')await generateAiTipCuts(state);
   for(let index=0;index<state.plan.slide_count;index++){
    if(state!==instagramCarousel)return;
    if(state.images[index])continue;
@@ -335,7 +351,7 @@ async function openInstagramCarousel(i){
   if(restored.images.filter(Boolean).length<restored.plan.slide_count&&!restored.published){restored.generating=true;restored.recordStatus='generating';await completeInstagramCarousel(restored,false)}
   return;
  }
- const state={candidate,candidateId,plan:null,caption:'',replyPrompt:candidate.reply_prompt||'',images:[],variations:[],selected:0,status:'스토리보드 생성 중…',generating:true,published:false,requestId:instagramRequestId(),candidateIndex:i,createdAt:Date.now(),recordStatus:'generating'};
+ const state={candidate,candidateId,plan:null,caption:'',replyPrompt:candidate.reply_prompt||'',images:[],cutImages:[],variations:[],selected:0,status:'스토리보드 생성 중…',generating:true,published:false,requestId:instagramRequestId(),candidateIndex:i,createdAt:Date.now(),recordStatus:'generating'};
  instagramCarousel=state;renderInstagramCarousel();await completeInstagramCarousel(state,true);
 }
 function selectInstagramSlide(index){if(!instagramCarousel)return;instagramCarousel.selected=index;renderInstagramCarousel()}
@@ -352,7 +368,7 @@ async function regenerateInstagramCarousel(){
  const state=instagramCarousel;if(!state||state.generating||instagramPublishing)return;
  if(!confirm(`새 이미지 시리즈를 Content Master 끝에 추가할까요? 기존 미디어는 유지됩니다.`))return;
  const candidate=instagramCandidate(state.candidateIndex);if(!candidate)return alert('Instagram 캐러셀을 다시 만들 본문이 필요합니다.');
- const replacement={candidate,candidateId:state.candidateId,plan:null,caption:'',replyPrompt:state.replyPrompt||candidate.reply_prompt||'',images:[],variations:[],selected:0,status:'스토리보드 생성 중…',generating:true,published:false,requestId:instagramRequestId(),candidateIndex:state.candidateIndex,createdAt:Date.now(),recordStatus:'generating'};
+ const replacement={candidate,candidateId:state.candidateId,plan:null,caption:'',replyPrompt:state.replyPrompt||candidate.reply_prompt||'',images:[],cutImages:[],variations:[],selected:0,status:'스토리보드 생성 중…',generating:true,published:false,requestId:instagramRequestId(),candidateIndex:state.candidateIndex,createdAt:Date.now(),recordStatus:'generating'};
  instagramCarousel=replacement;renderInstagramCarousel();await completeInstagramCarousel(replacement,true);
 }
 async function publishInstagramCarousel(){
