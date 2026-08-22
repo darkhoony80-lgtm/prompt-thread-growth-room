@@ -395,16 +395,18 @@ async function aiPromptImageDirector(key,candidate,variation){
   const sourcePrompt=String(candidate.reply_prompt||'').trim();
   if(!sourcePrompt)throw new Error('AI_PROMPT_SOURCE_PROMPT_EMPTY');
 
-  const plan=await generateJson(key,`다음 이미지 프롬프트와 게시물 설명을 보고 결과 이미지의 매력을 궁금하게 만드는 보조용 한국어 썸네일 문구를 새로 만들어.
+  const plan=await generateJson(key,`다음 이미지 프롬프트와 게시물 설명을 분석해서 Threads 이미지 전용 한국어 후킹 문구를 정확히 1개만 새로 만들어.
 기존 게시물 제목이나 hook 필드는 참고하거나 재사용하지 않는다.
 
 게시물 설명: ${candidate.body}
 입력 이미지 프롬프트: ${sourcePrompt.slice(0,5000)}
 
 규칙:
-- 6~12자 우선, 최대 14자.
-- 결과 이미지가 주인공이고 문구는 클릭을 돕는 보조 역할이다.
-- 프롬프트의 결과를 가리거나 내용을 과장하지 않는다.
+- 6~12자 우선, 최대 14자로 짧고 강하게 만든다.
+- 작은 설명문이 아니라 피드에서 즉시 읽히는 1~2줄 메인 문구다.
+- 프롬프트 결과의 매력을 직관적으로 전달하되 내용을 과장하지 않는다.
+- 부제, 설명문, 추가 카피, 두 번째 문구를 만들지 않는다.
+- 같은 단어나 같은 의미를 문구 안에서 반복하지 않는다.
 - "미쳤다", "충격", "모르면 손해" 같은 반복적 표현은 피한다.
 
 JSON만 반환:
@@ -414,15 +416,22 @@ JSON만 반환:
 
   return {
     thumbnailHook,
-    useReference:false,
-    prompt:`Create a finished 4:5 portrait image by faithfully following the SOURCE IMAGE PROMPT below. Its subject, people, action, environment, era, style, lighting, camera, composition, colors, textures, and mood have absolute visual priority.
+    useReference:true,
+    prompt:`Create one finished 4:5 portrait Threads image using the attached Character Master as the mandatory identity reference for VOA.
+
+VOA IDENTITY RULE:
+VOA must be the main character and visual protagonist. Preserve the Character Master's exact adult Korean female identity: facial structure, eyes, nose, mouth proportions, skin tone, age range, base hair color, and overall impression. If the source prompt mentions a woman, girl, model, person, or another main human subject, reinterpret that subject as VOA instead of generating a different person. Do not replace, randomize, or blend VOA's face. Apply the source prompt's clothing, pose, action, location, lighting, camera, and styling to VOA.
+
+SOURCE PROMPT FIDELITY RULE:
+Faithfully reproduce the SOURCE IMAGE PROMPT below as the core visual result. Preserve its environment, composition, mood, palette, lighting, lens, camera angle, textures, props, era, weather, and photographic or artistic style as far as they do not conflict with VOA's fixed identity. A viewer should immediately understand what result this prompt produces.
 
 SOURCE IMAGE PROMPT:
 ${sourcePrompt}
 
-Add this exact Korean supporting hook as part of the original generated image: "${thumbnailHook}"
-Render the hook once, accurately and legibly. Keep it visually restrained and secondary, placed where it does not cover a face, focal subject, important object, or defining prompt detail. Do not turn the image into a text-led poster, rearrange the requested scene around the text, paraphrase the hook, or add any other text, logo, or watermark.
-The final output must already contain both the faithful prompt result and the supporting hook. No later typography or overlay step will be used.
+EXACT KOREAN HOOK: "${thumbnailHook}"
+Render this hook exactly once as one or two short lines. Make it bold, high-contrast, and immediately readable in a small Threads feed, using roughly 50–70% of the available image width when the composition allows. Prefer natural negative space such as an open wall, sky, floor, or uncluttered background. Never cover VOA's face or body, the focal subject, or an essential prompt detail. Use natural shadow, outline, or local background contrast when needed for legibility.
+Do not paraphrase, translate, duplicate, or repeat the hook. Do not add a subtitle, explanation, extra copy, logo, watermark, or any other text.
+The image generation model must design VOA, the prompt-faithful scene, and the hook typography together in one complete image. No Canvas, pasted headline, or later overlay step will be used.
 Variation: ${variation}`
   };
 }
