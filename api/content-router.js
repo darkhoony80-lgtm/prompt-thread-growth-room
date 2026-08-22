@@ -10,6 +10,8 @@ const IMAGE_URL=`https://generativelanguage.googleapis.com/v1/models/${IMAGE_MOD
 const INSTAGRAM_API='https://graph.instagram.com/v25.0';
 const INSTAGRAM_PROFILE_FIELDS='user_id,username,account_type';
 const INSTAGRAM_CATEGORIES=['AI_TIP','AI_PROMPT','FOOD_PICK','HOT_ISSUE'];
+const INSTAGRAM_PROMPT_CATEGORIES=['AI_TIP','AI_PROMPT'];
+const INSTAGRAM_PROMPT_TABLE='instagram_prompt_posts';
 const INSTAGRAM_PUBLISH_REQUESTS=globalThis.__instagramCarouselPublishRequests||new Map();
 globalThis.__instagramCarouselPublishRequests=INSTAGRAM_PUBLISH_REQUESTS;
 
@@ -36,6 +38,82 @@ function safeInstagramMetaError(error,token){
     ...(type?{type}:{}),
     ...(message?{message}:{})
   };
+}
+function supabaseConfig(){
+  const rawUrl=String(process.env.SUPABASE_URL||'').trim();
+  const secret=String(process.env.SUPABASE_SECRET_KEY||'').trim();
+  if(!rawUrl||!secret){
+    const error=new Error('SUPABASE_NOT_CONFIGURED');
+    error.status=503;
+    throw error;
+  }
+  let url;
+  try{url=new URL(rawUrl)}catch{url=null}
+  if(!url||url.protocol!=='https:'){
+    const error=new Error('SUPABASE_URL_INVALID');
+    error.status=503;
+    throw error;
+  }
+  return {baseUrl:url.href.replace(/\/+$/,''),secret};
+}
+function safeSupabaseError(body,secret=''){
+  const source=body&&typeof body==='object'?body:{};
+  let message=String(source.message||source.details||'SUPABASE_REQUEST_FAILED').trim();
+  if(secret)message=message.split(secret).join('[REDACTED]');
+  message=message
+    .replace(/(apikey|authorization|bearer|secret[_\s-]?key)\s*[=:]\s*[^\s,;]+/gi,'$1=[REDACTED]')
+    .slice(0,300);
+  return {
+    ...(source.code?{code:String(source.code).slice(0,80)}:{}),
+    message:message||'SUPABASE_REQUEST_FAILED'
+  };
+}
+async function supabaseRest(path,{method='GET',body=null,prefer=''}={}){
+  const {baseUrl,secret}=supabaseConfig();
+  const headers={Accept:'application/json',apikey:secret};
+  if(!secret.startsWith('sb_'))headers.Authorization=`Bearer ${secret}`;
+  if(body!=null)headers['Content-Type']='application/json';
+  if(prefer)headers.Prefer=prefer;
+  const response=await fetch(`${baseUrl}/rest/v1/${path}`,{
+    method,headers,...(body!=null?{body:JSON.stringify(body)}:{})
+  });
+  const responseBody=await response.json().catch(()=>null);
+  if(!response.ok){
+    const error=new Error('SUPABASE_REQUEST_FAILED');
+    error.status=response.status;
+    error.meta=safeSupabaseError(responseBody,secret);
+    throw error;
+  }
+  return responseBody;
+}
+function instagramPromptRecord(input){
+  const mediaId=String(input?.instagram_media_id||'').trim();
+  const contentId=String(input?.content_id||'').trim().slice(0,200);
+  const contentType=String(input?.content_type||'').trim();
+  const replyPrompt=String(input?.reply_prompt||'').trim();
+  const caption=String(input?.instagram_caption||'').trim().slice(0,2200);
+  const publishedAt=String(input?.published_at||'').trim()||new Date().toISOString();
+  if(!/^\d{5,40}$/.test(mediaId))throw new Error('INSTAGRAM_MEDIA_ID_INVALID');
+  if(!contentId)throw new Error('INSTAGRAM_CONTENT_ID_REQUIRED');
+  if(!INSTAGRAM_PROMPT_CATEGORIES.includes(contentType))throw new Error('INSTAGRAM_PROMPT_CONTENT_TYPE_INVALID');
+  if(!replyPrompt)throw new Error('INSTAGRAM_REPLY_PROMPT_REQUIRED');
+  return {
+    instagram_media_id:mediaId,
+    content_id:contentId,
+    content_type:contentType,
+    reply_prompt:replyPrompt,
+    instagram_caption:caption,
+    publish_status:'published',
+    published_at:publishedAt,
+    updated_at:new Date().toISOString()
+  };
+}
+async function upsertInstagramPromptPost(input){
+  const record=instagramPromptRecord(input);
+  await supabaseRest(`${INSTAGRAM_PROMPT_TABLE}?on_conflict=instagram_media_id`,{
+    method:'POST',body:[record],prefer:'resolution=merge-duplicates,return=minimal'
+  });
+  return record;
 }
 function stripFence(s=''){
   return String(s).replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
@@ -966,6 +1044,9 @@ async function actionInstagramCarouselPublish(req,res){
   const urls=(Array.isArray(req.body?.image_urls)?req.body.image_urls:[]).map(instagramBlobUrl);
   const caption=String(req.body?.caption||'').trim().slice(0,2200);
   const requestId=String(req.body?.request_id||'').trim();
+  const contentId=String(req.body?.content_id||'').trim().slice(0,200);
+  const contentType=String(req.body?.content_type||'').trim();
+  const replyPrompt=String(req.body?.reply_prompt||'').trim();
   if(urls.length<3||urls.length>5||urls.some(url=>!url)){
     return send(res,400,{ok:false,error:'INSTAGRAM_CAROUSEL_IMAGE_URLS_INVALID'});
   }
@@ -975,7 +1056,25 @@ async function actionInstagramCarouselPublish(req,res){
   }
   const previous=INSTAGRAM_PUBLISH_REQUESTS.get(requestId);
   if(previous?.status==='publishing')return send(res,409,{ok:false,error:'INSTAGRAM_CAROUSEL_ALREADY_PUBLISHING'});
-  if(previous?.status==='published')return send(res,200,{ok:true,published:true,deduplicated:true,media_id:previous.media_id});
+  if(previous?.status==='published'){
+    if(previous.prompt_record&&previous.prompt_stored!==true){
+      try{
+        await upsertInstagramPromptPost(previous.prompt_record);
+        previous.prompt_stored=true;
+        previous.prompt_store_error=null;
+      }catch(e){
+        previous.prompt_stored=false;
+        previous.prompt_store_error=e?.meta?.message||e?.message||'SUPABASE_STORE_FAILED';
+        console.error('[INSTAGRAM_PROMPT_STORE_FAILED]',JSON.stringify({stage:'deduplicated_retry',message:previous.prompt_store_error,status:e?.status||null}));
+      }
+    }
+    return send(res,200,{
+      ok:true,published:true,deduplicated:true,media_id:previous.media_id,
+      published_at:previous.published_at,
+      ...(previous.prompt_stored==null?{prompt_store_skipped:true}:{prompt_stored:previous.prompt_stored}),
+      ...(previous.prompt_store_error?{prompt_store_error:previous.prompt_store_error}:{})
+    });
+  }
   if(INSTAGRAM_PUBLISH_REQUESTS.size>100){
     const oldest=INSTAGRAM_PUBLISH_REQUESTS.keys().next().value;
     INSTAGRAM_PUBLISH_REQUESTS.delete(oldest);
@@ -1008,12 +1107,85 @@ async function actionInstagramCarouselPublish(req,res){
     });
     const mediaId=String(published?.id||'');
     if(!mediaId)throw new Error('INSTAGRAM_MEDIA_ID_MISSING');
-    INSTAGRAM_PUBLISH_REQUESTS.set(requestId,{status:'published',media_id:mediaId});
-    return send(res,200,{ok:true,published:true,media_id:mediaId});
+    const publishedAt=new Date().toISOString();
+    const promptRecord=INSTAGRAM_PROMPT_CATEGORIES.includes(contentType)&&replyPrompt
+      ?{instagram_media_id:mediaId,content_id:contentId,content_type:contentType,reply_prompt:replyPrompt,instagram_caption:caption,published_at:publishedAt}
+      :null;
+    const completed={status:'published',media_id:mediaId,published_at:publishedAt,prompt_record:promptRecord,prompt_stored:null,prompt_store_error:null};
+    if(promptRecord){
+      try{
+        await upsertInstagramPromptPost(promptRecord);
+        completed.prompt_stored=true;
+      }catch(e){
+        completed.prompt_stored=false;
+        completed.prompt_store_error=e?.meta?.message||e?.message||'SUPABASE_STORE_FAILED';
+        console.error('[INSTAGRAM_PROMPT_STORE_FAILED]',JSON.stringify({stage:'after_media_publish',message:completed.prompt_store_error,status:e?.status||null}));
+      }
+    }
+    INSTAGRAM_PUBLISH_REQUESTS.set(requestId,completed);
+    return send(res,200,{
+      ok:true,published:true,media_id:mediaId,published_at:publishedAt,
+      ...(promptRecord?{prompt_stored:completed.prompt_stored}:{prompt_store_skipped:true}),
+      ...(completed.prompt_store_error?{prompt_store_error:completed.prompt_store_error}:{})
+    });
   }catch(e){
     INSTAGRAM_PUBLISH_REQUESTS.delete(requestId);
     console.error('[INSTAGRAM_CAROUSEL_PUBLISH_FAILED]',JSON.stringify({stage,message:e?.message||String(e),status:e?.status||null,meta:e?.meta||null}));
     return instagramPublishFailure(res,e,stage);
+  }
+}
+
+async function actionInstagramPromptStore(req,res){
+  try{
+    const record=await upsertInstagramPromptPost(req.body||{});
+    return send(res,200,{ok:true,stored:true,instagram_media_id:record.instagram_media_id});
+  }catch(e){
+    const validation=/^(INSTAGRAM_|SUPABASE_NOT_CONFIGURED|SUPABASE_URL_INVALID)/.test(e?.message||'');
+    const status=validation?(Number(e?.status)||400):502;
+    const detail=e?.meta?.message||e?.message||'SUPABASE_STORE_FAILED';
+    console.error('[INSTAGRAM_PROMPT_STORE_FAILED]',JSON.stringify({stage:'manual_retry',message:detail,status:e?.status||null}));
+    return send(res,status,{ok:false,stored:false,error:'INSTAGRAM_PROMPT_STORE_FAILED',detail});
+  }
+}
+
+async function actionInstagramPromptLookup(req,res){
+  if(req.method!=='GET'){
+    res.setHeader('Allow','GET');
+    return send(res,405,{ok:false,error:'METHOD_NOT_ALLOWED'});
+  }
+  const mediaId=String(req.query?.media_id||'').trim();
+  if(!/^\d{5,40}$/.test(mediaId))return send(res,400,{ok:false,error:'INSTAGRAM_MEDIA_ID_INVALID'});
+  try{
+    const rows=await supabaseRest(`${INSTAGRAM_PROMPT_TABLE}?instagram_media_id=eq.${encodeURIComponent(mediaId)}&select=instagram_media_id,content_id,content_type,reply_prompt&limit=1`);
+    const row=Array.isArray(rows)?rows[0]:null;
+    return send(res,200,row?{
+      ok:true,found:true,data:{
+        instagram_media_id:String(row.instagram_media_id),
+        content_id:String(row.content_id),
+        content_type:String(row.content_type),
+        reply_prompt:String(row.reply_prompt)
+      }
+    }:{ok:true,found:false});
+  }catch(e){
+    const detail=e?.meta?.message||e?.message||'SUPABASE_LOOKUP_FAILED';
+    console.error('[INSTAGRAM_PROMPT_LOOKUP_FAILED]',JSON.stringify({message:detail,status:e?.status||null}));
+    return send(res,Number(e?.status)===503?503:502,{ok:false,error:'INSTAGRAM_PROMPT_LOOKUP_FAILED',detail});
+  }
+}
+
+async function actionSupabaseStatus(req,res){
+  if(req.method!=='GET'){
+    res.setHeader('Allow','GET');
+    return send(res,405,{ok:false,connected:false,error:'METHOD_NOT_ALLOWED'});
+  }
+  try{
+    await supabaseRest(`${INSTAGRAM_PROMPT_TABLE}?select=id&limit=1`);
+    return send(res,200,{ok:true,connected:true});
+  }catch(e){
+    const missing=e?.message==='SUPABASE_NOT_CONFIGURED'||e?.message==='SUPABASE_URL_INVALID';
+    const detail=e?.meta?.message||e?.message||'SUPABASE_CONNECTION_FAILED';
+    console.error('[SUPABASE_STATUS_FAILED]',JSON.stringify({message:detail,status:e?.status||null}));
+    return send(res,missing?503:502,{ok:false,connected:false,error:missing?e.message:'SUPABASE_CONNECTION_FAILED'});
   }
 }
 
@@ -1092,6 +1264,8 @@ export default async function handler(req,res){
 
   const queryAction=String(req.query?.action||'').trim();
   if(queryAction==='instagram_status')return actionInstagramStatus(req,res);
+  if(queryAction==='supabase_status')return actionSupabaseStatus(req,res);
+  if(queryAction==='instagram_prompt_lookup')return actionInstagramPromptLookup(req,res);
 
   if(req.method!=='POST'){
     return send(res,405,{ok:false,error:'METHOD_NOT_ALLOWED'});
@@ -1110,10 +1284,11 @@ export default async function handler(req,res){
   if(action==='instagram_carousel_prepare')return actionInstagramCarouselPrepare(req,res);
   if(action==='instagram_carousel_image')return actionInstagramCarouselImage(req,res);
   if(action==='instagram_carousel_publish')return actionInstagramCarouselPublish(req,res);
+  if(action==='instagram_prompt_store')return actionInstagramPromptStore(req,res);
 
   return send(res,400,{
     ok:false,
     error:'UNKNOWN_CONTENT_ACTION',
-    allowed:['generate','image','store-image','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish']
+    allowed:['generate','image','store-image','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish','instagram_prompt_store','instagram_prompt_lookup','supabase_status']
   });
 }
