@@ -17,6 +17,9 @@ const INSTAGRAM_DELIVERY_TABLE='instagram_prompt_deliveries';
 const INSTAGRAM_INTENT_MODEL='gemini-3.5-flash-lite';
 const INSTAGRAM_PUBLISH_REQUESTS=globalThis.__instagramCarouselPublishRequests||new Map();
 globalThis.__instagramCarouselPublishRequests=INSTAGRAM_PUBLISH_REQUESTS;
+const AI_IMAGE_CTA='댓글 달면 무료 VOA 프롬프트 보내드려요 ♥️';
+const AI_IMAGE_CTA_PATH="M31.87 35.09 L31.87 24.24 L28.77 24.24 L28.77 32.24 L23.73 32.24 L23.73 10.64 L28.77 10.64 L28.77 19.93 L31.87 19.93 L31.87 9.84 L36.96 9.84 L36.96 35.09 Z M21.08 29.84 C18.25 30.08 12.58 30.21 4.08 30.21 L4.08 12.24 L20.00 12.24 L20.00 16.57 L9.15 16.57 L9.15 25.92 C14.08 25.92 17.99 25.79 20.88 25.51 Z M35.58 49.44 C33.09 49.05 30.52 48.01 27.85 46.34 C25.18 44.66 23.29 42.97 22.17 41.26 C21.18 42.90 19.38 44.54 16.77 46.16 C14.15 47.79 11.58 48.88 9.06 49.44 L5.97 45.38 C9.92 44.88 13.18 43.58 15.75 41.50 C18.32 39.41 19.61 37.30 19.61 35.17 L19.61 33.41 L24.73 33.41 L24.73 35.13 C24.73 37.25 26.02 39.35 28.60 41.45 C31.18 43.54 34.45 44.86 38.43 45.42 Z M44.65 27.52 L44.65 23.19 L70.30 23.19 C70.56 19.43 70.69 16.62 70.69 14.77 L49.98 14.77 L49.98 10.48 L75.86 10.48 C75.86 13.72 75.67 17.96 75.30 23.19 L81.35 23.19 L81.35 27.52 Z M50.10 48.73 L50.10 37.61 L70.85 37.61 L70.85 34.84 L50.10 34.84 L50.10 30.56 L75.98 30.56 L75.98 41.63 L55.23 41.63 L55.23 44.46 L76.99 44.46 L76.99 48.73 Z M133.28 21.70 L133.28 28.49 L128.17 28.49 L128.17 9.84 L133.28 9.84 L133.28 17.37 L139.29 17.37 L139.29 21.70 Z M124.30 26.15 C119.49 26.48 112.44 26.64 103.17 26.64 L103.17 11.09 L122.49 11.09 L122.49 15.46 L108.30 15.46 L108.30 22.31 C115.10 22.31 120.32 22.15 123.97 21.82 Z M108.47 48.52 L108.47 37.22 L128.17 37.22 L128.17 34.49 L108.47 34.49 L108.47 30.17 L133.28 30.17 L133.28 41.30 L113.59 41.30 L113.59 44.19 L134.31 44.19 L134.31 48.52 Z M145.69 31.48 L145.69 12.78 L164.62 12.78 L164.62 15.98 L172.14 15.98 L172.14 9.84 L177.23 9.84 L177.23 38.45 L172.14 38.45 L172.14 28.28 L164.62 28.28 L164.62 31.48 Z M159.59 17.10 L150.71 17.10 L150.71 27.15 L159.59 27.15 Z M164.62 24.20 L172.14 24.20 L172.14 20.10 L164.62 20.10 Z M151.74 48.03 L151.74 34.54 L156.88 34.54 L156.88 43.70 L178.03 43.70 L178.03 48.03 Z M205.86 26.95 L205.86 11.28 L231.12 11.28 L231.12 26.95 Z M226.02 15.61 L211.00 15.61 L211.00 22.66 L226.02 22.66 Z M221.09 35.85 L221.09 49.40 L215.93 49.40 L215.93 35.85 L200.18 35.85 L200.18 31.48 L236.89 31.48 L236.89 35.85 Z M242.18 44.11 L242.18 39.87 L252.16 39.87 L252.16 33.61 L247.30 33.61 L247.30 21.35 L268.47 21.35 L268.47 17.53 L247.39 17.53 L247.39 13.29 L273.64 13.29 L273.64 25.35 L252.47 25.35 L252.47 29.37 L274.44 29.37 L274.44 33.61 L269.31 33.61 L269.31 39.87 L278.89 39.87 L278.89 44.11 Z M257.33 39.87 L264.14 39.87 L264.14 33.61 L257.33 33.61 Z M324.21 15.52 L313.61 45.71 L307.02 45.71 L296.54 15.52 L302.88 15.52 L309.77 37.39 C310.06 38.30 310.26 39.28 310.39 40.32 L310.51 40.32 C310.56 39.55 310.78 38.55 311.17 37.32 L318.08 15.52 Z M326.16 31.01 C326.16 26.26 327.52 22.42 330.25 19.46 C332.98 16.51 336.60 15.03 341.13 15.03 C345.42 15.03 348.88 16.46 351.49 19.33 C354.11 22.19 355.42 25.87 355.42 30.35 C355.42 35.08 354.07 38.91 351.37 41.85 C348.67 44.78 345.10 46.25 340.66 46.25 C336.33 46.25 332.84 44.82 330.17 41.96 C327.49 39.10 326.16 35.45 326.16 31.01 Z M332.31 30.68 C332.31 33.74 333.06 36.25 334.57 38.22 C336.09 40.18 338.14 41.16 340.74 41.16 C343.43 41.16 345.53 40.23 347.02 38.36 C348.52 36.49 349.27 33.96 349.27 30.76 C349.27 27.47 348.54 24.87 347.09 22.97 C345.65 21.07 343.59 20.12 340.94 20.12 C338.26 20.12 336.15 21.11 334.62 23.10 C333.08 25.09 332.31 27.62 332.31 30.68 Z M386.26 45.71 L379.89 45.71 L377.45 38.49 L366.11 38.49 L363.73 45.71 L357.35 45.71 L368.53 15.52 L375.27 15.52 Z M375.99 33.86 L372.30 22.93 C372.15 22.49 371.99 21.66 371.83 20.43 L371.68 20.43 C371.57 21.34 371.40 22.16 371.17 22.89 L367.46 33.86 Z M407.70 17.53 L407.70 13.29 L437.10 13.29 L437.10 17.53 Z M407.41 33.20 L407.41 28.96 L413.03 28.96 L412.58 19.30 L417.70 19.30 L418.03 28.96 L426.73 28.96 L427.10 19.30 L432.22 19.30 L431.65 28.96 L437.39 28.96 L437.39 33.20 Z M404.04 44.03 L404.04 39.74 L440.75 39.74 L440.75 44.03 Z M446.04 33.65 L446.04 29.37 L461.79 29.37 L461.79 26.80 L451.85 26.80 L451.85 16.53 L471.82 16.53 L471.82 14.50 L451.85 14.50 L451.85 10.32 L476.95 10.32 L476.95 20.34 L456.98 20.34 L456.98 22.62 L477.83 22.62 L477.83 26.80 L466.96 26.80 L466.96 29.37 L482.75 29.37 L482.75 33.65 Z M451.46 48.64 L451.46 35.81 L477.38 35.81 L477.38 48.64 Z M472.25 40.09 L456.59 40.09 L456.59 44.36 L472.25 44.36 Z M491.70 17.53 L491.70 13.29 L521.10 13.29 L521.10 17.53 Z M491.41 33.20 L491.41 28.96 L497.03 28.96 L496.58 19.30 L501.70 19.30 L502.03 28.96 L510.73 28.96 L511.10 19.30 L516.22 19.30 L515.65 28.96 L521.39 28.96 L521.39 33.20 Z M488.04 44.03 L488.04 39.74 L524.75 39.74 L524.75 44.03 Z M535.46 33.41 L535.46 13.33 L561.50 13.33 L561.50 17.58 L540.63 17.58 L540.63 21.18 L560.38 21.18 L560.38 25.43 L540.63 25.43 L540.63 29.16 L562.14 29.16 L562.14 33.41 Z M530.04 44.11 L530.04 39.83 L566.75 39.83 L566.75 44.11 Z M586.81 43.95 L586.81 39.66 L602.56 39.66 L602.56 32.48 L592.35 32.48 L592.35 12.82 L597.52 12.82 L597.52 18.79 L612.81 18.79 L612.81 12.82 L617.94 12.82 L617.94 32.48 L607.73 32.48 L607.73 39.66 L623.52 39.66 L623.52 43.95 Z M612.81 23.11 L597.52 23.11 L597.52 28.20 L612.81 28.20 Z M657.71 49.40 L657.71 29.63 L654.10 29.63 L654.10 48.23 L649.01 48.23 L649.01 10.64 L654.10 10.64 L654.10 25.31 L657.71 25.31 L657.71 9.84 L662.83 9.84 L662.83 49.40 Z M647.49 36.98 C645.57 37.32 643.67 37.54 641.80 37.63 C639.94 37.73 636.36 37.78 631.09 37.78 L631.09 12.96 L636.15 12.96 L636.15 33.45 C640.29 33.45 643.90 33.22 646.96 32.77 Z M676.66 31.44 L676.66 13.33 L701.67 13.33 L701.67 17.62 L681.82 17.62 L681.82 27.15 L702.27 27.15 L702.27 31.44 Z M670.81 43.58 L670.81 39.29 L707.52 39.29 L707.52 43.58 Z M735.02 32.57 L735.02 28.24 L741.83 28.24 L741.83 22.31 L735.25 22.31 L735.25 17.99 L741.83 17.99 L741.83 9.84 L746.87 9.84 L746.87 49.40 L741.83 49.40 L741.83 32.57 Z M736.37 39.62 C733.11 40.26 725.88 40.58 714.70 40.58 L714.70 23.87 L728.09 23.87 L728.09 17.23 L714.78 17.23 L714.78 12.90 L733.17 12.90 L733.17 28.16 L719.78 28.16 L719.78 36.30 C727.22 36.41 732.53 36.13 735.70 35.46 Z M754.81 43.95 L754.81 39.70 L764.02 39.70 L764.02 30.60 C761.01 28.72 759.51 26.09 759.51 22.70 C759.51 19.56 760.80 17.08 763.37 15.26 C765.95 13.44 769.21 12.53 773.17 12.53 C777.08 12.53 780.32 13.44 782.91 15.26 C785.49 17.08 786.78 19.56 786.78 22.70 C786.78 26.04 785.29 28.67 782.31 30.60 L782.31 39.70 L791.52 39.70 L791.52 43.95 Z M773.17 16.78 C770.58 16.78 768.53 17.31 767.02 18.38 C765.51 19.44 764.76 20.88 764.76 22.70 C764.76 24.55 765.51 26.00 767.02 27.06 C768.53 28.12 770.58 28.65 773.17 28.65 C775.74 28.65 777.77 28.12 779.28 27.05 C780.78 25.98 781.53 24.53 781.53 22.70 C781.53 20.88 780.78 19.44 779.29 18.38 C777.79 17.31 775.75 16.78 773.17 16.78 Z M769.08 39.70 L777.25 39.70 L777.25 32.53 C775.89 32.77 774.53 32.89 773.17 32.89 C771.80 32.89 770.44 32.77 769.08 32.53 Z M846.56 24.51 C846.56 30.59 841.05 39.46 830.01 51.13 C819.12 40.37 813.67 31.49 813.67 24.51 C813.67 22.02 814.48 19.84 816.11 17.96 C817.78 16.02 819.79 15.05 822.16 15.05 C826.04 15.05 828.67 17.23 830.05 21.59 C830.89 19.39 831.77 17.83 832.70 16.92 C833.96 15.67 835.69 15.05 837.91 15.05 C840.53 15.05 842.65 15.98 844.27 17.84 C845.80 19.61 846.56 21.83 846.56 24.51 Z";
+const AI_IMAGE_CTA_BOUNDS={x:4.0811,y:9.8438,width:842.4815,height:41.2822};
 
 const LABELS={
   AI_PROMPT:'AI 프롬프트',
@@ -228,6 +231,18 @@ function parseJson(s=''){
 function clampHook(v=''){
   return [...String(v).replace(/\s+/g,' ').trim()].slice(0,14).join('');
 }
+function withoutGeneratedPromptCta(value,category){
+  const body=String(value||'').trim();
+  if(category!=='AI_TIP'&&category!=='AI_PROMPT')return body;
+  return body.split(/\r?\n/).filter(line=>{
+    const text=line.trim();
+    return !(
+      /^프롬프트는\s*첫\s*댓글/i.test(text)||
+      /프롬프트.*(?:댓글.*(?:남겨|달면|달아|저요)|DM.*(?:보내|전송))/i.test(text)||
+      /댓글.*(?:남겨|달면|달아|저요).*프롬프트/i.test(text)
+    );
+  }).join('\n').trim();
+}
 function cleanCandidate(x,i){
   const allowed=Object.keys(LABELS);
   const category=allowed.includes(x?.category)?x.category:'AI_PROMPT';
@@ -247,7 +262,7 @@ function cleanCandidate(x,i){
       .filter(Boolean).slice(0,3),
     hook,
     hook_candidates:hooks.slice(0,5),
-    body:String(x?.body||'').trim().slice(0,500),
+    body:withoutGeneratedPromptCta(x?.body,category).slice(0,500),
     reply_prompt:String(x?.reply_prompt||'').trim(),
     reason:String(x?.reason||'').trim().slice(0,180),
     image_brief:String(x?.image_brief||'').trim().slice(0,1200),
@@ -459,28 +474,111 @@ function aiPromptMoodRule(mood='RANDOM'){
   return rules[mood]||rules.RANDOM;
 }
 
-function pillarPrompt({pillar,research='',feedback='',performance='',mood='RANDOM'}){
+const AI_TIP_SCORE_KEYS=['hook_power','real_life_usefulness','novelty','try_now_value','save_value','share_value','specificity'];
+
+function aiTipRecentLines(input){
+  return (Array.isArray(input)?input:[]).slice(0,12).map(v=>{
+    const topic=String(v?.topic||'').replace(/\s+/g,' ').trim().slice(0,100);
+    const hook=String(v?.hook||'').replace(/\s+/g,' ').trim().slice(0,40);
+    return [topic,hook].filter(Boolean).join(' | ');
+  }).filter(Boolean);
+}
+
+function aiTipTextKey(value){
+  return String(value||'').toLocaleLowerCase('ko-KR').replace(/(?:chatgpt|gemini|챗gpt|ai|인공지능)/gi,'').replace(/[^0-9a-z가-힣]/gi,'');
+}
+
+function aiTipBigrams(value){
+  const key=aiTipTextKey(value),out=[];
+  for(let i=0;i<key.length-1;i++)out.push(key.slice(i,i+2));
+  return out;
+}
+
+function aiTipSimilarity(a,b){
+  const left=aiTipBigrams(a),right=aiTipBigrams(b);
+  if(!left.length||!right.length)return 0;
+  const counts=new Map();
+  for(const value of left)counts.set(value,(counts.get(value)||0)+1);
+  let shared=0;
+  for(const value of right){
+    const count=counts.get(value)||0;
+    if(count){shared++;counts.set(value,count-1)}
+  }
+  return (2*shared)/(left.length+right.length);
+}
+
+function validateAiTipSelection(output,item,recentAiTips=[]){
+  const shortlist=Array.isArray(output?.shortlist)?output.shortlist:[];
+  if(shortlist.length<5||shortlist.length>8)throw new Error('AI_TIP_SHORTLIST_INVALID');
+  const totals=shortlist.map((entry,index)=>{
+    const scores=entry?.scores||{};
+    if(AI_TIP_SCORE_KEYS.some(key=>!Number.isFinite(Number(scores[key]))||Number(scores[key])<0||Number(scores[key])>10)){
+      throw new Error(`AI_TIP_SCORE_INVALID_${index+1}`);
+    }
+    return AI_TIP_SCORE_KEYS.reduce((sum,key)=>sum+Number(scores[key]),0);
+  });
+  const selectedIndex=Number(output?.selected_index);
+  if(!Number.isInteger(selectedIndex)||selectedIndex<0||selectedIndex>=shortlist.length)throw new Error('AI_TIP_SELECTED_INDEX_INVALID');
+  if(totals[selectedIndex]<Math.max(...totals))throw new Error('AI_TIP_SELECTED_NOT_STRONGEST');
+
+  const combined=`${item.topic}\n${item.hook}\n${item.body}`;
+  if(/(?:이미지|사진).*(?:생성|변환|스타일)|참조\s*사진|캐릭터\s*변환/i.test(combined))throw new Error('AI_TIP_AI_PROMPT_SCOPE_COLLISION');
+  if(/^(?:AI|ChatGPT|Gemini|챗GPT)|(?:활용법|사용법|꿀팁|기능\s*소개)$/i.test(item.hook)||/(?:활용법|꿀팁|기능\s*소개)/i.test(item.hook)){
+    throw new Error('AI_TIP_HOOK_TOO_GENERIC');
+  }
+  if(item.body.length<150||!/(?:올리|붙여|입력|복사|내보내|첨부|가져오|선택|요청)/.test(item.body)||!/(?:표|목록|순서|항목|비교|분류|결과|찾아|정리|분석)/.test(item.body)){
+    throw new Error('AI_TIP_BODY_NOT_ACTIONABLE');
+  }
+  const reply=String(item.reply_prompt||'');
+  const required=['역할:','입력 자료:','목표:','분석 절차:','출력 형식:','주의사항:'];
+  if(reply.length<260||required.some(label=>!reply.includes(label)))throw new Error('AI_TIP_REPLY_PROMPT_INCOMPLETE');
+
+  const selectedText=`${item.topic} ${item.hook}`;
+  const recent=aiTipRecentLines(recentAiTips);
+  if(recent.some(value=>aiTipSimilarity(selectedText,value)>=.62))throw new Error('AI_TIP_RECENT_TOPIC_DUPLICATE');
+  return {candidate_count:shortlist.length,selected_index:selectedIndex,selected_score:totals[selectedIndex]};
+}
+
+function aiTipRule(recentAiTips=[]){
+  const recent=aiTipRecentLines(recentAiTips);
+  return `AI_TIP 하나를 만들기 전에 현실 문제에서 출발한 서로 다른 소재 후보를 정확히 6개 만든다.
+출발 영역은 돈, 부업, 직장, 장사, 절약, 쇼핑, 인간관계, 연애, 가족, 육아, 공부, 취업, 계약, 사기·손해 방지, 소비, 여행, 생활 속 귀찮은 일, 반복 업무, 문서·메일, 데이터 정리 중 이번에 가장 강한 것을 고른다. AI 기능에서 소재를 역으로 찾지 않는다.
+
+각 후보는 hook_power, real_life_usefulness, novelty, try_now_value, save_value, share_value, specificity를 각각 0~10점으로 냉정하게 평가한다. 정보 제목 수준, 흔한 AI 팁, 추상적 조언, 지금 따라 할 수 없는 소재는 낮게 준다. 7개 점수 합계가 가장 높은 후보만 selected_index로 선택하고 완성된 candidate로 작성한다.
+
+AI_TIP의 감정은 "헐, AI를 저렇게도 써먹는다고?"다. AI, ChatGPT, Gemini 같은 도구명이나 기능 소개를 후킹의 입구로 삼지 말고 돈·손해·회사·갈등·실수·귀찮음·예상 밖 결과처럼 사람이 원래 궁금해하는 현실 사건을 먼저 보여준다. hook은 6~10자 우선, 최대 14자이며 "무슨 일이야?"를 만들되 실제 인물이나 사건을 꾸며내지 않는다. "AI 활용법", "AI 꿀팁", "기능 소개" 같은 정보 제목은 금지한다.
+
+AI 이미지 생성 놀이, 참조사진 변환, 스타일 변환은 AI_PROMPT 영역이므로 제외한다. 신제품·신기능 출시 자체를 다루지 말고 현실 사용 가치가 명확할 때만 도구를 언급한다. HOT_ISSUE처럼 뉴스 요약을 하지 않는다.
+
+body는 자연스러운 한국어 반말로 150~500자 안에서 현실 상황 → 어떤 AI/도구에 무엇을 넣는지 → 어떤 식으로 요청하는지 → 어떤 결과를 얻고 어디에 쓰는지를 구체적으로 보여준다. CSV, 계약서, 메일, 영수증 같은 입력 자료와 실제 행동이 보이게 하되 매뉴얼처럼 늘이지 않는다. 과장만 있고 쓸모없는 본문, "시간을 절약할 수 있다" 같은 추상 문장은 금지한다. 프롬프트 제공·댓글·첫 댓글·DM CTA는 body에 넣지 않는다.
+
+reply_prompt는 사용자가 그대로 복사해 실행할 수 있는 완성형 한국어 실용 프롬프트다. 반드시 "역할:", "입력 자료:", "목표:", "분석 절차:", "출력 형식:", "주의사항:" 여섯 항목을 포함하고 사용자가 자료를 붙이는 명확한 자리표시자를 둔다. 불필요하게 장황하게 만들지 말고, 근거 없는 단정 금지·불확실성 표시·민감정보 제거 등 해당 작업에 필요한 안전 조건을 넣는다.
+
+최근 AI_TIP:
+${recent.length?recent.map(value=>`- ${value}`).join('\n'):'- 없음'}
+위 항목과 핵심 현실 문제 또는 해결 방식이 같으면 도구명·표현만 바꿔 재사용하지 않는다.
+
+image_brief는 선택된 현실 문제와 반전이 한눈에 이해되는 장면만 설명한다. 첫 이미지 후킹은 본문을 요약 설명하지 말고 현실 문제의 궁금증을 살리는 방향으로 이미지 Story 엔진이 만들 수 있게 한다.`;
+}
+
+function pillarPrompt({pillar,research='',feedback='',performance='',mood='RANDOM',recentAiTips=[]}){
   const common=`너는 한국 Threads 계정을 팔로워 성장시키는 콘텐츠 편집장이다.\n목표는 광고가 아니라 저장, 공유, 댓글, 팔로우를 부르는 원본 콘텐츠다.\n본문은 스레드에서 실제 사람이 말하듯 자연스러운 반말로 쓴다. 딱딱한 기사체, 보도자료체, 존댓말, 교과서식 설명은 피한다.\n짧은 문장과 줄바꿈을 활용하고, 귀엽고 친근한 리액션을 자연스럽게 섞는다. 이모지는 보통 1~3개만 사용하고 과하게 도배하지 않는다.\n사건사고·재난·피해자가 있는 내용에서는 장난스러운 표현을 피하고 친근하지만 차분한 반말을 사용한다.\n후킹은 6~10자 우선, 최대 14자. 기사 제목이나 흔한 문구를 복사하지 않는다.\nThreads 주제 태그도 함께 추천한다. 내부 소재명 topic과 Threads 주제 태그 topic_tag는 절대 같은 필드로 취급하지 않는다. topic_tag_candidates는 게시물 내용과 직접 관련된 후보 3개를 만든다. 한국 계정이므로 자연스럽고 실제 사람들이 찾을 법한 한글 Topic을 우선하되, AI Art처럼 영어명이 더 보편적인 주제는 영어도 허용한다. # 기호는 넣지 않는다. 너무 길거나 문장형인 태그, 광고 문구, 억지 신조어는 금지한다. topic_tag에는 후보 중 가장 적합한 하나를 넣는다.\nimage_brief는 본문과 직접 연결되는 시각적 핵심만 설명한다. 실제 썸네일 문구와 타이포그래피 구성은 카테고리별 이미지 생성 단계가 별도로 결정한다.\n최근 피드백: ${feedback||'없음'}\n실제 성과: ${performance||'없음'}`;
 
   const rules={
-    AI_TIP:`AI_TIP 하나만 만든다. 일반인이 잘 모르는 짧은 전문 개념/명령어를 오늘의 명령어처럼 소개한다. RED TEAM, STEELMAN, PRE-MORTEM, EDGE CASES, COUNTEREXAMPLE, RUBRIC, FIRST PRINCIPLES 같은 수준이지만 예시를 재탕하지 말고 더 넓게 발굴한다. '전문가처럼 답해줘', '결론부터', '예시 2개' 같은 초급 팁은 금지. 본문은 ① 낯선 용어 ② 복붙 가능한 짧은 영어 명령어 ③ 쉬운 한국어 설명 ④ 언제 쓰면 좋은지. 영어 명령어 필수. 말투는 '이거 한번 써봐 👀', '생각보다 꽤 쓸만해'처럼 짧고 영리한 반말로 쓴다.`,
-    AI_PROMPT:`AI_PROMPT 하나만 만든다. ${aiPromptMoodRule(mood)} 반드시 body와 reply_prompt를 완전히 분리한다. body는 Threads에 실제 게시되는 한국어 설명문이다. 결과 이미지의 매력, 빛/질감/분위기/촬영 느낌 중 핵심을 3~5문장으로 충분히 설명한다. 자연스러운 반말과 가벼운 이모지 1~2개를 사용한다. 영문 이미지 프롬프트 문장이나 영어 프롬프트 일부를 body에 절대 넣지 않는다. body 마지막은 반드시 '프롬프트는 첫 댓글에 남겨둘게 👇'처럼 첫 댓글을 안내한다.
+    AI_PROMPT:`AI_PROMPT 하나만 만든다. ${aiPromptMoodRule(mood)} 반드시 body와 reply_prompt를 완전히 분리한다. body는 Threads에 실제 게시되는 한국어 설명문이다. 결과 이미지의 매력, 빛/질감/분위기/촬영 느낌 중 핵심을 3~5문장으로 충분히 설명한다. 자연스러운 반말과 가벼운 이모지 1~2개를 사용한다. 영문 이미지 프롬프트 문장이나 영어 프롬프트 일부를 body에 절대 넣지 않는다. body에는 프롬프트 제공, 첫 댓글, 댓글 작성, DM 전송을 안내하거나 유도하는 CTA를 넣지 않고 순수 콘텐츠만 쓴다.
 
 reply_prompt를 쓰기 전에 내부적으로 다음 Scene Design 20개 항목을 빠짐없이 결정하고 충돌을 제거한다: SUBJECT, IDENTITY, ACTION/POSE, EXPRESSION, WARDROBE/STYLING, LOCATION, ENVIRONMENT DETAILS, ERA/CULTURAL CONTEXT, COMPOSITION, CAMERA POSITION, LENS/FOCAL LENGTH, DEPTH OF FIELD, LIGHTING, MATERIAL/SKIN/FABRIC DETAIL, COLOR SCIENCE, FILM/DIGITAL CHARACTER, ATMOSPHERE, PHYSICAL REALISM, IDENTITY CONSTRAINTS, NEGATIVE/PROHIBITED ELEMENTS. 내부 설계 목록은 출력하지 말고 이를 자연스럽게 통합한 하나의 고밀도 영문 MASTER PROMPT만 reply_prompt에 넣는다. 일반적으로 800~1500자 정도를 목표로 하되 단순한 장면을 억지로 늘리거나 키워드를 반복하지 않는다. camera height/distance, 자연스러운 원근과 공간 관계, 장면에 맞는 렌즈와 조명 방향·부드러움·하이라이트·그림자, 재질과 피부·직물, 색 반응을 구체적으로 선택한다. cinematic, ultra detailed, 35mm 같은 장식어의 기계적 나열은 금지한다.
 
 reply_prompt는 사용자가 자신의 사진을 첨부한 뒤 그대로 복사해 사용할 수 있어야 하며 반드시 다음 정체성 의미를 자연스러운 영문 지시로 포함한다: Use the attached reference image as the PRIMARY IDENTITY REFERENCE. Preserve the exact identity and recognizable facial characteristics, including facial structure, proportions, eyes, nose, lips, jawline, skin characteristics and apparent age. Do not reinterpret, replace, beautify, idealize, age-shift or generate a different person. Identity preservation takes priority over styling, era, fashion and cinematic aesthetics. 얼굴과 양쪽 눈은 완전히 보여야 한다. sunglasses, goggles, masks, veils, hands, hair, props, deep hat shadows, dramatic shadows over the eyes, foreground objects로 얼굴을 가리지 않는다. 콘셉트에 얼굴 가림 요소가 있어도 제거하고 나머지 시대·의상·환경으로 스타일을 유지한다. 비정상 신체, 물체 관통, 불가능한 카메라·공간 관계, 부자연스러운 반사, 복제 인물, 추가 손·팔·손가락을 금지한다. 한국어 설명, 번역, Prompt:, 따옴표, Markdown은 reply_prompt에 넣지 않는다. image_brief는 reply_prompt 결과 이미지의 구도와 시각적 매력을 보충하되 별도의 텍스트 중심 썸네일로 바꾸지 않는다.`,
 
-AI_TIP:`AI 활용 팁은 반드시 body와 reply_prompt를 완전히 분리한다.
-핵심은 '짧은 전문 명령어/기법 이름' 하나를 소개하는 것이다. RED TEAM, STEELMAN, PRE-MORTEM, EDGE CASES, COUNTEREXAMPLE, RUBRIC, FIRST PRINCIPLES, DECOMPOSITION처럼 1~3단어 수준의 짧고 기억하기 쉬운 개념을 우선한다. 단, 같은 용어를 반복 재탕하지 말고 매번 다른 전문 개념을 발굴한다.
-body에는 해당 짧은 명령어 이름을 눈에 띄게 소개하고, 그게 무엇인지 / 언제 쓰는지 / 어떤 효과가 있는지를 한국어 반말로 3~5문장 설명한다. 실제 복붙 명령문은 body에 절대 넣지 않는다. body 마지막은 반드시 '프롬프트는 첫 댓글에 남겨둘게 👇'처럼 안내한다.
-reply_prompt에는 사용자가 그대로 복사해 AI에 넣을 실제 프롬프트만 넣는다. 반드시 영어로 작성한다. 한국어 문장, 한국어 설명, 번역, Markdown, 코드블록, 장식 문구 금지. 길게 장황하게 쓰지 말고 보통 1~3문장의 짧고 강한 명령형 영어 프롬프트로 작성한다.
-예시 방향: "Red-team this plan. Identify hidden assumptions, failure modes, and the strongest counterarguments."처럼 짧고 전문적이어야 한다.
-image_brief는 본문 핵심을 한눈에 이해시키는 보조 장면을 설명한다. 최종 이미지에서는 이미지 생성 단계가 본문 전체를 다시 분석해 썸네일 전용 문구를 별도로 만들며, 그 문구가 주인공이 된다.`,
+    AI_TIP:aiTipRule(recentAiTips),
     FOOD_PICK:`FOOD_PICK 하나만 만든다. 현재 한국 시간대를 반영해서 지금 먹기 가장 자연스러운 상황을 먼저 정한다. 점심 시간에는 점심, 저녁에는 저녁, 밤 9시 이후에는 야식/술안주 성격을 우선한다. '오늘 점심은 내가 정해줄게 😋', '오늘 저녁은 이거 먹자', '오늘 술안주는 이걸로 가자'처럼 우리가 먼저 결론을 준다. 아래 검색 결과에서 실제 확인된 전국 식당 하나를 고른다. 최근 생성 이력으로 제외된 업장은 절대 선택하지 않는다. 같은 지역/같은 장르/같은 업장을 연속 반복하지 말고 다양성을 우선한다. 식당명/지역/대표 메뉴/추천 이유를 간결하게 쓴다. 존재, 지역, 메뉴를 지어내지 않는다. 음식은 먹고 싶게 느껴지는 가볍고 맛깔나는 반말로 추천한다. 마지막에 '※ 이미지는 메뉴 이해를 돕는 AI 연출 이미지'를 넣는다.\n검색 결과:\n${research}`,
     HOT_ISSUE:`HOT_ISSUE 하나만 만든다. AI에 편향하지 말고 오늘 실제 뉴스 중 대화 가치와 화제성이 가장 큰 하나를 고른다. 환율/증시/정책/사회/사건사고/전쟁/국제/날씨/태풍/스포츠/연예/자동차/부동산/과학/테크 모두 동등하게 본다. 아래 검색 결과만 사실 재료로 사용한다. 검색 결과 안에 '최근 이미 다룬 핫이슈'와 중복 금지 규칙이 포함되어 있으면 반드시 따른다. 같은 사건을 제목/후킹/표현만 바꿔 재사용하지 않는다. 기사 제목 복사 금지. 본문은 '무슨 일인데? → 쉽게 말하면 왜 중요한데? → 앞으로 뭘 보면 돼?' 흐름으로 친근한 반말로 풀어준다. 뉴스 앵커처럼 딱딱하게 쓰지 않는다. 다만 재난·전쟁·피해자가 있는 사건은 가벼운 농담 없이 차분하게 쓴다. 루머와 확인 안 된 숫자 금지.\n검색 결과:\n${research}`
   };
 
-  return `${common}\n\n${rules[pillar]}\n\nJSON만 반환:\n{"candidate":{"category":"${pillar}","topic":"...","topic_tag":"...","topic_tag_candidates":["...","...","..."],"hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reply_prompt":"AI_PROMPT/AI_TIP만 규칙에 맞게 작성, 나머지는 빈 문자열","reason":"...","image_brief":"...","source_notes":[],"score":{"stop":0,"save":0,"share":0,"comment":0,"follow":0,"novelty":0,"visual":0,"total":0}}}`;
+  const candidateSchema=`{"candidate":{"category":"${pillar}","topic":"...","topic_tag":"...","topic_tag_candidates":["...","...","..."],"hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reply_prompt":"AI_PROMPT/AI_TIP만 규칙에 맞게 작성, 나머지는 빈 문자열","reason":"...","image_brief":"...","source_notes":[],"score":{"stop":0,"save":0,"share":0,"comment":0,"follow":0,"novelty":0,"visual":0,"total":0}}}`;
+  const aiTipSchema=`{"shortlist":[{"problem":"...","ai_use":"...","hook":"...","scores":{"hook_power":0,"real_life_usefulness":0,"novelty":0,"try_now_value":0,"save_value":0,"share_value":0,"specificity":0}}],"selected_index":0,"candidate":{"category":"AI_TIP","topic":"...","topic_tag":"...","topic_tag_candidates":["...","...","..."],"hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reply_prompt":"역할: ...\\n입력 자료: ...\\n목표: ...\\n분석 절차: ...\\n출력 형식: ...\\n주의사항: ...","reason":"...","image_brief":"...","source_notes":[],"score":{"stop":0,"save":0,"share":0,"comment":0,"follow":0,"novelty":0,"visual":0,"total":0}}}`;
+  return `${common}\n\n${rules[pillar]}\n\nJSON만 반환:\n${pillar==='AI_TIP'?aiTipSchema:candidateSchema}`;
 }
 
 async function actionGenerate(req,res){
@@ -495,6 +593,7 @@ async function actionGenerate(req,res){
   const performance=String(req.body?.performance||'').slice(0,5000);
   const recentFood=Array.isArray(req.body?.recentFood)?req.body.recentFood.slice(0,8):[];
   const recentHotIssues=Array.isArray(req.body?.recentHotIssues)?req.body.recentHotIssues.slice(0,20):[];
+  const recentAiTips=Array.isArray(req.body?.recentAiTips)?req.body.recentAiTips.slice(0,12):[];
   const requestedMood=String(req.body?.mood||'RANDOM').trim().toUpperCase();
   const allowedMoods=['RANDOM','HAPPY','LOVE','COMIC','HORROR','FANTASY'];
   const mood=pillar==='AI_PROMPT'&&allowedMoods.includes(requestedMood)?requestedMood:'RANDOM';
@@ -504,11 +603,12 @@ async function actionGenerate(req,res){
     if(pillar==='HOT_ISSUE')research=await researchHotIssues(key,recentHotIssues);
     if(pillar==='FOOD_PICK')research=await researchFood(key,recentFood);
 
-    const out=await generateJson(key,pillarPrompt({pillar,research,feedback,performance,mood}),.88);
+    const out=await generateJson(key,pillarPrompt({pillar,research,feedback,performance,mood,recentAiTips}),.88);
     const raw=out?.candidate||out?.item||out;
     const item=cleanCandidate({...raw,category:pillar},0);
     if(pillar==='AI_PROMPT')item.mood=mood;
     if(!item.body||!item.hook)throw new Error('PILLAR_CONTENT_INVALID');
+    const aiTipSelection=pillar==='AI_TIP'?validateAiTipSelection(out,item,recentAiTips):null;
     if(pillar==='AI_PROMPT'&&(
       item.reply_prompt.length<650||
       !/PRIMARY IDENTITY REFERENCE/i.test(item.reply_prompt)||
@@ -520,12 +620,36 @@ async function actionGenerate(req,res){
       engine:'growth-v5-independent-pillars',
       pillar,
       grounded:pillar==='HOT_ISSUE'||pillar==='FOOD_PICK',
+      ...(aiTipSelection?{selection:aiTipSelection}:{}),
       item
     });
   }catch(e){
     console.error('[PILLAR_GENERATE_FAILED]',JSON.stringify({pillar,message:e?.message||String(e)}));
     return send(res,502,{ok:false,error:'PILLAR_GENERATE_FAILED',detail:e?.message||String(e)});
   }
+}
+
+function aiImageCtaInstruction(){
+  return `FIXED CTA SAFE AREA: A small text-only CTA will be composited after image generation. Do not render, imitate or reserve a box, background plate, ribbon, banner, button, badge or CTA color card for it. HARD COMPOSITION CONSTRAINT: every generated hook, caption and story-text bounding box must end above y=72% of the canvas; no generated text pixel may appear in the lower 28%. The full-width bottom 14% must contain only empty negative space made from the scene's natural background surface or environment. Every person, face, hair, body, hand, clothing, product, food, drink and essential prop must end above that zone; zoom out or reframe to leave a clear empty foreground margin when necessary. No lower-third caption or foreground subject may enter it. Recompose the camera and place all supplied copy in the upper or middle negative space without shortening or deleting it. The footer is subordinate and must never become the visual protagonist.`;
+}
+
+async function applyAiImageCta(buffer){
+  const {default:sharp}=await import('sharp');
+  const rotated=sharp(buffer).rotate();
+  const meta=await rotated.metadata();
+  const width=Number(meta.width)||0,height=Number(meta.height)||0;
+  if(width<200||height<250)throw new Error('AI_IMAGE_CTA_IMAGE_SIZE_INVALID');
+  const footerTop=Math.max(0,Math.floor(height*.84));
+  const stats=await sharp(buffer).rotate().extract({left:0,top:footerTop,width,height:height-footerTop}).greyscale().stats();
+  const lightBackground=Number(stats.channels?.[0]?.mean||0)>145;
+  const scale=Math.min(width*.68/AI_IMAGE_CTA_BOUNDS.width,height*.022/AI_IMAGE_CTA_BOUNDS.height);
+  const renderedWidth=AI_IMAGE_CTA_BOUNDS.width*scale,renderedHeight=AI_IMAGE_CTA_BOUNDS.height*scale;
+  const x=(width-renderedWidth)/2-AI_IMAGE_CTA_BOUNDS.x*scale;
+  const y=height-height*.006-renderedHeight-AI_IMAGE_CTA_BOUNDS.y*scale;
+  const fill=lightBackground?'#111111':'#ffffff';
+  const stroke=lightBackground?'#ffffff':'#000000';
+  const svg=Buffer.from(`<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"><path d="${AI_IMAGE_CTA_PATH}" transform="translate(${x.toFixed(2)} ${y.toFixed(2)}) scale(${scale.toFixed(5)})" fill="${fill}" stroke="${stroke}" stroke-opacity="0.38" stroke-width="${(1/scale).toFixed(3)}" paint-order="stroke"/></svg>`);
+  return sharp(buffer).rotate().composite([{input:svg,left:0,top:0}]).jpeg({quality:92,mozjpeg:true}).toBuffer();
 }
 
 async function aiTipImageDirector(key,candidate,variation){
@@ -580,8 +704,10 @@ JSON만 반환:
     useReference:true,
     prompt:`Create a finished 4:5 portrait Threads information thumbnail, not a photo with a headline pasted on top and not a text-free base image.
 
-EXACT MAIN KOREAN HOOK: "${thumbnailHook}"
-${optionalCopy}
+ EXACT MAIN KOREAN HOOK: "${thumbnailHook}"
+ ${optionalCopy}
+
+${aiImageCtaInstruction()}
 
 Visual direction: ${String(plan?.visual_direction||candidate.image_brief||'').slice(0,1200)}
 Layout direction: ${String(plan?.layout_direction||'').slice(0,800)}
@@ -590,10 +716,10 @@ Color direction: ${String(plan?.color_direction||'').slice(0,500)}
 Source topic: ${candidate.topic}
 Variation: ${variation}
 
-Design the typography and visual scene together as one coherent information thumbnail. The exact main hook must be the largest, strongest, and first-read element, rendered once in one or two short lines with excellent Korean legibility at small mobile-feed size. Secondary elements, when provided, must be clearly smaller and must not compete with or repeat the main hook. Do not invent extra text, paraphrase supplied copy, repeat the same phrase, or fill the canvas with tiny text.
+ Design the typography and visual scene together as one coherent information thumbnail. The exact main hook must be the largest, strongest, and first-read element, rendered once in one or two short lines with excellent Korean legibility at small mobile-feed size. Secondary elements, when provided, must be clearly smaller and must not compete with or repeat the main hook. Do not invent extra text, paraphrase supplied copy, repeat the same phrase, render a bottom CTA, or fill the canvas with tiny text.
 Choose the person, background, props, framing, graphic accents, information hierarchy, and whitespace from the source topic rather than relying on a generic stock-photo layout. Use one immediately understandable visual concept rather than generic AI robots, neon circuitry, hologram brains, or fake app UI. If a person improves comprehension, use the attached Character Master as the same adult Korean woman, VOA, with context-appropriate styling and a natural expression.
 Vary palette and art direction according to the content. Do not default to a fixed black-and-yellow palette or reuse one rigid template. Maintain strong readable contrast without automatically adding black bars, yellow boxes, blur bands, generic gradient headers, logos, or watermarks.
-The image generation model must directly render the complete text hierarchy and visual design in one final image. No later Canvas typography, pasted headline, or overlay step will be used.`
+ The image generation model must directly render the complete story text hierarchy and visual design in one final image. No later Canvas typography, pasted headline, or story-text overlay is used; only the fixed text-only CTA footer is composited afterward.`
   };
 }
 
@@ -652,11 +778,12 @@ Faithfully reproduce the SOURCE IMAGE PROMPT below as the core visual result. Pr
 SOURCE IMAGE PROMPT:
 ${safeSourcePrompt}
 
-EXACT KOREAN HOOK: "${thumbnailHook}"
-Render this hook exactly once in one or two short lines as a large, bold, high-contrast editorial headline that is immediately readable in a small Threads feed. Place it only within authentic negative space inside the photograph. Never place any text over VOA's face, hair, head, body, clothing, or the scene's essential focal subject. Reposition VOA or adjust the camera composition before generation when necessary to secure clean space. You may emphasize one key word with a different color or size and use a natural shadow or outline for legibility, but never use a rectangular panel, card, or text box behind it.
-Do not paraphrase, translate, duplicate, or repeat the hook. Do not add a subtitle, explanation, extra copy, logo, watermark, or any other text.
+ EXACT KOREAN HOOK: "${thumbnailHook}"
+ Render this hook exactly once in one or two short lines as a large, bold, high-contrast editorial headline that is immediately readable in a small Threads feed. Place it only within authentic negative space inside the photograph. Never place any text over VOA's face, hair, head, body, clothing, or the scene's essential focal subject. Reposition VOA or adjust the camera composition before generation when necessary to secure clean space. You may emphasize one key word with a different color or size and use a natural shadow or outline for legibility, but never use a rectangular panel, card, or text box behind it.
+${aiImageCtaInstruction()}
+ Do not paraphrase, translate, duplicate, or repeat the hook. Do not add a subtitle, explanation, extra copy, bottom CTA, logo, watermark, or any other text.
 Choose VOA placement, hook placement, camera framing, type scale, emphasis, colors, and editorial art direction from this specific source prompt's spatial structure. Do not default to VOA on the right and text on the left, and do not repeat a fixed position, color scheme, type size, or template across images. Variation must stay natural rather than becoming needlessly complex.
-The image generation model must design the prompt-faithful photograph, VOA, its natural negative space, and the hook typography together as one finished image from the start. Preserve the photograph's realism and appeal above decorative graphics. No Canvas, pasted headline, or later overlay step will be used.
+ The image generation model must design the prompt-faithful photograph, VOA, its natural negative space, and the hook typography together as one finished image from the start. Preserve the photograph's realism and appeal above decorative graphics. No Canvas, pasted headline, or later hook/story overlay is used; only the fixed text-only CTA footer is composited afterward.
 Variation: ${variation}`
   };
 }
@@ -803,10 +930,16 @@ async function actionImage(req,res){
       }));
       throw new Error('GEMINI_IMAGE_MISSING');
     }
+    const aiPromptImage=['AI_TIP','AI_PROMPT'].includes(candidate.category);
+    const outputBuffer=aiPromptImage
+      ?await applyAiImageCta(Buffer.from(img.data,'base64'))
+      :null;
 
     return send(res,200,{
       ok:true,
-      ...img,
+      ...(outputBuffer
+        ?{data:outputBuffer.toString('base64'),mime_type:'image/jpeg'}
+        :img),
       director_prompt:prompt,
       thumbnail_hook:imagePlan.thumbnailHook||null,
       complete_thumbnail:['AI_TIP','AI_PROMPT'].includes(candidate.category)
@@ -896,8 +1029,10 @@ async function actionVariant(req,res){
 본문은 자연스러운 한국어 반말로 작성하고 딱딱한 기사체·보도자료체·존댓말을 피한다.
 짧은 문장과 줄바꿈을 활용하고 이모지는 보통 1~3개만 자연스럽게 사용한다.
 사건사고·재난·피해자가 있는 내용은 장난스럽게 표현하지 않는다.
-AI_TIP이면 짧은 전문 용어 + 영어 한 줄 명령어가 필수.
+AI_TIP이면 현실 문제·손해·귀찮음·실수 같은 인간의 관심사를 먼저 보여주고, AI 기능 소개나 이미지 생성 놀이로 흐르지 않는다. 본문에는 사용자가 넣을 자료, 실제 요청 방식, 얻을 결과가 구체적으로 보여야 한다.
 AI_PROMPT와 AI_TIP은 body에는 한국어 설명만 쓰고 reply_prompt에는 실제 복붙용 프롬프트만 쓴다. 둘을 절대 섞지 않는다.
+AI_TIP reply_prompt는 한국어로 "역할:", "입력 자료:", "목표:", "분석 절차:", "출력 형식:", "주의사항:"을 모두 포함한 완성형 실용 프롬프트로 쓴다.
+AI_PROMPT와 AI_TIP의 body에는 프롬프트 제공, 첫 댓글, 댓글 작성, DM 전송을 안내하거나 유도하는 CTA를 넣지 않는다.
 FOOD_PICK이면 기존 검증된 식당/메뉴 사실을 바꾸거나 지어내지 말 것.
 HOT_ISSUE이면 source_notes의 사실 범위를 넘지 말 것.
 hook 6~10자 우선 최대 14자.
@@ -906,7 +1041,7 @@ hook 6~10자 우선 최대 14자.
 기존:${JSON.stringify(x).slice(0,6000)}
 
 JSON만:
-{"hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reply_prompt":"AI_PROMPT는 상세 영문 이미지 프롬프트, AI_TIP은 짧은 영문 명령형 프롬프트","reason":"...","image_brief":"..."}`;
+{"hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reply_prompt":"AI_PROMPT는 상세 영문 이미지 프롬프트, AI_TIP은 여섯 필수 항목을 갖춘 한국어 실용 프롬프트","reason":"...","image_brief":"..."}`;
 
   try{
     const v=await generateJson(key,prompt,1);
@@ -919,7 +1054,7 @@ JSON만:
         hook_candidates:Array.isArray(v.hook_candidates)
           ?v.hook_candidates.slice(0,5)
           :x.hook_candidates,
-        body:String(v.body||x.body).slice(0,500),
+        body:withoutGeneratedPromptCta(v.body||x.body,x.category).slice(0,500),
         reply_prompt:['AI_PROMPT','AI_TIP'].includes(x.category)?String(v.reply_prompt||x.reply_prompt||'').trim():'',
         reason:String(v.reason||x.reason).slice(0,180),
         image_brief:String(v.image_brief||x.image_brief).slice(0,1200)
@@ -973,6 +1108,88 @@ function instagramSource(candidate={}){
   };
 }
 
+const AI_TIP_SCENE_FIELDS=['setting','subjects','action','props','camera','lighting','negative_space'];
+
+const AI_TIP_VISUAL_TEXT_RISK_RULES=[
+  {
+    id:'OBJECT_SHOWING_LANGUAGE',
+    pattern:/\b(?:document|contract|paperwork|paper|form|screen|phone screen|interface|dashboard|sign|note)\s+(?:showing|displaying|containing|featuring)\s+(?:the\s+)?(?:words?|text|phrase|sentence|message|caption|headline|subtitle|label|copy)\b/i
+  },
+  {
+    id:'VISIBLE_COPY_SAYING_OR_READING',
+    pattern:/\b(?:phone screen|screen|caption|label|headline|subtitle|speech bubble|sign|note)\s+(?:is\s+)?(?:saying|reading)\b/i
+  },
+  {
+    id:'READABLE_LANGUAGE_CONTENT',
+    pattern:/\b(?:document|contract|paperwork|paper|form|screen|phone screen|interface|dashboard)?\s*(?:with\s+)?readable\s+(?:clause\s+)?(?:text|words?|copy|caption|headline|message|sentence|language|content)\b/i
+  },
+  {
+    id:'EXPLICIT_WRITTEN_COPY',
+    pattern:/\b(?:words?|text|phrase|sentence|message|caption|headline|subtitle|label|copy)\s+(?:written|printed|displayed|shown|reading|saying)\b/i
+  }
+];
+
+function findAiTipVisualTextRisk(value){
+  for(const rule of AI_TIP_VISUAL_TEXT_RISK_RULES){
+    const match=String(value||'').match(rule.pattern);
+    if(match)return {rule:rule.id,token:match[0]};
+  }
+  return null;
+}
+
+function normalizeAiTipVisualScene(input,storyNumber){
+  const scene={};
+  for(const field of AI_TIP_SCENE_FIELDS){
+    const value=String(input?.[field]||'').replace(/\s+/g,' ').trim().slice(0,360);
+    if(!value)throw new Error(`AI_TIP_VISUAL_SCENE_${field.toUpperCase()}_REQUIRED`);
+    scene[field]=value;
+  }
+  for(const field of AI_TIP_SCENE_FIELDS){
+    const risk=findAiTipVisualTextRisk(scene[field]);
+    if(!risk)continue;
+    const diagnostic={
+      story_number:Number(storyNumber)||null,
+      field,
+      props:scene.props,
+      matched_rule:risk.rule,
+      matched_token:risk.token
+    };
+    console.warn('[AI_TIP_VISUAL_SCENE_TEXT_RISK]',JSON.stringify(diagnostic));
+    const error=new Error(`AI_TIP_VISUAL_SCENE_TEXT_RISK_${field.toUpperCase()}`);
+    error.aiTipVisualSceneDiagnostic=diagnostic;
+    throw error;
+  }
+  return scene;
+}
+
+function minimizeAiTipTextBearingSurfaces(scene){
+  const source={...scene};
+  const parts=String(source.props||'').split(/\s*[,;]\s*/).filter(Boolean);
+  const hasDocumentSurface=parts.some(part=>/\b(?:contract|agreement|legal document|document|paperwork|papers?|form)\b/i.test(part));
+  const hasScreenSurface=parts.some(part=>/\b(?:smartphone|phone|screen|monitor|laptop|dashboard|interface)\b/i.test(part));
+  if(!hasDocumentSurface&&!hasScreenSurface)return source;
+
+  source.props=parts.map(part=>{
+    if(/\b(?:contract|agreement|legal document|document|paperwork|papers?|form)\b/i.test(part)){
+      if(/\b(?:folder|envelope|folded|clipped|bundle|stack|edge-view|edges?)\b/i.test(part))return part;
+      if(/\b(?:contract|agreement|legal document)\b/i.test(part)){
+        return 'an angled clipped folder holding partially folded administrative sheets with only layered paper edges visible, every cover, header, and flat page face hidden';
+      }
+      return 'an oblique bundle of partially obscured administrative sheets with only cropped edges visible and abstract geometric markers on the clip';
+    }
+    if(/\b(?:smartphone|phone|screen|monitor|laptop|dashboard|interface)\b/i.test(part)){
+      return 'a steep three-quarter-angle smartphone with a solid-color display containing only one oversized non-linguistic geometric symbol and no interface chrome';
+    }
+    return part;
+  }).join(', ');
+
+  const cameraRules=[];
+  if(hasDocumentSurface)cameraRules.push('crop every document cover, header area, and flat page face outside the frame or hide it behind the folder, hands, or clip');
+  if(hasScreenSurface)cameraRules.push('keep every electronic display steeply oblique and show only large abstract shapes without rows, controls, status bars, numbers, or glyph-like marks');
+  source.camera=`${source.camera}; ${cameraRules.join('; ')}`.slice(0,700);
+  return source;
+}
+
 function normalizeInstagramPlan(raw,source){
   const slides=(Array.isArray(raw?.slides)?raw.slides:[]).slice(0,5).map((slide,index)=>{
     const lines=String(slide?.message||'').split(/\r?\n|\\n/).map(v=>v.replace(/\s+/g,' ').trim()).filter(Boolean);
@@ -985,7 +1202,8 @@ function normalizeInstagramPlan(raw,source){
       role:index===0?'HOOK':String(slide?.role||'').trim().slice(0,80),
       message,
       visual:String(slide?.visual||'').trim().slice(0,900),
-      composition:String(slide?.composition||'').trim().slice(0,700)
+      composition:String(slide?.composition||'').trim().slice(0,700),
+      ...(source.category==='AI_TIP'?{scene:minimizeAiTipTextBearingSurfaces(normalizeAiTipVisualScene(slide?.scene,index+1))}:{})
     };
   }).filter(slide=>slide.message&&slide.visual&&slide.composition);
   if(slides.length<2||slides.length>5)throw new Error('INSTAGRAM_CAROUSEL_SLIDE_COUNT_INVALID');
@@ -1004,11 +1222,8 @@ function normalizeInstagramPlan(raw,source){
   const allCopy=`${slides.map(slide=>slide.message).join(' ')} ${caption}`;
   const aiCategory=source.category==='AI_TIP'||source.category==='AI_PROMPT';
   if(aiCategory){
-    if(!/저요/.test(caption)||!/DM/i.test(caption)){
-      throw new Error('INSTAGRAM_CAROUSEL_COMMENT_CTA_MISSING');
-    }
-    if(/첫\s*댓글|고정\s*댓글|댓글에\s*프롬프트|댓글에서\s*복사/i.test(allCopy)){
-      throw new Error('INSTAGRAM_CAROUSEL_LEGACY_CTA_FORBIDDEN');
+    if(/저요|DM|첫\s*댓글|고정\s*댓글|댓글.{0,20}프롬프트|프롬프트.{0,20}댓글/i.test(allCopy)){
+      throw new Error('INSTAGRAM_STORY_BODY_CTA_FORBIDDEN');
     }
     const promptPrefix=source.reply_prompt.replace(/\s+/g,' ').trim().slice(0,60);
     if(promptPrefix.length>=20&&allCopy.replace(/\s+/g,' ').includes(promptPrefix)){
@@ -1037,9 +1252,72 @@ function normalizeInstagramPlan(raw,source){
   };
 }
 
+const AI_TIP_STORY_MAX_LINES=2;
+const AI_TIP_STORY_MAX_LINE_CHARS=11;
+const AI_TIP_STORY_MAX_TOTAL_CHARS=22;
+
+function aiTipStoryLines(message){
+  return String(message||'').split(/\r?\n|\\n/).map(value=>value.replace(/\s+/g,' ').trim()).filter(Boolean);
+}
+
+function aiTipStoryMessageIsCompact(message){
+  const lines=aiTipStoryLines(message);
+  return lines.length>0&&
+    lines.length<=AI_TIP_STORY_MAX_LINES&&
+    lines.every(line=>[...line].length<=AI_TIP_STORY_MAX_LINE_CHARS)&&
+    [...lines.join('').replace(/\s/g,'')].length<=AI_TIP_STORY_MAX_TOTAL_CHARS;
+}
+
+function assertCompactAiTipStory(plan){
+  if(!plan?.slides?.every(slide=>aiTipStoryMessageIsCompact(slide.message))){
+    throw new Error('AI_TIP_STORY_TEXT_NOT_COMPACT');
+  }
+}
+
+async function compactAiTipStoryPlan(key,plan,source){
+  const targets=plan.slides.filter(slide=>!aiTipStoryMessageIsCompact(slide.message));
+  if(!targets.length){assertCompactAiTipStory(plan);return plan}
+  const originalByNumber=new Map(targets.map(slide=>[slide.number,slide.message]));
+  const raw=await generateJson(key,`AI_TIP 이미지 Story의 긴 문구만 이미지용 핵심 구절로 압축해.
+본문이나 Story를 다시 쓰는 작업이 아니다. 원문의 핵심 의미를 보존하고 조사·수식어·설명 문장을 제거한다. 새로운 주장, 사실, 숫자, 결과를 추가하지 않는다. 자세한 설명은 본문에 남기고 이미지에서 즉시 읽어야 할 단어만 남긴다.
+
+보수적 패널 제한:
+- 정확히 1~2줄
+- 각 줄은 공백과 문장부호를 포함해 최대 ${AI_TIP_STORY_MAX_LINE_CHARS}자
+- 전체 문자는 줄바꿈·공백 제외 최대 ${AI_TIP_STORY_MAX_TOTAL_CHARS}자
+- 짧은 단어와 강한 핵심 구절 우선
+- 제목+부제 구조, 완전한 설명문, CTA 금지
+- 줄바꿈은 \\n 하나만 사용
+
+원본 콘텐츠 주제: ${source.topic}
+원본 Story 문구:
+${targets.map(slide=>`${slide.number}. ${JSON.stringify(slide.message)}`).join('\n')}
+
+JSON만 반환:
+{"items":[{"number":1,"message":"짧은 1줄 또는\\n짧은 2줄"}]}`,.35);
+  const items=Array.isArray(raw?.items)?raw.items:[];
+  const replacements=new Map(items.map(item=>[Number(item?.number),aiTipStoryLines(item?.message).join('\n')]));
+  const slides=plan.slides.map(slide=>{
+    if(!originalByNumber.has(slide.number))return slide;
+    const message=replacements.get(slide.number)||'';
+    if(!aiTipStoryMessageIsCompact(message))throw new Error(`AI_TIP_STORY_COMPRESSION_INVALID_${slide.number}`);
+    if(aiTipSimilarity(message,originalByNumber.get(slide.number))<.16)throw new Error(`AI_TIP_STORY_COMPRESSION_MEANING_DRIFT_${slide.number}`);
+    return {...slide,message};
+  });
+  const compact={...plan,slides};
+  assertCompactAiTipStory(compact);
+  const seen=new Set();
+  for(const slide of compact.slides){
+    const normalized=slide.message.replace(/[\s\p{P}\p{S}]/gu,'').toLocaleLowerCase('ko-KR');
+    if(!normalized||seen.has(normalized))throw new Error('AI_TIP_STORY_COMPRESSION_DUPLICATE');
+    seen.add(normalized);
+  }
+  return compact;
+}
+
 function instagramCarouselRules(category){
-  if(category==='AI_TIP')return `AI_TIP은 추상적인 AI 회로나 카드뉴스 요약 대신 개념을 직관적으로 체감시키는 실제 장면의 연속으로 만든다. 첫 장은 낯선 반전·질문으로 멈추게 하고, 뒤 장은 문제→발견→적용처럼 조금씩 의미를 공개한다. 마지막 장 또는 caption에는 프롬프트가 필요하면 댓글에 "저요"를 남겨 달라는 DM CTA를 자연스럽게 넣되 실제 프롬프트 전문, 첫 댓글·고정 댓글·댓글 복사 안내는 넣지 않는다.`;
-  if(category==='AI_PROMPT')return `AI_PROMPT는 하나의 reply_prompt로 만든 고품질 VOA 화보 스토리다. master_scene에 동일 인물·정체성·장소/시간대·의상 또는 의도된 연속 의상·주요 소품·색감·촬영 세계관을 구체적으로 고정한다. 각 slide는 MASTER SCENE을 반복 설명하는 독립 프롬프트가 아니라 establishing/full-body, medium lifestyle, environment interaction, strong facial editorial portrait 등 서로 다른 SHOT 역할만 바꾼다. 같은 포즈와 구도 반복은 금지한다. VOA 얼굴과 양쪽 눈은 모든 장에서 선명하고 완전히 보여야 하며 sunglasses, goggles, masks, veils, hands, hair, props, deep hat shadows, dramatic shadows, foreground objects로 가리지 않는다. source reply_prompt와 충돌하면 Identity Lock이 우선한다. 마지막 장 또는 caption에는 프롬프트가 필요하면 댓글에 "저요"를 남겨 달라는 DM CTA를 자연스럽게 넣되 실제 reply_prompt 전문은 넣지 않는다.`;
+  if(category==='AI_TIP')return `AI_TIP은 추상적인 AI 회로나 카드뉴스 요약 대신 개념을 직관적으로 체감시키는 실제 장면의 연속으로 만든다. 첫 장은 낯선 반전·질문으로 멈추게 하고, 뒤 장은 문제→발견→적용처럼 조금씩 의미를 공개한다. 각 slide message는 좁은 이미지 패널에서도 자동 줄바꿈되지 않도록 1~2줄, 줄마다 공백·문장부호 포함 최대 ${AI_TIP_STORY_MAX_LINE_CHARS}자, 전체 공백 제외 최대 ${AI_TIP_STORY_MAX_TOTAL_CHARS}자로 쓴다. 설명 문장보다 짧은 핵심 구절을 우선하고 자세한 내용은 본문에 맡긴다. 각 slide.scene은 이미지에 글자로 쓰일 설명이 아니라 비언어 장면 데이터다. 반드시 영어로 setting, subjects, action, props, camera, lighting, negative_space를 모두 작성한다. action은 인물의 물리적 행동만, props는 사물·색·추상 도형만 기술한다. 문구, 분석 결과, 요청 내용, 요약, 화면 글자, UI 라벨처럼 읽을 수 있는 언어 개념은 scene에 넣지 않는다. 문서가 꼭 필요하면 정면 계약서·표지·제목 영역이나 평평하게 펼친 한 장을 쓰지 말고, 비스듬한 닫힌 폴더·봉투·클립된 묶음·접힌 종이 모서리처럼 페이지 표면이 보이지 않는 물체로 표현한다. 화면이 꼭 필요하면 정면 UI 대신 비스듬한 단색 화면에 큰 경고 삼각형·원·체크·화살표 같은 비언어 도형 하나만 둔다. 문서·화면의 평평한 표면과 제목 영역은 손, 클립, 폴더 또는 프레임 밖 크롭으로 가린다. slide message와 caption은 순수 콘텐츠만 쓰며 프롬프트 제공, 댓글 작성, 첫 댓글, DM 전송 CTA를 만들지 않는다.`;
+  if(category==='AI_PROMPT')return `AI_PROMPT는 하나의 reply_prompt로 만든 고품질 VOA 화보 스토리다. master_scene에 동일 인물·정체성·장소/시간대·의상 또는 의도된 연속 의상·주요 소품·색감·촬영 세계관을 구체적으로 고정한다. 각 slide는 MASTER SCENE을 반복 설명하는 독립 프롬프트가 아니라 establishing/full-body, medium lifestyle, environment interaction, strong facial editorial portrait 등 서로 다른 SHOT 역할만 바꾼다. 같은 포즈와 구도 반복은 금지한다. VOA 얼굴과 양쪽 눈은 모든 장에서 선명하고 완전히 보여야 하며 sunglasses, goggles, masks, veils, hands, hair, props, deep hat shadows, dramatic shadows, foreground objects로 가리지 않는다. source reply_prompt와 충돌하면 Identity Lock이 우선한다. slide message와 caption은 순수 콘텐츠만 쓰며 프롬프트 제공, 댓글 작성, 첫 댓글, DM 전송 CTA를 만들지 않는다.`;
   if(category==='FOOD_PICK')return `FOOD는 음식의 질감, 조리 과정, 김·불·소스와 먹는 순간을 서로 다른 실제 장면으로 보여주는 식욕 스토리다. 첫 장은 메뉴를 다 설명하기보다 맛의 단서로 궁금증을 만들고, 뒤 장에서 음식의 정체와 장소·메뉴 핵심을 조금씩 공개한다. 확인된 정보만 사용하며 같은 완성 접시 사진을 반복하지 않는다. "저요", 프롬프트, DM CTA는 절대 넣지 않는다.`;
   return `HOT_ISSUE는 단순 로고 포스터나 본문 요약 카드가 아니라 사건·기업·산업을 상징하는 강한 서로 다른 장면으로 전개한다. 첫 장은 사실을 훼손하지 않는 비유·질문·반전으로 멈추게 하고, 뒤 장에서 무슨 일→왜 중요한지→핵심 의미를 점진적으로 공개한다. source_notes 밖의 숫자·발언·사건, 실제 인물에 대한 근거 없는 주장은 만들지 않는다. "저요", 프롬프트, DM CTA는 절대 넣지 않는다.`;
 }
@@ -1072,21 +1350,37 @@ ${instagramCarouselRules(source.category)}
 - 텍스트에는 반투명 패널, 단색 카드, 자연스러운 그라데이션, negative space, editorial caption area 중 장면에 맞는 하나의 읽기 쉬운 영역을 정한다. 비주얼이 주인공이어야 하며 화면 전체를 거대한 텍스트 카드로 만들지 않는다.
 - 이미지 생성 AI가 텍스트까지 직접 디자인할 것이므로 Canvas, 후합성, 별도 Hook 합성은 없다.
 - Instagram caption은 Threads 본문 복사가 아닌 별도 문장으로 쓴다. 첫 1~2줄은 강하게, 이미지 설명을 장황하게 반복하지 않고 과도한 CTA·광고 말투를 피한다.
-- AI_TIP과 AI_PROMPT caption에는 실제 reply_prompt 전문을 절대 넣지 않는다. 콘텐츠 설명 뒤에 프롬프트가 필요한 사람은 댓글에 "저요"를 남기면 DM으로 무료 전달한다는 CTA를 자연스럽게 넣는다. 첫 댓글·고정 댓글·댓글 복사 안내는 금지한다.
+- AI_TIP과 AI_PROMPT caption에는 실제 reply_prompt 전문과 프롬프트 제공, 댓글 작성, 첫 댓글, DM 전송 CTA를 절대 넣지 않는다. 순수 콘텐츠 문장으로 끝낸다.
 - FOOD_PICK과 HOT_ISSUE에는 "저요", 프롬프트, DM CTA를 넣지 않고 콘텐츠 성격에 맞게 마무리한다.
 - HOT_ISSUE와 FOOD는 제공된 사실 밖의 내용을 만들지 않는다.
 
 JSON만 반환:
-{"visual_concept":"...","master_scene":"시리즈에서 고정할 인물·장소·시간·의상·소품·색감·촬영 세계관","color_palette":"...","art_direction":"타이포그래피·가독성 영역·graphic language 포함","character_direction":"...","caption":"...","slides":[{"role":"첫 장은 HOOK, 이후 장별 정보 공개 역할","message":"이미지에 정확히 한 번 표시할 최종 문구, 줄바꿈은 \\n","visual":"이 장의 실제 장면","composition":"카메라·피사체·텍스트 안전 영역"}]}`,.72);
-    return send(res,200,{ok:true,plan:normalizeInstagramPlan(raw,source)});
+{"visual_concept":"...","master_scene":"시리즈에서 고정할 인물·장소·시간·의상·소품·색감·촬영 세계관","color_palette":"...","art_direction":"타이포그래피·가독성 영역·graphic language 포함","character_direction":"...","caption":"...","slides":[{"role":"첫 장은 HOOK, 이후 장별 정보 공개 역할","message":"이미지에 정확히 한 번 표시할 최종 문구, 줄바꿈은 \\n","visual":"이 장의 실제 장면","composition":"카메라·피사체·텍스트 안전 영역","scene":{"setting":"nonverbal setting in English","subjects":"physical subjects only","action":"physical action only","props":"objects and abstract non-linguistic symbols only; use folders, envelopes, cropped paper edges, oblique solid-color screens instead of exposed text-bearing surfaces","camera":"camera framing that crops or occludes all document headers and frontal screens","lighting":"lighting only","negative_space":"empty placement area only"}}]}`,.72);
+    let plan=normalizeInstagramPlan(raw,source);
+    if(source.category==='AI_TIP')plan=await compactAiTipStoryPlan(key,plan,source);
+    return send(res,200,{ok:true,plan});
   }catch(e){
-    console.error('[INSTAGRAM_CAROUSEL_PREPARE_FAILED]',JSON.stringify({message:e?.message||String(e)}));
-    return send(res,502,{ok:false,error:'INSTAGRAM_CAROUSEL_PREPARE_FAILED',detail:e?.message||String(e)});
+    const diagnostic=e?.aiTipVisualSceneDiagnostic||null;
+    console.error('[INSTAGRAM_CAROUSEL_PREPARE_FAILED]',JSON.stringify({message:e?.message||String(e),...(diagnostic?{diagnostic}:{})}));
+    return send(res,502,{ok:false,error:'INSTAGRAM_CAROUSEL_PREPARE_FAILED',detail:e?.message||String(e),...(diagnostic?{diagnostic}:{})});
   }
 }
 
 function instagramCarouselImagePrompt(source,plan,slide,variation){
   const safeReplyPrompt=identitySafePrompt(source.reply_prompt);
+  const fixedCta=source.category==='AI_TIP'||source.category==='AI_PROMPT'?aiImageCtaInstruction():'';
+  if(source.category==='AI_TIP'){
+    const scene=minimizeAiTipTextBearingSurfaces(normalizeAiTipVisualScene(slide?.scene,slide?.number));
+    return `Create one finished 4:5 portrait editorial image for an AI_TIP visual story. Keep the established palette (${plan.color_palette}) and a coherent premium realistic style across the series while making this physical scene distinct. Variation ${variation}.
+
+Build a purely nonverbal scene in ${scene.setting}. Show ${scene.subjects} physically ${scene.action}. Include only these visual props and non-linguistic symbols: ${scene.props}. Use ${scene.camera}, with ${scene.lighting}. Preserve ${scene.negative_space} as clean breathing room for the confirmed headline. Every detail in this paragraph is visual direction only and must be depicted through people, objects, posture, color, light, and composition—not written language.
+
+The one and only readable story phrase permitted anywhere in the generated image is exactly ${JSON.stringify(slide.message)}. Preserve its authored newline, render it exactly once without quotation marks, and keep both short lines large and immediately readable. Give the phrase at least 55% of the canvas width so neither line wraps again. Do not rewrite, expand, explain, translate, duplicate, prefix, or suffix it.
+
+Never render prompt labels or production notes such as MASTER SCENE, SLIDE, DISPLAY TEXT, ROLE, HOOK, VARIATION, caption, image prompt, or numbering. Do not render any other readable letters or words on documents, contracts, screens, phones, signs, labels, stamps, interfaces, or props; represent their contents only as abstract illegible marks and visual symbols. Do not add subtitles, explanatory copy, logos, watermarks, fake UI copy, or extra facts.
+
+If a person is useful, use the attached Character Master as the same adult Korean woman VOA; otherwise do not force a person into the scene. Keep all typography fully outside faces, bodies, and essential subjects with visible breathing room. ${aiImageCtaInstruction()} The fixed CTA is added afterward and must not be rendered now. Design the scene and the exact two-line phrase together in this single generation pass.`;
+  }
   const aiPromptRule=source.category==='AI_PROMPT'
     ?`Use the attached reference image as the PRIMARY IDENTITY REFERENCE. Preserve the exact identity of that person throughout every slide: the same facial structure, proportions, eyes, nose, lips, jawline, skin characteristics, apparent age and recognizable identity. Do not reinterpret, replace, beautify, randomize, blend or generate a different person. Every human protagonist is VOA, the exact same person across the full carousel; only pose, gaze, framing and camera distance may vary. Keep the face and eyes fully visible and unobstructed. Never use sunglasses, goggles, masks, veils, face-covering hats, hands, hair, props or heavy shadows over the eyes or face. Remove any conflicting face-obscuring instruction from SOURCE REPLY_PROMPT and preserve its era or styling through non-face elements. Identity Lock overrides the source prompt. Faithfully apply the remaining world, wardrobe, location, lighting, camera and mood. IDENTITY-SAFE SOURCE REPLY_PROMPT: ${safeReplyPrompt}`
     :'If a person is useful, use the attached Character Master as the same adult Korean woman VOA; otherwise do not force a person into the scene.';
@@ -1111,9 +1405,10 @@ VARIATION: ${variation}
 
 ${aiPromptRule}
 ${factRule}
+${fixedCta}
 
-Continue the same coherent MASTER SCENE, palette, subject identity, typography family, text treatment, contrast and editorial mood as the series, while making this slide's actual scene, camera framing and composition visibly distinct. The visual scene is the protagonist; the short text only creates curiosity. Render the supplied DISPLAY TEXT exactly once. Never duplicate the headline, never repeat a caption, never add explanatory text, invented secondary copy, labels, logos, watermarks, fake UI, slide numbers or extra facts. Do not paraphrase or extend DISPLAY TEXT. Its authored line count is final and must never exceed three lines.
-Give DISPLAY TEXT one deliberate readable area chosen for this scene: authentic negative space, a restrained translucent panel, a compact solid editorial card, or a natural gradient field. Do not turn the full image into a giant text card. Reserve a generous no-text safety zone around every face, body and essential food/product/event subject. Typography and its readability treatment must remain fully outside those silhouettes with visible breathing room. Reposition the subject or camera to create the space; never cover the subject. Design the scene and its exact text together in the first generation pass. No Canvas, pasted headline or later overlay is used.`;
+Continue the same coherent MASTER SCENE, palette, subject identity, typography family, text treatment, contrast and editorial mood as the series, while making this slide's actual scene, camera framing and composition visibly distinct. The visual scene is the protagonist; the short text only creates curiosity. Render the supplied DISPLAY TEXT exactly once. Never duplicate the headline, never repeat a caption, never add explanatory text, invented secondary copy, labels, logos, watermarks, fake UI, slide numbers, bottom CTA or extra facts. The fixed CTA is composited later and must not be rendered by the image model. Do not paraphrase or extend DISPLAY TEXT. Its authored line count is final and must never exceed three lines.
+Give DISPLAY TEXT one deliberate readable area chosen for this scene: authentic negative space, a restrained translucent panel, a compact solid editorial card, or a natural gradient field. Keep every pixel of DISPLAY TEXT above the strict bottom 14% CTA exclusion zone; a lower-third caption or baseline inside that zone is forbidden. Do not turn the full image into a giant text card. Reserve a generous no-text safety zone around every face, body and essential food/product/event subject. Typography and its readability treatment must remain fully outside those silhouettes with visible breathing room. Reposition the subject or camera to create the space; never cover the subject. Design the scene and its exact text together in the first generation pass. No Canvas, pasted headline or later story-text overlay is used; only the fixed text-only CTA footer is composited afterward.`;
 }
 
 async function actionInstagramCarouselImage(req,res){
@@ -1126,6 +1421,10 @@ async function actionInstagramCarouselImage(req,res){
   if(!source||!plan||!slide)return send(res,400,{ok:false,error:'INSTAGRAM_CAROUSEL_IMAGE_INPUT_REQUIRED'});
   if(!Number.isInteger(slide.number)||slide.number<1||slide.number>5){
     return send(res,400,{ok:false,error:'INSTAGRAM_CAROUSEL_SLIDE_INVALID'});
+  }
+  if(source.category==='AI_TIP'){
+    try{assertCompactAiTipStory({slides:[slide]})}
+    catch(e){return send(res,400,{ok:false,error:'AI_TIP_STORY_TEXT_NOT_COMPACT',detail:e?.message||String(e)})}
   }
   try{
     let referenceImage=null;
@@ -1141,11 +1440,13 @@ async function actionInstagramCarouselImage(req,res){
     });
     const image=extractInlineImage(generated);
     if(!image)throw new Error('GEMINI_IMAGE_MISSING');
-    const {default:sharp}=await import('sharp');
-    const jpeg=await sharp(Buffer.from(image.data,'base64'))
-      .rotate()
-      .jpeg({quality:92,mozjpeg:true})
-      .toBuffer();
+    const sourceBuffer=Buffer.from(image.data,'base64');
+    let jpeg;
+    if(source.category==='AI_TIP'||source.category==='AI_PROMPT')jpeg=await applyAiImageCta(sourceBuffer);
+    else{
+      const {default:sharp}=await import('sharp');
+      jpeg=await sharp(sourceBuffer).rotate().jpeg({quality:92,mozjpeg:true}).toBuffer();
+    }
     if(jpeg.length>4_000_000)throw new Error('INSTAGRAM_CAROUSEL_IMAGE_TOO_LARGE');
     const id=String(req.body?.candidate_id||source.category)
       .replace(/[^a-zA-Z0-9_-]/g,'').slice(0,60)||source.category;
