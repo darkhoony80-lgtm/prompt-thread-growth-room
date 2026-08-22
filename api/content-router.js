@@ -462,6 +462,7 @@ async function editorialImageDirector(key,candidate,variation){
 - 본문에 없는 장소, 메뉴, 수치, 사건, 제품 정보는 절대 만들지 않는다.
 - visual_direction은 핵심 음식/사건/제품, 배경, 소품, 카메라 구도를 구체적으로 정한다.
 - layout_direction은 메인 후킹, 보조 정보, 핵심 비주얼의 위치·크기·여백·위계를 정한다.
+- 인물이 등장하면 머리카락부터 얼굴, 목, 몸, 의상, 손까지 인물 전체 실루엣과 그 주변 여백을 글자 금지 영역으로 먼저 확보한다. 모든 텍스트 블록은 이 영역 밖에 완전히 배치한다.
 - design_style과 color_direction은 콘텐츠 성격에 맞게 정하고 고정 템플릿을 반복하지 않는다.
 - ${categoryRule}
 
@@ -514,6 +515,7 @@ Variation: ${variation}
 ${imagePriority}
 
 Render the exact main hook once as the largest, strongest first-read element with excellent Korean legibility in a small mobile feed. Arrange it in one to three compact lines and allow one key word to use a contrasting color or scale. Secondary copy and 2–3 key facts, when supplied, must be much smaller, concise, and clearly subordinate. Do not paraphrase supplied text, repeat a phrase or meaning, invent extra copy, or fill the image with long tiny text.
+HUMAN TEXT-SAFETY RULE: Before rendering any typography or graphic accent, reserve a generous no-text safety zone around the complete silhouette of every person. No letter, number, icon, badge, brush stroke, highlight, caption, or text background may touch or overlap any hair, head, face, neck, shoulder, body, clothing, arm, or hand. Every text block must remain fully outside the person's bounding area with visible breathing room. If the planned copy does not fit, reflow or reduce secondary text, move the text, reposition the person, or widen the camera framing; never solve the conflict by covering the person. The face and body must remain clean, unobstructed, and instantly recognizable.
 Design the hero subject, background, props, framing, typography position, size, color, hierarchy, and whitespace together from the first generation pass. Match the source content rather than repeating one fixed palette or template. Use tasteful editorial accents only when they support hierarchy; do not add logos, watermarks, fake app UI, or unrelated decoration.
 The image generation model must directly render the complete visual and all supplied text as one final thumbnail. No Canvas typography, pasted headline, separate Hook composite, or later overlay step will be used.`;
 }
