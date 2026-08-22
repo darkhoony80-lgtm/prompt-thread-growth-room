@@ -54,7 +54,7 @@ function supabaseConfig(){
     error.status=503;
     throw error;
   }
-  return {baseUrl:url.href.replace(/\/+$/,''),secret};
+  return {baseUrl:url.origin,secret};
 }
 function safeSupabaseError(body,secret=''){
   const source=body&&typeof body==='object'?body:{};
