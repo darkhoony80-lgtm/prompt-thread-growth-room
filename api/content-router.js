@@ -7,6 +7,8 @@ const IMAGE_MODEL='gemini-3.1-flash-image';
 
 const TEXT_URL=`https://generativelanguage.googleapis.com/v1beta/models/${TEXT_MODEL}:generateContent`;
 const IMAGE_URL=`https://generativelanguage.googleapis.com/v1/models/${IMAGE_MODEL}:generateContent`;
+const INSTAGRAM_API='https://graph.instagram.com/v25.0';
+const INSTAGRAM_PROFILE_FIELDS='user_id,username,account_type';
 
 const LABELS={
   AI_PROMPT:'AI 프롬프트',
@@ -17,6 +19,20 @@ const LABELS={
 
 function send(res,status,body){
   return res.status(status).json(body);
+}
+function safeInstagramMetaError(error,token){
+  const code=Number(error?.code)||null;
+  const type=String(error?.type||'').slice(0,80)||null;
+  let message=String(error?.message||'').trim();
+  if(token)message=message.split(token).join('[REDACTED]');
+  message=message
+    .replace(/(access[_\s-]?token\s*[=:]\s*)[^\s,;]+/gi,'$1[REDACTED]')
+    .slice(0,300);
+  return {
+    ...(code?{code}:{}),
+    ...(type?{type}:{}),
+    ...(message?{message}:{})
+  };
 }
 function stripFence(s=''){
   return String(s).replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
@@ -712,15 +728,88 @@ JSON만:
   }
 }
 
+async function actionInstagramStatus(req,res){
+  res.setHeader('Pragma','no-cache');
+  if(req.method!=='GET'){
+    res.setHeader('Allow','GET');
+    return send(res,405,{ok:false,connected:false,error:'METHOD_NOT_ALLOWED'});
+  }
+
+  const token=String(process.env.INSTAGRAM_ACCESS_TOKEN||'').trim();
+  if(!token){
+    return send(res,503,{
+      ok:false,
+      connected:false,
+      error:'INSTAGRAM_ACCESS_TOKEN_NOT_CONFIGURED'
+    });
+  }
+
+  let response;
+  let body;
+  try{
+    const url=new URL(`${INSTAGRAM_API}/me`);
+    url.searchParams.set('fields',INSTAGRAM_PROFILE_FIELDS);
+    response=await fetch(url,{
+      method:'GET',
+      headers:{Accept:'application/json',Authorization:`Bearer ${token}`}
+    });
+    body=await response.json().catch(()=>({}));
+  }catch{
+    return send(res,502,{
+      ok:false,
+      connected:false,
+      error:'INSTAGRAM_API_ERROR',
+      meta:{message:'INSTAGRAM_REQUEST_FAILED'}
+    });
+  }
+
+  if(!response.ok){
+    const metaError=body?.error||{};
+    const authenticationFailed=
+      response.status===401||
+      Number(metaError?.code)===190||
+      String(metaError?.type||'').toLowerCase()==='oauthexception';
+    return send(res,authenticationFailed?401:502,{
+      ok:false,
+      connected:false,
+      error:authenticationFailed?'INSTAGRAM_AUTH_FAILED':'INSTAGRAM_API_ERROR',
+      meta:safeInstagramMetaError(metaError,token)
+    });
+  }
+
+  const id=body?.user_id??body?.id;
+  const username=String(body?.username||'').trim();
+  if(id==null||!username){
+    return send(res,502,{
+      ok:false,
+      connected:false,
+      error:'INSTAGRAM_API_INVALID_RESPONSE'
+    });
+  }
+
+  return send(res,200,{
+    ok:true,
+    connected:true,
+    account:{
+      id:String(id),
+      username,
+      ...(body?.account_type?{account_type:String(body.account_type)}:{})
+    }
+  });
+}
+
 export default async function handler(req,res){
   res.setHeader('Cache-Control','no-store');
+
+  const queryAction=String(req.query?.action||'').trim();
+  if(queryAction==='instagram_status')return actionInstagramStatus(req,res);
 
   if(req.method!=='POST'){
     return send(res,405,{ok:false,error:'METHOD_NOT_ALLOWED'});
   }
 
   const action=String(
-    req.query?.action||
+    queryAction||
     req.body?.action||
     ''
   ).trim();
