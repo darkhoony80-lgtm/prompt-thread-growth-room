@@ -323,7 +323,7 @@ async function actionGenerate(req,res){
 }
 
 async function aiTipImageDirector(key,candidate,variation){
-  const plan=await generateJson(key,`AI 활용 팁 Threads 본문 전체를 분석해서 썸네일 전용 한국어 후킹 문구를 새로 만들어.
+  const plan=await generateJson(key,`AI 활용 팁 Threads 본문 전체를 분석해서 한 장의 완성형 정보 썸네일을 기획해.
 기존 게시물 제목이나 hook 필드는 참고하거나 재사용하지 않는다.
 
 소재: ${candidate.topic}
@@ -331,31 +331,63 @@ async function aiTipImageDirector(key,candidate,variation){
 시각 브리프: ${candidate.image_brief}
 
 규칙:
-- 문구는 6~12자 우선, 최대 14자이며 한눈에 읽혀야 한다.
-- 본문 핵심과 직접 연결되고 답을 전부 말하지 않아 궁금증이 남아야 한다.
-- 문구 자체가 썸네일의 주인공이어야 한다.
+- main_hook은 6~12자 우선, 최대 14자이며 작은 모바일 피드에서도 즉시 읽혀야 한다.
+- main_hook은 본문 핵심과 직접 연결되고 답을 전부 말하지 않아 궁금증이 남아야 한다.
+- main_hook이 가장 크고 강한 시각적 주인공이다.
+- 필요한 경우에만 짧은 topic_label, supporting_copy, callout, key_points 2~3개를 사용한다. 필요 없으면 빈 문자열이나 빈 배열로 둔다.
+- 보조 문구는 본문에서 직접 추출한 정보만 사용하고, main_hook과 같은 문장 또는 같은 의미를 반복하지 않는다.
+- 전체 텍스트 양을 최소화한다. 작은 글씨로 정보를 빽빽하게 채우지 않는다.
 - "미쳤다", "충격", "모르면 손해" 같은 반복적 과장 표현은 쓰지 않는다.
-- 장면은 문구를 이해시키는 하나의 명확한 시각적 은유로 정한다.
+- visual_direction은 본문 주제를 가장 빨리 이해시키는 인물/배경/소품/구도와 시각적 은유를 정한다.
+- layout_direction은 각 텍스트와 비주얼의 위치, 크기, 여백, 위계를 정한다.
+- design_style과 color_direction은 콘텐츠 주제에 맞게 매번 선택한다. 검정+노랑이나 특정 템플릿을 기본값으로 고정하지 않는다.
 
 JSON만 반환:
-{"thumbnail_hook":"...","visual_direction":"..."}`,.75);
-  const thumbnailHook=clampHook(plan?.thumbnail_hook);
+{"main_hook":"...","topic_label":"","supporting_copy":"","callout":"","key_points":[],"visual_direction":"...","layout_direction":"...","design_style":"...","color_direction":"..."}`,.78);
+  const thumbnailHook=clampHook(plan?.main_hook);
   if(!thumbnailHook)throw new Error('AI_TIP_THUMBNAIL_HOOK_EMPTY');
+
+  const seen=new Set([thumbnailHook.replace(/\s+/g,'').toLocaleLowerCase('ko-KR')]);
+  const uniqueText=(value,max)=>{
+    const text=[...String(value||'').replace(/\s+/g,' ').trim()].slice(0,max).join('');
+    const key=text.replace(/\s+/g,'').toLocaleLowerCase('ko-KR');
+    if(!text||seen.has(key))return '';
+    seen.add(key);
+    return text;
+  };
+  const topicLabel=uniqueText(plan?.topic_label,12);
+  const supportingCopy=uniqueText(plan?.supporting_copy,28);
+  const callout=uniqueText(plan?.callout,18);
+  const keyPoints=(Array.isArray(plan?.key_points)?plan.key_points:[])
+    .map(value=>uniqueText(value,20))
+    .filter(Boolean)
+    .slice(0,3);
+  const optionalCopy=[
+    topicLabel&&`Small topic label: "${topicLabel}"`,
+    supportingCopy&&`Supporting copy: "${supportingCopy}"`,
+    callout&&`Callout or speech bubble: "${callout}"`,
+    keyPoints.length&&`Key points: ${keyPoints.map(value=>`"${value}"`).join(' / ')}`
+  ].filter(Boolean).join('\n')||'No secondary text is needed.';
 
   return {
     thumbnailHook,
     useReference:true,
-    prompt:`Create a finished 4:5 portrait Threads thumbnail, not a text-free base image.
+    prompt:`Create a finished 4:5 portrait Threads information thumbnail, not a photo with a headline pasted on top and not a text-free base image.
 
-EXACT KOREAN HEADLINE: "${thumbnailHook}"
+EXACT MAIN KOREAN HOOK: "${thumbnailHook}"
+${optionalCopy}
+
 Visual direction: ${String(plan?.visual_direction||candidate.image_brief||'').slice(0,1200)}
+Layout direction: ${String(plan?.layout_direction||'').slice(0,800)}
+Design style: ${String(plan?.design_style||'').slice(0,500)}
+Color direction: ${String(plan?.color_direction||'').slice(0,500)}
 Source topic: ${candidate.topic}
 Variation: ${variation}
 
-The exact Korean headline is the visual hero. Render it once, accurately and legibly, using bold premium Korean typography, a mobile-readable size, strong natural contrast, and an intentional position integrated into the composition. Keep it to one or two short lines. Do not paraphrase, translate, misspell, duplicate, or add any other text.
-The person, environment, and objects only support the idea behind the headline. Use one immediately understandable scene rather than generic AI robots, neon circuitry, hologram brains, or fake UI. If a person improves comprehension, use the attached Character Master as the same adult Korean woman, VOA, with context-appropriate styling and a natural expression.
-Use a full-bleed premium editorial composition with realistic materials, skin, light, and depth. Do not create a black bar, gradient band, blur band, translucent panel, header box, logo, or watermark. Ensure readability through composition, local contrast, restrained outline, or shadow rather than covering the image with a panel.
-The final output must already contain the complete headline and artwork. No later typography or overlay step will be used.`
+Design the typography and visual scene together as one coherent information thumbnail. The exact main hook must be the largest, strongest, and first-read element, rendered once in one or two short lines with excellent Korean legibility at small mobile-feed size. Secondary elements, when provided, must be clearly smaller and must not compete with or repeat the main hook. Do not invent extra text, paraphrase supplied copy, repeat the same phrase, or fill the canvas with tiny text.
+Choose the person, background, props, framing, graphic accents, information hierarchy, and whitespace from the source topic rather than relying on a generic stock-photo layout. Use one immediately understandable visual concept rather than generic AI robots, neon circuitry, hologram brains, or fake app UI. If a person improves comprehension, use the attached Character Master as the same adult Korean woman, VOA, with context-appropriate styling and a natural expression.
+Vary palette and art direction according to the content. Do not default to a fixed black-and-yellow palette or reuse one rigid template. Maintain strong readable contrast without automatically adding black bars, yellow boxes, blur bands, generic gradient headers, logos, or watermarks.
+The image generation model must directly render the complete text hierarchy and visual design in one final image. No later Canvas typography, pasted headline, or overlay step will be used.`
   };
 }
 
