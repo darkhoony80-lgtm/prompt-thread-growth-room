@@ -1271,15 +1271,11 @@ function normalizeAiTipWebtoonPanel(input,{pageNumber,panelIndex,characterIds}){
   if(!Number.isInteger(characterCount)||characterCount!==characters.length){
     throw new Error(`AI_TIP_PANEL_CHARACTER_COUNT_LOCK_${panelId}`);
   }
-  const dialogue=(Array.isArray(input?.dialogue)?input.dialogue:[]).slice(0,2).map(item=>{
-    const speaker=aiTipWebtoonString(item?.speaker,40).toUpperCase();
-    if(!characters.includes(speaker))throw new Error(`AI_TIP_DIALOGUE_SPEAKER_INVALID_${panelId}`);
-    return {speaker,text:aiTipWebtoonVisibleText(item?.text)};
-  });
-  const narration=aiTipWebtoonStringArray(input?.narration,{maxItems:1,maxLength:80}).map(aiTipWebtoonVisibleText);
-  const soundEffect=aiTipWebtoonStringArray(input?.sound_effect,{maxItems:1,maxLength:40}).map(aiTipWebtoonVisibleText);
-  const lockedText=[...dialogue.map(item=>item.text),...narration,...soundEffect];
-  if(lockedText.length>2)throw new Error(`AI_TIP_CUT_VISIBLE_TEXT_COUNT_INVALID_${panelId}`);
+  const dialogue=[];
+  const narration=aiTipWebtoonStringArray(input?.narration,{maxItems:1,maxLength:120}).map(aiTipWebtoonVisibleText);
+  const soundEffect=[];
+  const lockedText=[...narration];
+  if(lockedText.length>1)throw new Error(`AI_TIP_CUT_VISIBLE_TEXT_COUNT_INVALID_${panelId}`);
   if(lockedText.length&&textSafeArea==='none')throw new Error(`AI_TIP_CUT_TEXT_SAFE_AREA_REQUIRED_${panelId}`);
   const allowedVisibleText=[...lockedText];
   let props=aiTipWebtoonString(input?.props,600);
@@ -1570,13 +1566,13 @@ function aiTipDynamicWebtoonPlannerPrompt(sourceMaterial){
 
 Story 원칙:
 - REAL KOREAN LIFE + VOARA AI_TIP SIGNATURE CHARACTER + 본문 문제와 직접 연결된 SURREAL OVERSIZED PROBLEM + USEFUL AI TIP
-- HOOK → DISCOVERY → AI 활용 → HUMAN CHECK → PAYOFF 흐름을 정보량에 맞게 4~6개 CUT으로 압축한다. 기본 4~5컷이며 꼭 필요할 때만 6컷이다
+- HOOK → DISCOVERY → AI 활용 → HUMAN CHECK → PAYOFF 흐름을 정보량에 맞게 4~5개 CUT으로 압축한다. 본문의 핵심 문제, 실제 활용 과정, 사람이 확인할 지점, 결과가 빠지지 않도록 각 CUT이 서로 다른 정보를 담당한다
 - AI는 초안·분석·정리·반복 작업을 돕고 사람이 확인·수정해 실제로 활용한다. 마법 수익, 확정 수익, 돈 자동 생성 금지
 - 첫 PANEL은 결론을 말하지 않는 Scroll Stopper다. 설명보다 비정상적으로 거대한 현실 문제를 먼저 보여준다
-- 2~4 PAGE로 자연스럽게 나눈다. PAGE당 1~3 CUT이며 panel_size는 다음 값만 사용한다: establishing_tall, wide, medium, reaction_close_up, object_detail, action_tall, narrow_bridge
+- CUT 하나를 PAGE 하나로 사용한다. 즉 4~5 CUT이면 4~5 PAGE다. PAGE당 정확히 1 CUT이며 panel_size는 다음 값만 사용한다: establishing_tall, wide, medium, reaction_close_up, object_detail, action_tall, narrow_bridge
 - 전체에서 최소 3가지 panel_size를 사용하고 같은 크기 Grid를 만들지 않는다. establishing, reaction close-up, object detail, action을 Story에 맞게 섞는다
 - PAGE grouping만 정하고 최종 좌표와 크기는 코드 Composer가 4개 고정 템플릿에서 선택한다
-- 모든 PAGE transition.type은 정확히 vertical_whitespace다. transition.object는 종이비행기로 고정하지 말고 본문 소재에 맞는 사물 또는 none을 선택한다. motion과 meaning으로 시간·공간 이동을 설명한다
+- PAGE 내부 전환 여백과 장식 오브젝트를 만들지 않는다. transition.type은 none, transition.object는 none으로 고정한다
 
 CUT LOCK:
 - cut_id는 C1, C2처럼 전체 Story에서 고유하다
@@ -1588,12 +1584,12 @@ CUT LOCK:
 - importance는 1~10 정수다. HOOK와 핵심 AI 활용/HUMAN CHECK 장면을 높게 준다
 
 VISIBLE TEXT LOCK:
-- dialogue는 speaker와 확정 한국어 text 객체다. 한 패널 최대 2개
-- narration 최대 1개, sound_effect 최대 1개이며 dialogue까지 합친 한 CUT의 전체 문구는 최대 2개다. 각 문구는 1~2줄, 공백 제외 최대 32자다
-- allowed_visible_text는 dialogue.text + narration + sound_effect의 정확한 합집합이어야 한다. 순서·철자·문구를 바꾸지 않는다
-- 텍스트가 없는 CUT은 dialogue, narration, sound_effect, allowed_visible_text를 모두 []로 둔다
-- 같은 visible text를 다른 CUT에서 반복하지 않는다
-- 본문 복사, 장문 설명, 임의 대사·내레이션·라벨·캡션·장식 문자 금지
+- 말풍선은 사용하지 않는다. dialogue와 sound_effect는 항상 []로 둔다
+- narration은 CUT당 정확히 1개를 우선한다. 원본 본문의 핵심 내용을 스토리 순서대로 충실히 전달하되 같은 내용을 반복하지 않는다
+- narration은 모바일에서 읽을 수 있는 1~3줄, 공백 포함 최대 72자로 작성한다. 단순 후킹 문구만 남기지 말고 해당 장면에서 알아야 할 실제 정보를 담는다
+- allowed_visible_text는 narration의 정확한 배열과 같아야 한다. 순서·철자·문구를 바꾸지 않는다
+- 새로운 주장, 숫자, 사실을 만들지 말고 반드시 원본 본문에서만 가져온다
+- 제목 카드, 말풍선, 효과음, 임의 라벨·장식 문자 금지
 - laptop, phone, monitor는 no readable UI text, no fake website text, no random letters, no labels, no logo, no pseudo-text. 필요한 정보는 텍스트 없는 큰 추상 블록과 아이콘으로만 표현한다
 
 Caption은 순수 콘텐츠 문장으로 작성하고 reply_prompt 전문, 댓글 작성, 첫 댓글, DM CTA를 넣지 않는다.
@@ -1623,8 +1619,8 @@ JSON만 반환:
       "characters":["HANAREUM"],"character_count":1,"character_action":"...","facial_expression":"...","camera":"...",
       "props":"...","surreal_element":"...",
       "importance":9,"text_safe_area":"top_left",
-      "dialogue":[{"speaker":"HANAREUM","text":"짧은 대사"}],"narration":[],"sound_effect":[],
-      "allowed_visible_text":["짧은 대사"],
+      "dialogue":[],"narration":["본문 핵심을 이어가는 짧은 내레이션"],"sound_effect":[],
+      "allowed_visible_text":["본문 핵심을 이어가는 짧은 내레이션"],
       "forbidden_elements":["duplicate character","extra people","unlisted text","readable UI text"],
       "transition_to_next":"..."
     }]
@@ -1762,23 +1758,17 @@ Give DISPLAY TEXT one deliberate readable area chosen for this scene: authentic 
 }
 
 function aiTipLayoutRects(template,count){
-  const layouts={
-    HERO_REACTION:[{left:30,top:30,width:1020,height:650},{left:290,top:790,width:760,height:280}],
-    ASYMMETRIC_PAIR:[{left:30,top:30,width:690,height:500},{left:400,top:650,width:650,height:420}],
-    SPLIT_EMPHASIS:[{left:30,top:30,width:1020,height:430},{left:30,top:620,width:1020,height:450}],
-    STACKED_TRIO:[{left:30,top:30,width:1020,height:350},{left:30,top:500,width:650,height:290},{left:360,top:850,width:690,height:230}]
-  };
-  const selected=layouts[template]||layouts.ASYMMETRIC_PAIR;
-  if(count===1)return [{left:40,top:40,width:1000,height:980}];
-  return selected.slice(0,count);
+  // 새 Story Board는 PAGE당 1 CUT을 사용해 4:5 장면 전체를 그대로 보여준다.
+  if(count===1)return [{left:0,top:0,width:1080,height:1350}];
+  // 이전/복원 데이터 호환용 fallback: 여백 없이 화면을 균등 분할한다.
+  const h=Math.floor(1350/count);
+  return Array.from({length:count},(_,i)=>({left:0,top:i*h,width:1080,height:i===count-1?1350-i*h:h}));
 }
 
 function aiTipCutTextItems(cut){
-  return [
-    ...cut.dialogue.map(item=>({type:'speech',text:item.text})),
-    ...cut.narration.map(text=>({type:'narration',text})),
-    ...cut.sound_effect.map(text=>({type:'sound',text}))
-  ];
+  // AI_TIP 최종 페이지에는 말풍선/효과음을 합성하지 않는다.
+  // 본문 흐름은 컷별 내레이션으로만 전달한다.
+  return cut.narration.map(text=>({type:'narration',text}));
 }
 
 function wrapAiTipKorean(value,max=13){
@@ -1807,28 +1797,20 @@ function aiTipBubblePosition(area,rect,width,height,index){
 
 async function aiTipBubbleLayer(item,area,rect,index){
   const {default:sharp}=await import('sharp');
-  const width=Math.min(430,Math.max(260,Math.round(rect.width*.52))),height=118;
-  const tail=item.type==='speech'?`<path d="M58 104 L42 117 L86 103" fill="#fff" stroke="#20252b" stroke-width="3"/>`:'';
-  const fill=item.type==='narration'?'#fff9df':'#ffffff';
-  const base=Buffer.from(`<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="${width-4}" height="102" rx="${item.type==='narration'?12:48}" fill="${fill}" stroke="#20252b" stroke-width="3"/>${tail}</svg>`);
-  const fontfile=join(process.cwd(),'assets','fonts','NanumGothic-Regular.ttf');
-  const text=await sharp({text:{text:wrapAiTipKorean(item.text),font:'Nanum Gothic 34',fontfile,width:width-42,height:82,align:'centre',rgba:true}}).png().toBuffer();
-  const bubble=await sharp(base).composite([{input:text,left:21,top:13}]).png().toBuffer();
-  const [left,top]=aiTipBubblePosition(area,rect,width,height,index);
-  return {input:bubble,left,top};
+  const width=Math.max(320,rect.width-48),height=Math.min(150,Math.max(104,Math.round(rect.height*.13)));
+  const fontSize=rect.width>=900?38:32;
+  const text=await sharp({text:{text:wrapAiTipKorean(item.text,18),font:`Nanum Gothic ${fontSize}`,fontfile:join(process.cwd(),'assets','fonts','NanumGothic-Regular.ttf'),width:width-44,height:height-24,align:'left',rgba:true}}).png().toBuffer();
+  // 말풍선 대신 이미지 위에 얇은 반투명 내레이션 스트립만 사용한다.
+  const bg=Buffer.from(`<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"><rect width="${width}" height="${height}" rx="12" fill="#fffdf8" fill-opacity="0.84"/></svg>`);
+  const caption=await sharp(bg).composite([{input:text,left:22,top:12}]).png().toBuffer();
+  const bottom=/bottom/.test(area);
+  const left=rect.left+24,top=bottom?rect.top+rect.height-height-24:rect.top+24;
+  return {input:caption,left,top};
 }
 
-function aiTipTransitionLayer(page,rects){
-  if(rects.length<2)return null;
-  const first=rects[0],second=rects[1],top=first.top+first.height,bottom=second.top;
-  if(bottom-top<60)return null;
-  const object=String(page.transition?.object||'').toLowerCase();
-  const shape=/(?:coin|동전)/.test(object)
-    ?'<circle cx="42" cy="42" r="27" fill="#f4c85b" stroke="#9b6a18" stroke-width="5"/>'
-    :/(?:clip|클립)/.test(object)
-      ?'<path d="M28 16 C8 36 10 72 34 74 C58 76 72 52 69 29 C67 10 42 9 34 26 L25 50 C20 66 43 70 50 54 L59 31" fill="none" stroke="#c58d2b" stroke-width="6" stroke-linecap="round"/>'
-      :'<path d="M12 18 L72 42 L17 70 L28 47 Z" fill="#fff" stroke="#7c8792" stroke-width="4"/>';
-  return {input:Buffer.from(`<svg width="84" height="84" xmlns="http://www.w3.org/2000/svg">${shape}</svg>`),left:498,top:top+Math.max(0,Math.round((bottom-top-84)/2))};
+function aiTipTransitionLayer(){
+  // 페이지 내부 전환용 흰 여백/장식 오브젝트를 사용하지 않는다.
+  return null;
 }
 
 async function fetchAiTipCutImage(value){
@@ -1848,9 +1830,10 @@ async function composeAiTipWebtoonPage(page,cutBuffers){
   const layers=[];
   for(let index=0;index<cutBuffers.length;index++){
     const rect=rects[index],cut=page.panels[index];
-    const image=await sharp(cutBuffers[index]).rotate().resize(rect.width,rect.height,{fit:'cover',position:'north'}).jpeg({quality:92}).toBuffer();
+    // cover는 4:5 CUT을 가로형 패널에 맞추면서 얼굴/몸/소품을 크게 잘라냈다.
+    // contain으로 전체 CUT을 보존하고 남는 영역만 페이지 배경색으로 채운다.
+    const image=await sharp(cutBuffers[index]).rotate().resize(rect.width,rect.height,{fit:'contain',background:'#fffdf8',withoutEnlargement:false}).jpeg({quality:92}).toBuffer();
     layers.push({input:image,left:rect.left,top:rect.top});
-    layers.push({input:Buffer.from(`<svg width="${rect.width}" height="${rect.height}" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="${rect.width-4}" height="${rect.height-4}" fill="none" stroke="#22272d" stroke-width="4"/></svg>`),left:rect.left,top:rect.top});
     const textItems=aiTipCutTextItems(cut);
     for(let textIndex=0;textIndex<textItems.length;textIndex++)layers.push(await aiTipBubbleLayer(textItems[textIndex],cut.text_safe_area,rect,textIndex));
   }
@@ -1888,7 +1871,9 @@ async function actionInstagramCarouselImage(req,res){
       const image=extractInlineImage(generated);
       if(!image)throw new Error('GEMINI_IMAGE_MISSING');
       const {default:sharp}=await import('sharp');
-      const jpeg=await sharp(Buffer.from(image.data,'base64')).rotate().resize(1024,1024,{fit:'cover',position:'attention'}).jpeg({quality:92,mozjpeg:true}).toBuffer();
+      // Gemini CUT은 4:5로 생성된다. 정사각형 cover 변환 시 원본 장면이 먼저 잘리므로
+      // 4:5 비율을 그대로 보존한 제작용 CUT으로 저장한다.
+      const jpeg=await sharp(Buffer.from(image.data,'base64')).rotate().resize(1024,1280,{fit:'contain',background:'#fffdf8',withoutEnlargement:false}).jpeg({quality:92,mozjpeg:true}).toBuffer();
       const blob=await put(`instagram-webtoon-cuts/${Date.now()}-${id}-${current.cut_id}.jpg`,jpeg,{access:'public',addRandomSuffix:true,contentType:'image/jpeg',cacheControlMaxAge:31536000});
       return send(res,200,{ok:true,mode:'cut',cut_id:current.cut_id,url:blob.url,mime_type:'image/jpeg'});
     }
