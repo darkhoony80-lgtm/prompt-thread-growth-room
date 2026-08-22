@@ -1,12 +1,40 @@
 /* Growth Engine V3. Filename kept for existing index.html include. */
 (function(){
 const CATS={AI_PROMPT:'AI 프롬프트',AI_TIP:'AI 활용 팁',FOOD_PICK:'오늘 뭐 먹지?',HOT_ISSUE:'🔥 오늘의 핫이슈'};
-const Q='pt_queue_v3',F='pt_feedback_v3',P='pt_published_v3',D='pt_drafts_v6',FH='pt_food_history_v1';
+const Q='pt_queue_v3',F='pt_feedback_v3',P='pt_published_v3',D='pt_drafts_v6',FH='pt_food_history_v1',IGC='pt_instagram_carousels_v1';
 const PILLARS=['AI_TIP','AI_PROMPT','FOOD_PICK','HOT_ISSUE'];
 let candidates=[null,null,null,null];
-let instagramCarousel=null,instagramPublishing=false;
+let instagramCarousel=null,instagramPublishing=false,instagramModalOpen=false;
 function read(k,d=[]){try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}}
 function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
+function instagramRecords(){const value=read(IGC,{});return value&&typeof value==='object'&&!Array.isArray(value)?value:{}}
+function instagramRecord(id){return instagramRecords()[String(id||'')]||null}
+function persistInstagramCarousel(state=instagramCarousel){
+ if(!state?.candidateId||!state?.plan)return;
+ const records=instagramRecords(),now=Date.now(),previous=records[state.candidateId]||{};
+ records[state.candidateId]={
+  version:1,content_id:state.candidateId,content_type:state.candidate.category,
+  candidate:state.candidate,plan:state.plan,
+  images:state.images.map((url,index)=>({order:index+1,url:url||null,variation:state.variations[index]||1})),
+  caption:state.caption,reply_prompt:state.candidate.reply_prompt||'',
+  status:state.recordStatus||(state.published?'published':state.generating?'generating':state.images.filter(Boolean).length===state.plan.slide_count?'ready':'incomplete'),
+  generated_at:state.generatedAt||previous.generated_at||null,created_at:previous.created_at||state.createdAt||now,updated_at:now,
+  request_id:state.requestId,media_id:state.mediaId||previous.media_id||null,published_at:state.publishedAt||previous.published_at||null
+ };
+ write(IGC,records);
+}
+function restoreInstagramCarousel(record,index,candidate){
+ const plan=record?.plan,items=Array.isArray(record?.images)?record.images.slice().sort((a,b)=>Number(a.order)-Number(b.order)):[];
+ if(!plan||!Array.isArray(plan.slides)||plan.slides.length<3||plan.slides.length>5)return null;
+ return {
+  candidate:record.candidate||candidate,candidateId:record.content_id,plan,caption:String(record.caption||plan.caption||''),
+  images:new Array(plan.slide_count).fill(null).map((_,i)=>items[i]?.url||null),
+  variations:new Array(plan.slide_count).fill(1).map((_,i)=>Number(items[i]?.variation)||1),selected:0,
+  status:record.status==='published'?'Instagram 게시 완료':'게시 전 검토',generating:false,published:record.status==='published',
+  mediaId:record.media_id||null,publishedAt:record.published_at||null,generatedAt:record.generated_at||null,
+  createdAt:record.created_at||Date.now(),requestId:record.request_id||instagramRequestId(),candidateIndex:index
+ };
+}
 function apiError(j,fallback='REQUEST_FAILED'){
  const d=j?.detail;
  if(typeof d==='string'&&d)return d;
@@ -176,13 +204,13 @@ function instagramRequestId(){
 function renderInstagramCarousel(){
  ensureInstagramModal();
  const modal=document.getElementById('instagramCarouselModal'),status=document.getElementById('igCarouselStatus'),box=document.getElementById('igCarouselBody');
- if(!instagramCarousel){modal.hidden=true;return}
+ if(!instagramCarousel||!instagramModalOpen){modal.hidden=true;return}
  modal.hidden=false;status.textContent=instagramCarousel.status||'준비 중';
  const state=instagramCarousel,plan=state.plan;
  if(!plan){box.innerHTML='<div class="card empty"><div><b>스토리보드 생성 중</b>Instagram 전용 흐름과 캡션을 준비하고 있습니다.</div></div>';return}
  const selected=Math.max(0,Math.min(state.selected||0,plan.slides.length-1)),image=state.images[selected];
  const thumbs=plan.slides.map((slide,index)=>`<button class="ig-thumb ${index===selected?'on':''}" onclick="PostAuto.instagramSelect(${index})" title="${esc(slide.role)}"><span>${index+1}/${plan.slide_count}</span>${state.images[index]?`<img src="${esc(state.images[index])}" alt="${index+1}번 캐러셀 이미지">`:'<div style="aspect-ratio:4/5;display:grid;place-items:center;color:var(--m)">생성 중</div>'}</button>`).join('');
- box.innerHTML=`<div class="ig-preview-grid"><div>${image?`<img class="ig-main-image" src="${esc(image)}" alt="확대된 ${selected+1}번 캐러셀 이미지">`:'<div class="ig-main-image" style="display:grid;place-items:center;color:var(--m)">이미지 준비 중</div>'}<div class="ig-thumbs">${thumbs}</div><p class="mut">${selected+1}/${plan.slide_count} · ${esc(plan.slides[selected]?.role||'')}</p><p>${esc(plan.slides[selected]?.message||'')}</p></div><div><span class="badge">${esc(CATS[plan.category]||plan.category)}</span><h3>Instagram 전용 캡션</h3><textarea id="igCarouselCaption" class="ig-caption" maxlength="2200" oninput="PostAuto.instagramCaption(this.value)" ${state.published?'disabled':''}>${esc(state.caption)}</textarea><p class="mut">게시 전에 자유롭게 수정할 수 있습니다. ${state.caption.length}/2200자</p><div class="ig-actions"><button class="btn" onclick="PostAuto.instagramRegenerate()" ${state.generating||instagramPublishing||state.published?'disabled':''}>${selected+1}번 이미지 다시 생성</button><button class="btn p" onclick="PostAuto.instagramPublish()" ${state.images.filter(Boolean).length!==plan.slide_count||state.generating||instagramPublishing||state.published?'disabled':''}>${instagramPublishing?'Instagram 게시 중…':state.published?'Instagram 게시 완료':'Instagram 게시'}</button></div><p class="mut">게시 버튼을 직접 누르고 최종 확인한 경우에만 Instagram에 게시됩니다. Threads 게시와는 독립입니다.</p></div></div>`;
+ box.innerHTML=`<div class="ig-preview-grid"><div>${image?`<img class="ig-main-image" src="${esc(image)}" alt="확대된 ${selected+1}번 캐러셀 이미지">`:'<div class="ig-main-image" style="display:grid;place-items:center;color:var(--m)">이미지 준비 중</div>'}<div class="ig-thumbs">${thumbs}</div><p class="mut">${selected+1}/${plan.slide_count} · ${esc(plan.slides[selected]?.role||'')}</p><p>${esc(plan.slides[selected]?.message||'')}</p></div><div><span class="badge">${esc(CATS[plan.category]||plan.category)}</span><h3>Instagram 전용 캡션</h3><textarea id="igCarouselCaption" class="ig-caption" maxlength="2200" oninput="PostAuto.instagramCaption(this.value)" ${state.published?'disabled':''}>${esc(state.caption)}</textarea><p class="mut">게시 전에 자유롭게 수정할 수 있습니다. ${state.caption.length}/2200자</p><div class="ig-actions"><button class="btn" onclick="PostAuto.instagramRegenerate()" ${state.generating||instagramPublishing||state.published?'disabled':''}>${selected+1}번 이미지 다시 생성</button><button class="btn" onclick="PostAuto.instagramRegenerateAll()" ${state.generating||instagramPublishing||state.published?'disabled':''}>캐러셀 전체 다시 생성</button><button class="btn p" onclick="PostAuto.instagramPublish()" ${state.images.filter(Boolean).length!==plan.slide_count||state.generating||instagramPublishing||state.published?'disabled':''}>${instagramPublishing?'Instagram 게시 중…':state.published?'Instagram 게시 완료':'Instagram 게시'}</button></div><p class="mut">게시 버튼을 직접 누르고 최종 확인한 경우에만 Instagram에 게시됩니다. Threads 게시와는 독립입니다.</p></div></div>`;
 }
 async function instagramApi(action,payload){
  const r=await fetch(`/api/content-router?action=${encodeURIComponent(action)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}),j=await r.json().catch(()=>({}));
@@ -195,31 +223,54 @@ async function generateInstagramSlide(index){
  const j=await instagramApi('instagram_carousel_image',{candidate:state.candidate,candidate_id:state.candidateId,plan:state.plan,slide,variation});
  if(state!==instagramCarousel)return;
  state.images[index]=j.url;
+ persistInstagramCarousel(state);
+}
+async function completeInstagramCarousel(state,createPlan=false){
+ try{
+  if(createPlan||!state.plan){
+   const prepared=await instagramApi('instagram_carousel_prepare',{candidate:state.candidate});
+   if(state!==instagramCarousel)return;
+   state.plan=prepared.plan;state.caption=prepared.plan.caption;state.images=new Array(prepared.plan.slide_count).fill(null);state.variations=new Array(prepared.plan.slide_count).fill(1);persistInstagramCarousel(state);
+  }
+  for(let index=0;index<state.plan.slide_count;index++){
+   if(state!==instagramCarousel)return;
+   if(state.images[index])continue;
+   state.status=`이미지 준비 중 ${index+1}/${state.plan.slide_count}`;state.selected=index;renderInstagramCarousel();
+   await generateInstagramSlide(index);renderInstagramCarousel();
+  }
+  state.selected=0;state.status='게시 전 검토';state.recordStatus='ready';state.generatedAt=Date.now();
+ }catch(e){if(state===instagramCarousel){state.status='Instagram 캐러셀 생성 실패';state.recordStatus=state.plan?'incomplete':'prepare_failed';alert('Instagram 캐러셀 생성 실패: '+e.message)}}
+ finally{state.generating=false;persistInstagramCarousel(state);if(state===instagramCarousel)renderInstagramCarousel()}
 }
 async function openInstagramCarousel(i){
  if(instagramPublishing)return;
  const candidate=instagramCandidate(i);if(!candidate)return alert('Instagram 캐러셀을 만들 본문이 필요합니다.');
- instagramCarousel={candidate,candidateId:candidates[i]?.id||`candidate-${i}`,plan:null,caption:'',images:[],variations:[],selected:0,status:'스토리보드 생성 중…',generating:true,published:false,requestId:instagramRequestId()};
- renderInstagramCarousel();
- try{
-  const prepared=await instagramApi('instagram_carousel_prepare',{candidate});
-  instagramCarousel.plan=prepared.plan;instagramCarousel.caption=prepared.plan.caption;instagramCarousel.images=new Array(prepared.plan.slide_count).fill(null);instagramCarousel.variations=new Array(prepared.plan.slide_count).fill(1);
-  for(let index=0;index<prepared.plan.slide_count;index++){
-   instagramCarousel.status=`이미지 준비 중 ${index+1}/${prepared.plan.slide_count}`;instagramCarousel.selected=index;renderInstagramCarousel();
-   await generateInstagramSlide(index);renderInstagramCarousel();
-  }
-  instagramCarousel.selected=0;instagramCarousel.status='게시 전 검토';
- }catch(e){instagramCarousel.status='Instagram 캐러셀 생성 실패';alert('Instagram 캐러셀 생성 실패: '+e.message)}
- finally{if(instagramCarousel)instagramCarousel.generating=false;renderInstagramCarousel()}
+ const candidateId=candidates[i]?.id||`candidate-${i}`;instagramModalOpen=true;
+ if(instagramCarousel?.candidateId===candidateId){renderInstagramCarousel();return}
+ const restored=restoreInstagramCarousel(instagramRecord(candidateId),i,candidate);
+ if(restored){
+  instagramCarousel=restored;renderInstagramCarousel();
+  if(restored.images.filter(Boolean).length<restored.plan.slide_count&&!restored.published){restored.generating=true;restored.recordStatus='generating';await completeInstagramCarousel(restored,false)}
+  return;
+ }
+ const state={candidate,candidateId,plan:null,caption:'',images:[],variations:[],selected:0,status:'스토리보드 생성 중…',generating:true,published:false,requestId:instagramRequestId(),candidateIndex:i,createdAt:Date.now(),recordStatus:'generating'};
+ instagramCarousel=state;renderInstagramCarousel();await completeInstagramCarousel(state,true);
 }
 function selectInstagramSlide(index){if(!instagramCarousel)return;instagramCarousel.selected=index;renderInstagramCarousel()}
-function setInstagramCaption(value){if(!instagramCarousel||instagramCarousel.published)return;instagramCarousel.caption=String(value).slice(0,2200)}
-function closeInstagramCarousel(){if(instagramPublishing)return alert('Instagram 게시 처리가 끝날 때까지 기다려 주세요.');if(instagramCarousel?.generating)return alert('캐러셀 이미지 생성이 끝날 때까지 기다려 주세요.');instagramCarousel=null;renderInstagramCarousel()}
+function setInstagramCaption(value){if(!instagramCarousel||instagramCarousel.published)return;instagramCarousel.caption=String(value).slice(0,2200);persistInstagramCarousel()}
+function closeInstagramCarousel(){instagramModalOpen=false;renderInstagramCarousel()}
 async function regenerateInstagramSlide(){
  const state=instagramCarousel,index=state?.selected||0;if(!state||state.generating||instagramPublishing||state.published)return;
- state.generating=true;state.variations[index]=(state.variations[index]||1)+1;state.status=`${index+1}번 이미지 다시 생성 중…`;renderInstagramCarousel();
- try{await generateInstagramSlide(index);state.status='게시 전 검토'}catch(e){state.status='이미지 다시 생성 실패';alert('이미지 다시 생성 실패: '+e.message)}
- finally{state.generating=false;renderInstagramCarousel()}
+ state.generating=true;state.recordStatus='generating';state.variations[index]=(state.variations[index]||1)+1;state.status=`${index+1}번 이미지 다시 생성 중…`;renderInstagramCarousel();
+ try{await generateInstagramSlide(index);state.status='게시 전 검토';state.recordStatus='ready'}catch(e){state.status='이미지 다시 생성 실패';state.recordStatus='ready';alert('이미지 다시 생성 실패: '+e.message)}
+ finally{state.generating=false;persistInstagramCarousel(state);renderInstagramCarousel()}
+}
+async function regenerateInstagramCarousel(){
+ const state=instagramCarousel;if(!state||state.generating||instagramPublishing||state.published)return;
+ if(!confirm(`기존 ${state.plan.slide_count}장의 이미지는 교체됩니다. 캐러셀 전체를 다시 생성하시겠습니까?`))return;
+ const candidate=instagramCandidate(state.candidateIndex);if(!candidate)return alert('Instagram 캐러셀을 다시 만들 본문이 필요합니다.');
+ const replacement={candidate,candidateId:state.candidateId,plan:null,caption:'',images:[],variations:[],selected:0,status:'스토리보드 생성 중…',generating:true,published:false,requestId:instagramRequestId(),candidateIndex:state.candidateIndex,createdAt:Date.now(),recordStatus:'generating'};
+ instagramCarousel=replacement;renderInstagramCarousel();await completeInstagramCarousel(replacement,true);
 }
 async function publishInstagramCarousel(){
  const state=instagramCarousel;if(!state||instagramPublishing||state.published)return;
@@ -227,12 +278,12 @@ async function publishInstagramCarousel(){
  if(!caption)return alert('Instagram 캡션을 입력해 주세요.');
  if(state.images.filter(Boolean).length!==state.plan.slide_count)return alert('모든 캐러셀 이미지가 준비된 뒤 게시할 수 있습니다.');
  if(!confirm(`${state.plan.slide_count}장의 캐러셀을 @voara.lab에 게시할까요?\n\n이 작업은 실제 Instagram 게시입니다.`))return;
- state.caption=caption;instagramPublishing=true;state.status='Instagram 컨테이너 생성 및 게시 중…';renderInstagramCarousel();
+ state.caption=caption;instagramPublishing=true;state.recordStatus='publishing';state.status='Instagram 컨테이너 생성 및 게시 중…';persistInstagramCarousel(state);renderInstagramCarousel();
  try{
   const j=await instagramApi('instagram_carousel_publish',{image_urls:state.images,caption:state.caption,request_id:state.requestId});
-  state.published=true;state.mediaId=j.media_id;state.status='Instagram 게시 완료';alert('Instagram 게시 완료 ✅');
- }catch(e){state.status='Instagram 게시 실패';alert('Instagram 게시에 실패했습니다: '+e.message)}
- finally{instagramPublishing=false;renderInstagramCarousel()}
+  state.published=true;state.mediaId=j.media_id;state.publishedAt=Date.now();state.recordStatus='published';state.status='Instagram 게시 완료';alert('Instagram 게시 완료 ✅');
+ }catch(e){state.recordStatus='ready';state.status='Instagram 게시 실패';alert('Instagram 게시에 실패했습니다: '+e.message)}
+ finally{instagramPublishing=false;persistInstagramCarousel(state);renderInstagramCarousel()}
 }
 async function followerBaseline(){
  try{
@@ -300,6 +351,6 @@ function patchReplies(){
  const b=document.getElementById('batchReply');if(!b)return;b.onclick=async()=>{if(window._batchRunning||window._replyHistoryAvailable===false)return;const all=window._replyItems||[],targets=[];all.forEach((x,i)=>{if(x.review_required||x.already_replied)return;const text=document.getElementById(`replyText-${i}`)?.value.trim();if(text)targets.push({i,id:x.id,text})});if(!targets.length||!confirm(`${targets.length}개 미응답 댓글을 순차 답장할까요?`))return;window._batchRunning=true;updateBatchButton();let ok=0,fail=0;for(let n=0;n<targets.length;n++){const t=targets[n];b.textContent=`일괄 답장 ${n+1}/${targets.length}`;try{await postReply(t.id,t.text);markReplyDone(t.i,t.id,t.text);ok++}catch{fail++}if(n<targets.length-1)await new Promise(r=>setTimeout(r,500))}window._batchRunning=false;updateBatchButton();alert(`완료 · 성공 ${ok} / 실패 ${fail}`);await syncReplies(currentPostIds).catch(()=>{})};
  setTimeout(()=>{try{updateBatchButton()}catch{}},100);
 }
-window.PostAuto={generate:generatePillar,image:i=>makeImage(i,false),reimage:i=>makeImage(i,true),keep,now,variant,no,drop,publishQueue,save:syncDraft,instagram:openInstagramCarousel,instagramSelect:selectInstagramSlide,instagramCaption:setInstagramCaption,instagramClose:closeInstagramCarousel,instagramRegenerate:regenerateInstagramSlide,instagramPublish:publishInstagramCarousel};
+window.PostAuto={generate:generatePillar,image:i=>makeImage(i,false),reimage:i=>makeImage(i,true),keep,now,variant,no,drop,publishQueue,save:syncDraft,instagram:openInstagramCarousel,instagramSelect:selectInstagramSlide,instagramCaption:setInstagramCaption,instagramClose:closeInstagramCarousel,instagramRegenerate:regenerateInstagramSlide,instagramRegenerateAll:regenerateInstagramCarousel,instagramPublish:publishInstagramCarousel};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ensure);else ensure();
 })();
