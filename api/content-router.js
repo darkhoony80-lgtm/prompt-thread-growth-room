@@ -9,6 +9,9 @@ const TEXT_URL=`https://generativelanguage.googleapis.com/v1beta/models/${TEXT_M
 const IMAGE_URL=`https://generativelanguage.googleapis.com/v1/models/${IMAGE_MODEL}:generateContent`;
 const INSTAGRAM_API='https://graph.instagram.com/v25.0';
 const INSTAGRAM_PROFILE_FIELDS='user_id,username,account_type';
+const INSTAGRAM_CATEGORIES=['AI_TIP','AI_PROMPT','FOOD_PICK','HOT_ISSUE'];
+const INSTAGRAM_PUBLISH_REQUESTS=globalThis.__instagramCarouselPublishRequests||new Map();
+globalThis.__instagramCarouselPublishRequests=INSTAGRAM_PUBLISH_REQUESTS;
 
 const LABELS={
   AI_PROMPT:'AI 프롬프트',
@@ -728,6 +731,275 @@ JSON만:
   }
 }
 
+function instagramSource(candidate={}){
+  const category=INSTAGRAM_CATEGORIES.includes(candidate?.category)
+    ?candidate.category:'';
+  if(!category)return null;
+  return {
+    category,
+    topic:String(candidate.topic||'').trim().slice(0,160),
+    body:String(candidate.body||'').trim().slice(0,1800),
+    reply_prompt:String(candidate.reply_prompt||'').trim().slice(0,6000),
+    image_brief:String(candidate.image_brief||'').trim().slice(0,1800),
+    source_notes:Array.isArray(candidate.source_notes)
+      ?candidate.source_notes.map(v=>String(v||'').trim().slice(0,300)).filter(Boolean).slice(0,8)
+      :[]
+  };
+}
+
+function normalizeInstagramPlan(raw,source){
+  const slides=(Array.isArray(raw?.slides)?raw.slides:[]).slice(0,5).map((slide,index)=>({
+    number:index+1,
+    role:String(slide?.role||'').trim().slice(0,80),
+    message:String(slide?.message||'').replace(/\s+/g,' ').trim().slice(0,90),
+    visual:String(slide?.visual||'').trim().slice(0,900),
+    composition:String(slide?.composition||'').trim().slice(0,700)
+  })).filter(slide=>slide.message&&slide.visual);
+  if(slides.length<4||slides.length>5)throw new Error('INSTAGRAM_CAROUSEL_SLIDE_COUNT_INVALID');
+  const seen=new Set();
+  for(const slide of slides){
+    const key=slide.message.replace(/[\s\p{P}\p{S}]/gu,'').toLocaleLowerCase('ko-KR');
+    if(!key||seen.has(key))throw new Error('INSTAGRAM_CAROUSEL_DUPLICATE_COPY');
+    seen.add(key);
+  }
+  const caption=String(raw?.caption||'').trim().slice(0,2200);
+  if(!caption)throw new Error('INSTAGRAM_CAROUSEL_CAPTION_EMPTY');
+  return {
+    category:source.category,
+    slide_count:slides.length,
+    visual_concept:String(raw?.visual_concept||'').trim().slice(0,900),
+    color_palette:String(raw?.color_palette||'').trim().slice(0,400),
+    art_direction:String(raw?.art_direction||'').trim().slice(0,1000),
+    character_direction:String(raw?.character_direction||'').trim().slice(0,600),
+    caption,
+    slides
+  };
+}
+
+function instagramCarouselRules(category){
+  if(category==='AI_TIP')return `AI_TIP 정보형 흐름: 1 표지 HOOK, 2 흔한 실수/문제, 3 핵심 원리, 4 실제 활용법·예시·Before→After, 마지막 저장할 핵심 정리. 기존 Threads 썸네일 기획은 재사용하지 않는다.`;
+  if(category==='AI_PROMPT')return `AI_PROMPT 결과 화보형 흐름: 1 가장 강한 대표 결과+HOOK, 2 같은 세계관의 다른 구도, 3 다른 포즈·카메라 거리, 4 환경·디테일, 마지막 대표 마무리+프롬프트 안내. 모든 장의 인물은 같은 VOA Character Master 정체성이며 얼굴을 선글라스·마스크·모자·손·머리카락·소품으로 가리지 않는다. reply_prompt의 장소·분위기·색감·조명·촬영 스타일·의상·포즈를 충실히 유지하되 거의 같은 사진을 반복하지 않는다.`;
+  if(category==='FOOD_PICK')return `FOOD 발견형 흐름: 1 오늘 메뉴 HOOK, 2 음식 전체 비주얼, 3 가장 맛있는 디테일, 4 먹는 순간 또는 재료·식감, 마지막 오늘 먹어야 할 한 줄 결론. 확인된 음식·식당 정보만 사용하고 음식 사진을 단순 반복하지 않는다.`;
+  return `HOT_ISSUE 정보형 흐름: 1 무슨 일이야 HOOK, 2 핵심 사실, 3 왜 화제인지, 4 알아야 할 핵심 포인트, 마지막 결론·앞으로 볼 부분·자연스러운 질문. 본문과 source_notes에 없는 숫자·발언·사건은 만들지 않는다.`;
+}
+
+async function actionInstagramCarouselPrepare(req,res){
+  const key=process.env.GEMINI_API_KEY;
+  const source=instagramSource(req.body?.candidate);
+  if(!key)return send(res,503,{ok:false,error:'GEMINI_NOT_CONFIGURED'});
+  if(!source?.body)return send(res,400,{ok:false,error:'INSTAGRAM_CAROUSEL_SOURCE_REQUIRED'});
+  if(source.category==='AI_PROMPT'&&!source.reply_prompt){
+    return send(res,400,{ok:false,error:'INSTAGRAM_CAROUSEL_REPLY_PROMPT_REQUIRED'});
+  }
+  const sourceMaterial=JSON.stringify(source).slice(0,11000);
+  try{
+    const raw=await generateJson(key,`다음 콘텐츠를 Instagram 전용 4~5장 캐러셀 하나로 새로 기획해. Threads용 한 장 이미지를 복제하거나 기존 hook 필드를 사용하지 않는다.
+
+원본 콘텐츠: ${sourceMaterial}
+
+${instagramCarouselRules(source.category)}
+
+공통 규칙:
+- 기본은 5장, 원문이 짧아 반복이 생길 때만 4장. 6장 이상 금지.
+- 독립 이미지 모음이 아니라 넘겨야 이야기가 완성되는 한 시리즈로 만든다.
+- visual_concept, color_palette, art_direction, 등장인물·공간·분위기는 시리즈 전체에서 일관되게 유지한다.
+- 각 장은 역할, 구도, 정보량이 달라야 하고 같은 문장·의미·레이아웃을 반복하지 않는다.
+- message는 장당 하나의 짧은 한국어 핵심 문구이며 모바일에서 읽혀야 한다. 긴 설명문 금지.
+- 장별 visual과 composition은 다음 장과 구별되는 구체적 장면·카메라·여백·타이포그래피 위치를 정한다.
+- 텍스트는 주요 인물, 얼굴, 음식, 제품, 사건의 핵심 피사체를 가리지 않는 실제 여백에 둔다.
+- 이미지 생성 AI가 텍스트까지 직접 디자인할 것이므로 Canvas, 후합성, 별도 Hook 합성은 없다.
+- Instagram caption은 Threads 본문 복사가 아닌 별도 문장으로 쓴다. 첫 1~2줄은 강하게, 이미지 설명을 장황하게 반복하지 않고 과도한 CTA·광고 말투를 피한다.
+- AI_PROMPT는 필요하면 reply_prompt를 caption에 포함할 수 있다.
+- HOT_ISSUE와 FOOD는 제공된 사실 밖의 내용을 만들지 않는다.
+
+JSON만 반환:
+{"visual_concept":"...","color_palette":"...","art_direction":"...","character_direction":"...","caption":"...","slides":[{"role":"...","message":"...","visual":"...","composition":"..."}]}`,.72);
+    return send(res,200,{ok:true,plan:normalizeInstagramPlan(raw,source)});
+  }catch(e){
+    console.error('[INSTAGRAM_CAROUSEL_PREPARE_FAILED]',JSON.stringify({message:e?.message||String(e)}));
+    return send(res,502,{ok:false,error:'INSTAGRAM_CAROUSEL_PREPARE_FAILED',detail:e?.message||String(e)});
+  }
+}
+
+function instagramCarouselImagePrompt(source,plan,slide,variation){
+  const aiPromptRule=source.category==='AI_PROMPT'
+    ?`The attached Character Master is mandatory identity reference. Every human protagonist is VOA, the exact same adult Korean woman. Keep her face sharp, complete and unobstructed: no sunglasses, mask, hat, hand, hair, prop or deep shadow over her face. Faithfully apply the reply_prompt world, wardrobe, location, lighting, camera and mood while varying this slide's framing. SOURCE REPLY_PROMPT: ${source.reply_prompt}`
+    :'If a person is useful, use the attached Character Master as the same adult Korean woman VOA; otherwise do not force a person into the scene.';
+  const factRule=source.category==='HOT_ISSUE'||source.category==='FOOD_PICK'
+    ?`FACT SAFETY: Do not add any place, menu, number, quote, event, product claim or fact absent from this source: ${JSON.stringify({body:source.body,source_notes:source.source_notes})}`:'';
+  return `Create slide ${slide.number} of ${plan.slide_count} as one finished 4:5 portrait Instagram carousel image.
+
+SERIES VISUAL CONCEPT: ${plan.visual_concept}
+SERIES COLOR PALETTE: ${plan.color_palette}
+SERIES ART DIRECTION: ${plan.art_direction}
+SERIES CHARACTER DIRECTION: ${plan.character_direction}
+CATEGORY: ${source.category}
+SOURCE TOPIC: ${source.topic}
+
+THIS SLIDE ROLE: ${slide.role}
+EXACT KOREAN MESSAGE: "${slide.message}"
+THIS SLIDE VISUAL: ${slide.visual}
+THIS SLIDE COMPOSITION: ${slide.composition}
+VARIATION: ${variation}
+
+${aiPromptRule}
+${factRule}
+
+Continue the same coherent visual world, palette, subject identity and editorial system as the series, but make this slide's camera framing, information density and composition visibly distinct. Render the exact Korean message once, directly inside the generated image, as the single mobile-readable message. Do not paraphrase it, repeat it, add long explanatory copy, logos, watermarks, fake UI, slide numbers or extra facts.
+Reserve a generous no-text safety zone around every face, body and essential food/product/event subject. Typography, badges, graphic accents and backgrounds must remain fully outside those silhouettes with visible breathing room. Reposition the subject or camera to create authentic negative space; never cover the subject. Design image and typography together from the first generation pass. No Canvas, pasted headline or later overlay is used.`;
+}
+
+async function actionInstagramCarouselImage(req,res){
+  const key=process.env.GEMINI_API_KEY;
+  const source=instagramSource(req.body?.candidate);
+  const plan=req.body?.plan;
+  const slide=req.body?.slide;
+  const variation=Math.max(1,Math.min(20,Number(req.body?.variation)||1));
+  if(!key)return send(res,503,{ok:false,error:'GEMINI_NOT_CONFIGURED'});
+  if(!source||!plan||!slide)return send(res,400,{ok:false,error:'INSTAGRAM_CAROUSEL_IMAGE_INPUT_REQUIRED'});
+  if(!Number.isInteger(slide.number)||slide.number<1||slide.number>5){
+    return send(res,400,{ok:false,error:'INSTAGRAM_CAROUSEL_SLIDE_INVALID'});
+  }
+  try{
+    let referenceImage=null;
+    if(source.category==='AI_PROMPT'){
+      const master=await readFile(join(process.cwd(),'voa-character-master.png'));
+      referenceImage={mimeType:'image/png',data:master.toString('base64')};
+    }
+    const generated=await geminiGenerate(key,{
+      model:IMAGE_MODEL,
+      prompt:instagramCarouselImagePrompt(source,plan,slide,variation),
+      image:true,
+      referenceImage
+    });
+    const image=extractInlineImage(generated);
+    if(!image)throw new Error('GEMINI_IMAGE_MISSING');
+    const {default:sharp}=await import('sharp');
+    const jpeg=await sharp(Buffer.from(image.data,'base64'))
+      .rotate()
+      .jpeg({quality:92,mozjpeg:true})
+      .toBuffer();
+    if(jpeg.length>4_000_000)throw new Error('INSTAGRAM_CAROUSEL_IMAGE_TOO_LARGE');
+    const id=String(req.body?.candidate_id||source.category)
+      .replace(/[^a-zA-Z0-9_-]/g,'').slice(0,60)||source.category;
+    const blob=await put(
+      `instagram-carousel/${Date.now()}-${id}-slide-${slide.number}.jpg`,
+      jpeg,
+      {access:'public',addRandomSuffix:true,contentType:'image/jpeg',cacheControlMaxAge:31536000}
+    );
+    return send(res,200,{ok:true,slide_number:slide.number,url:blob.url,mime_type:'image/jpeg'});
+  }catch(e){
+    console.error('[INSTAGRAM_CAROUSEL_IMAGE_FAILED]',JSON.stringify({slide:Number(slide?.number)||null,message:e?.message||String(e)}));
+    return send(res,502,{ok:false,error:'INSTAGRAM_CAROUSEL_IMAGE_FAILED',detail:e?.message||String(e)});
+  }
+}
+
+function instagramBlobUrl(value){
+  try{
+    const url=new URL(String(value||''));
+    return url.protocol==='https:'&&/(^|\.)blob\.vercel-storage\.com$/i.test(url.hostname)
+      ?url.href:null;
+  }catch{return null}
+}
+
+async function instagramGraph(token,path,{method='GET',params=null}={}){
+  const response=await fetch(`${INSTAGRAM_API}/${String(path).replace(/^\/+/, '')}`,{
+    method,
+    headers:{Accept:'application/json',Authorization:`Bearer ${token}`,...(params?{'Content-Type':'application/x-www-form-urlencoded'}:{})},
+    ...(params?{body:new URLSearchParams(params)}:{})
+  });
+  const body=await response.json().catch(()=>({}));
+  if(!response.ok){
+    const error=new Error('INSTAGRAM_GRAPH_REQUEST_FAILED');
+    error.status=response.status;
+    error.meta=safeInstagramMetaError(body?.error||{},token);
+    throw error;
+  }
+  return body;
+}
+
+async function waitForInstagramContainer(token,id){
+  for(let attempt=0;attempt<5;attempt++){
+    const status=await instagramGraph(token,`${id}?fields=status_code,status`);
+    const code=String(status?.status_code||'').toUpperCase();
+    if(code==='FINISHED'||code==='PUBLISHED')return status;
+    if(code==='ERROR'||code==='EXPIRED'){
+      const error=new Error(`INSTAGRAM_CONTAINER_${code}`);
+      error.meta={status_code:code};
+      throw error;
+    }
+    if(attempt<4)await new Promise(resolve=>setTimeout(resolve,1800));
+  }
+  const error=new Error('INSTAGRAM_CONTAINER_NOT_READY');
+  error.status=409;
+  throw error;
+}
+
+function instagramPublishFailure(res,error,stage){
+  return send(res,Number(error?.status)>=400&&Number(error?.status)<600?Number(error.status):502,{
+    ok:false,
+    error:'INSTAGRAM_CAROUSEL_PUBLISH_FAILED',
+    detail:{stage,message:error?.message||'INSTAGRAM_PUBLISH_FAILED',...(error?.meta?{meta:error.meta}:{})}
+  });
+}
+
+async function actionInstagramCarouselPublish(req,res){
+  const token=String(process.env.INSTAGRAM_ACCESS_TOKEN||'').trim();
+  if(!token)return send(res,503,{ok:false,error:'INSTAGRAM_ACCESS_TOKEN_NOT_CONFIGURED'});
+  const urls=(Array.isArray(req.body?.image_urls)?req.body.image_urls:[]).map(instagramBlobUrl);
+  const caption=String(req.body?.caption||'').trim().slice(0,2200);
+  const requestId=String(req.body?.request_id||'').trim();
+  if(urls.length<4||urls.length>5||urls.some(url=>!url)){
+    return send(res,400,{ok:false,error:'INSTAGRAM_CAROUSEL_IMAGE_URLS_INVALID'});
+  }
+  if(!caption)return send(res,400,{ok:false,error:'INSTAGRAM_CAROUSEL_CAPTION_REQUIRED'});
+  if(!/^[a-zA-Z0-9_-]{12,100}$/.test(requestId)){
+    return send(res,400,{ok:false,error:'INSTAGRAM_CAROUSEL_REQUEST_ID_INVALID'});
+  }
+  const previous=INSTAGRAM_PUBLISH_REQUESTS.get(requestId);
+  if(previous?.status==='publishing')return send(res,409,{ok:false,error:'INSTAGRAM_CAROUSEL_ALREADY_PUBLISHING'});
+  if(previous?.status==='published')return send(res,200,{ok:true,published:true,deduplicated:true,media_id:previous.media_id});
+  if(INSTAGRAM_PUBLISH_REQUESTS.size>100){
+    const oldest=INSTAGRAM_PUBLISH_REQUESTS.keys().next().value;
+    INSTAGRAM_PUBLISH_REQUESTS.delete(oldest);
+  }
+  INSTAGRAM_PUBLISH_REQUESTS.set(requestId,{status:'publishing'});
+  let stage='account';
+  try{
+    const account=await instagramGraph(token,`me?fields=${INSTAGRAM_PROFILE_FIELDS}`);
+    const userId=String(account?.user_id??account?.id??'');
+    if(!userId)throw new Error('INSTAGRAM_USER_ID_MISSING');
+    stage='children_create';
+    const children=await Promise.all(urls.map(url=>instagramGraph(token,`${userId}/media`,{
+      method:'POST',params:{image_url:url,is_carousel_item:'true'}
+    })));
+    const childIds=children.map(item=>String(item?.id||''));
+    if(childIds.some(id=>!id))throw new Error('INSTAGRAM_CHILD_ID_MISSING');
+    stage='children_status';
+    await Promise.all(childIds.map(id=>waitForInstagramContainer(token,id)));
+    stage='parent_create';
+    const parent=await instagramGraph(token,`${userId}/media`,{
+      method:'POST',params:{media_type:'CAROUSEL',children:childIds.join(','),caption}
+    });
+    const parentId=String(parent?.id||'');
+    if(!parentId)throw new Error('INSTAGRAM_PARENT_ID_MISSING');
+    stage='parent_status';
+    await waitForInstagramContainer(token,parentId);
+    stage='media_publish';
+    const published=await instagramGraph(token,`${userId}/media_publish`,{
+      method:'POST',params:{creation_id:parentId}
+    });
+    const mediaId=String(published?.id||'');
+    if(!mediaId)throw new Error('INSTAGRAM_MEDIA_ID_MISSING');
+    INSTAGRAM_PUBLISH_REQUESTS.set(requestId,{status:'published',media_id:mediaId});
+    return send(res,200,{ok:true,published:true,media_id:mediaId});
+  }catch(e){
+    INSTAGRAM_PUBLISH_REQUESTS.delete(requestId);
+    console.error('[INSTAGRAM_CAROUSEL_PUBLISH_FAILED]',JSON.stringify({stage,message:e?.message||String(e),status:e?.status||null,meta:e?.meta||null}));
+    return instagramPublishFailure(res,e,stage);
+  }
+}
+
 async function actionInstagramStatus(req,res){
   res.setHeader('Pragma','no-cache');
   if(req.method!=='GET'){
@@ -818,10 +1090,13 @@ export default async function handler(req,res){
   if(action==='image')return actionImage(req,res);
   if(action==='store-image')return actionStoreImage(req,res);
   if(action==='variant')return actionVariant(req,res);
+  if(action==='instagram_carousel_prepare')return actionInstagramCarouselPrepare(req,res);
+  if(action==='instagram_carousel_image')return actionInstagramCarouselImage(req,res);
+  if(action==='instagram_carousel_publish')return actionInstagramCarouselPublish(req,res);
 
   return send(res,400,{
     ok:false,
     error:'UNKNOWN_CONTENT_ACTION',
-    allowed:['generate','image','store-image','variant']
+    allowed:['generate','image','store-image','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish']
   });
 }
