@@ -2680,9 +2680,9 @@ async function actionOpenRouterTest(req,res){
         'Content-Type':'application/json'
       },
       body:JSON.stringify({
-        model:'openrouter/free',
-        messages:[{role:'user',content:'Reply with exactly: VOARA_OPENROUTER_OK'}],
-        max_tokens:16,
+        model:'stealth/ox-alpha',
+        messages:[{role:'user',content:'Reply with exactly: VOARA_OX_ALPHA_OK'}],
+        max_tokens:256,
         temperature:0
       })
     });
