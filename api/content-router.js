@@ -18,6 +18,8 @@ const INSTAGRAM_INTENT_MODEL='gemini-3.5-flash-lite';
 const INSTAGRAM_PUBLISH_REQUESTS=globalThis.__instagramCarouselPublishRequests||new Map();
 globalThis.__instagramCarouselPublishRequests=INSTAGRAM_PUBLISH_REQUESTS;
 const AI_IMAGE_CTA='댓글 달면 무료 VOA 프롬프트 보내드려요 ♥️';
+const FOOD_ISSUE_IMAGE_CTA='자세한 내용은 본문을 참고하세요♥️';
+const GENERATED_REPLY_PROMPT_MAX_CHARS=950;
 const AI_IMAGE_CTA_PATH="M31.87 35.09 L31.87 24.24 L28.77 24.24 L28.77 32.24 L23.73 32.24 L23.73 10.64 L28.77 10.64 L28.77 19.93 L31.87 19.93 L31.87 9.84 L36.96 9.84 L36.96 35.09 Z M21.08 29.84 C18.25 30.08 12.58 30.21 4.08 30.21 L4.08 12.24 L20.00 12.24 L20.00 16.57 L9.15 16.57 L9.15 25.92 C14.08 25.92 17.99 25.79 20.88 25.51 Z M35.58 49.44 C33.09 49.05 30.52 48.01 27.85 46.34 C25.18 44.66 23.29 42.97 22.17 41.26 C21.18 42.90 19.38 44.54 16.77 46.16 C14.15 47.79 11.58 48.88 9.06 49.44 L5.97 45.38 C9.92 44.88 13.18 43.58 15.75 41.50 C18.32 39.41 19.61 37.30 19.61 35.17 L19.61 33.41 L24.73 33.41 L24.73 35.13 C24.73 37.25 26.02 39.35 28.60 41.45 C31.18 43.54 34.45 44.86 38.43 45.42 Z M44.65 27.52 L44.65 23.19 L70.30 23.19 C70.56 19.43 70.69 16.62 70.69 14.77 L49.98 14.77 L49.98 10.48 L75.86 10.48 C75.86 13.72 75.67 17.96 75.30 23.19 L81.35 23.19 L81.35 27.52 Z M50.10 48.73 L50.10 37.61 L70.85 37.61 L70.85 34.84 L50.10 34.84 L50.10 30.56 L75.98 30.56 L75.98 41.63 L55.23 41.63 L55.23 44.46 L76.99 44.46 L76.99 48.73 Z M133.28 21.70 L133.28 28.49 L128.17 28.49 L128.17 9.84 L133.28 9.84 L133.28 17.37 L139.29 17.37 L139.29 21.70 Z M124.30 26.15 C119.49 26.48 112.44 26.64 103.17 26.64 L103.17 11.09 L122.49 11.09 L122.49 15.46 L108.30 15.46 L108.30 22.31 C115.10 22.31 120.32 22.15 123.97 21.82 Z M108.47 48.52 L108.47 37.22 L128.17 37.22 L128.17 34.49 L108.47 34.49 L108.47 30.17 L133.28 30.17 L133.28 41.30 L113.59 41.30 L113.59 44.19 L134.31 44.19 L134.31 48.52 Z M145.69 31.48 L145.69 12.78 L164.62 12.78 L164.62 15.98 L172.14 15.98 L172.14 9.84 L177.23 9.84 L177.23 38.45 L172.14 38.45 L172.14 28.28 L164.62 28.28 L164.62 31.48 Z M159.59 17.10 L150.71 17.10 L150.71 27.15 L159.59 27.15 Z M164.62 24.20 L172.14 24.20 L172.14 20.10 L164.62 20.10 Z M151.74 48.03 L151.74 34.54 L156.88 34.54 L156.88 43.70 L178.03 43.70 L178.03 48.03 Z M205.86 26.95 L205.86 11.28 L231.12 11.28 L231.12 26.95 Z M226.02 15.61 L211.00 15.61 L211.00 22.66 L226.02 22.66 Z M221.09 35.85 L221.09 49.40 L215.93 49.40 L215.93 35.85 L200.18 35.85 L200.18 31.48 L236.89 31.48 L236.89 35.85 Z M242.18 44.11 L242.18 39.87 L252.16 39.87 L252.16 33.61 L247.30 33.61 L247.30 21.35 L268.47 21.35 L268.47 17.53 L247.39 17.53 L247.39 13.29 L273.64 13.29 L273.64 25.35 L252.47 25.35 L252.47 29.37 L274.44 29.37 L274.44 33.61 L269.31 33.61 L269.31 39.87 L278.89 39.87 L278.89 44.11 Z M257.33 39.87 L264.14 39.87 L264.14 33.61 L257.33 33.61 Z M324.21 15.52 L313.61 45.71 L307.02 45.71 L296.54 15.52 L302.88 15.52 L309.77 37.39 C310.06 38.30 310.26 39.28 310.39 40.32 L310.51 40.32 C310.56 39.55 310.78 38.55 311.17 37.32 L318.08 15.52 Z M326.16 31.01 C326.16 26.26 327.52 22.42 330.25 19.46 C332.98 16.51 336.60 15.03 341.13 15.03 C345.42 15.03 348.88 16.46 351.49 19.33 C354.11 22.19 355.42 25.87 355.42 30.35 C355.42 35.08 354.07 38.91 351.37 41.85 C348.67 44.78 345.10 46.25 340.66 46.25 C336.33 46.25 332.84 44.82 330.17 41.96 C327.49 39.10 326.16 35.45 326.16 31.01 Z M332.31 30.68 C332.31 33.74 333.06 36.25 334.57 38.22 C336.09 40.18 338.14 41.16 340.74 41.16 C343.43 41.16 345.53 40.23 347.02 38.36 C348.52 36.49 349.27 33.96 349.27 30.76 C349.27 27.47 348.54 24.87 347.09 22.97 C345.65 21.07 343.59 20.12 340.94 20.12 C338.26 20.12 336.15 21.11 334.62 23.10 C333.08 25.09 332.31 27.62 332.31 30.68 Z M386.26 45.71 L379.89 45.71 L377.45 38.49 L366.11 38.49 L363.73 45.71 L357.35 45.71 L368.53 15.52 L375.27 15.52 Z M375.99 33.86 L372.30 22.93 C372.15 22.49 371.99 21.66 371.83 20.43 L371.68 20.43 C371.57 21.34 371.40 22.16 371.17 22.89 L367.46 33.86 Z M407.70 17.53 L407.70 13.29 L437.10 13.29 L437.10 17.53 Z M407.41 33.20 L407.41 28.96 L413.03 28.96 L412.58 19.30 L417.70 19.30 L418.03 28.96 L426.73 28.96 L427.10 19.30 L432.22 19.30 L431.65 28.96 L437.39 28.96 L437.39 33.20 Z M404.04 44.03 L404.04 39.74 L440.75 39.74 L440.75 44.03 Z M446.04 33.65 L446.04 29.37 L461.79 29.37 L461.79 26.80 L451.85 26.80 L451.85 16.53 L471.82 16.53 L471.82 14.50 L451.85 14.50 L451.85 10.32 L476.95 10.32 L476.95 20.34 L456.98 20.34 L456.98 22.62 L477.83 22.62 L477.83 26.80 L466.96 26.80 L466.96 29.37 L482.75 29.37 L482.75 33.65 Z M451.46 48.64 L451.46 35.81 L477.38 35.81 L477.38 48.64 Z M472.25 40.09 L456.59 40.09 L456.59 44.36 L472.25 44.36 Z M491.70 17.53 L491.70 13.29 L521.10 13.29 L521.10 17.53 Z M491.41 33.20 L491.41 28.96 L497.03 28.96 L496.58 19.30 L501.70 19.30 L502.03 28.96 L510.73 28.96 L511.10 19.30 L516.22 19.30 L515.65 28.96 L521.39 28.96 L521.39 33.20 Z M488.04 44.03 L488.04 39.74 L524.75 39.74 L524.75 44.03 Z M535.46 33.41 L535.46 13.33 L561.50 13.33 L561.50 17.58 L540.63 17.58 L540.63 21.18 L560.38 21.18 L560.38 25.43 L540.63 25.43 L540.63 29.16 L562.14 29.16 L562.14 33.41 Z M530.04 44.11 L530.04 39.83 L566.75 39.83 L566.75 44.11 Z M586.81 43.95 L586.81 39.66 L602.56 39.66 L602.56 32.48 L592.35 32.48 L592.35 12.82 L597.52 12.82 L597.52 18.79 L612.81 18.79 L612.81 12.82 L617.94 12.82 L617.94 32.48 L607.73 32.48 L607.73 39.66 L623.52 39.66 L623.52 43.95 Z M612.81 23.11 L597.52 23.11 L597.52 28.20 L612.81 28.20 Z M657.71 49.40 L657.71 29.63 L654.10 29.63 L654.10 48.23 L649.01 48.23 L649.01 10.64 L654.10 10.64 L654.10 25.31 L657.71 25.31 L657.71 9.84 L662.83 9.84 L662.83 49.40 Z M647.49 36.98 C645.57 37.32 643.67 37.54 641.80 37.63 C639.94 37.73 636.36 37.78 631.09 37.78 L631.09 12.96 L636.15 12.96 L636.15 33.45 C640.29 33.45 643.90 33.22 646.96 32.77 Z M676.66 31.44 L676.66 13.33 L701.67 13.33 L701.67 17.62 L681.82 17.62 L681.82 27.15 L702.27 27.15 L702.27 31.44 Z M670.81 43.58 L670.81 39.29 L707.52 39.29 L707.52 43.58 Z M735.02 32.57 L735.02 28.24 L741.83 28.24 L741.83 22.31 L735.25 22.31 L735.25 17.99 L741.83 17.99 L741.83 9.84 L746.87 9.84 L746.87 49.40 L741.83 49.40 L741.83 32.57 Z M736.37 39.62 C733.11 40.26 725.88 40.58 714.70 40.58 L714.70 23.87 L728.09 23.87 L728.09 17.23 L714.78 17.23 L714.78 12.90 L733.17 12.90 L733.17 28.16 L719.78 28.16 L719.78 36.30 C727.22 36.41 732.53 36.13 735.70 35.46 Z M754.81 43.95 L754.81 39.70 L764.02 39.70 L764.02 30.60 C761.01 28.72 759.51 26.09 759.51 22.70 C759.51 19.56 760.80 17.08 763.37 15.26 C765.95 13.44 769.21 12.53 773.17 12.53 C777.08 12.53 780.32 13.44 782.91 15.26 C785.49 17.08 786.78 19.56 786.78 22.70 C786.78 26.04 785.29 28.67 782.31 30.60 L782.31 39.70 L791.52 39.70 L791.52 43.95 Z M773.17 16.78 C770.58 16.78 768.53 17.31 767.02 18.38 C765.51 19.44 764.76 20.88 764.76 22.70 C764.76 24.55 765.51 26.00 767.02 27.06 C768.53 28.12 770.58 28.65 773.17 28.65 C775.74 28.65 777.77 28.12 779.28 27.05 C780.78 25.98 781.53 24.53 781.53 22.70 C781.53 20.88 780.78 19.44 779.29 18.38 C777.79 17.31 775.75 16.78 773.17 16.78 Z M769.08 39.70 L777.25 39.70 L777.25 32.53 C775.89 32.77 774.53 32.89 773.17 32.89 C771.80 32.89 770.44 32.77 769.08 32.53 Z M846.56 24.51 C846.56 30.59 841.05 39.46 830.01 51.13 C819.12 40.37 813.67 31.49 813.67 24.51 C813.67 22.02 814.48 19.84 816.11 17.96 C817.78 16.02 819.79 15.05 822.16 15.05 C826.04 15.05 828.67 17.23 830.05 21.59 C830.89 19.39 831.77 17.83 832.70 16.92 C833.96 15.67 835.69 15.05 837.91 15.05 C840.53 15.05 842.65 15.98 844.27 17.84 C845.80 19.61 846.56 21.83 846.56 24.51 Z";
 const AI_IMAGE_CTA_BOUNDS={x:4.0811,y:9.8438,width:842.4815,height:41.2822};
 
@@ -109,6 +111,7 @@ function instagramPromptRecord(input){
   if(!contentId)throw new Error('INSTAGRAM_CONTENT_ID_REQUIRED');
   if(!INSTAGRAM_PROMPT_CATEGORIES.includes(contentType))throw new Error('INSTAGRAM_PROMPT_CONTENT_TYPE_INVALID');
   if(!replyPrompt)throw new Error('INSTAGRAM_REPLY_PROMPT_REQUIRED');
+  if(replyPrompt.length>GENERATED_REPLY_PROMPT_MAX_CHARS)throw new Error('INSTAGRAM_REPLY_PROMPT_TOO_LONG');
   return {
     instagram_media_id:mediaId,
     content_id:contentId,
@@ -534,6 +537,7 @@ function validateAiTipSelection(output,item,recentAiTips=[]){
   const reply=String(item.reply_prompt||'');
   const required=['역할:','입력 자료:','목표:','분석 절차:','출력 형식:','주의사항:'];
   if(reply.length<260||required.some(label=>!reply.includes(label)))throw new Error('AI_TIP_REPLY_PROMPT_INCOMPLETE');
+  if(reply.length>GENERATED_REPLY_PROMPT_MAX_CHARS)throw new Error('AI_TIP_REPLY_PROMPT_TOO_LONG');
 
   const selectedText=`${item.topic} ${item.hook}`;
   const recent=aiTipRecentLines(recentAiTips);
@@ -554,7 +558,7 @@ AI 이미지 생성 놀이, 참조사진 변환, 스타일 변환은 AI_PROMPT �
 
 body는 자연스러운 한국어 반말로 150~500자 안에서 현실 상황 → 어떤 AI/도구에 무엇을 넣는지 → 어떤 식으로 요청하는지 → 어떤 결과를 얻고 어디에 쓰는지를 구체적으로 보여준다. CSV, 계약서, 메일, 영수증 같은 입력 자료와 실제 행동이 보이게 하되 매뉴얼처럼 늘이지 않는다. 과장만 있고 쓸모없는 본문, "시간을 절약할 수 있다" 같은 추상 문장은 금지한다. 프롬프트 제공·댓글·첫 댓글·DM CTA는 body에 넣지 않는다.
 
-reply_prompt는 사용자가 그대로 복사해 실행할 수 있는 완성형 한국어 실용 프롬프트다. 반드시 "역할:", "입력 자료:", "목표:", "분석 절차:", "출력 형식:", "주의사항:" 여섯 항목을 포함하고 사용자가 자료를 붙이는 명확한 자리표시자를 둔다. 불필요하게 장황하게 만들지 말고, 근거 없는 단정 금지·불확실성 표시·민감정보 제거 등 해당 작업에 필요한 안전 조건을 넣는다.
+reply_prompt는 사용자가 그대로 복사해 실행할 수 있는 최대 ${GENERATED_REPLY_PROMPT_MAX_CHARS}자의 완성형 한국어 실용 프롬프트다. 반드시 "역할:", "입력 자료:", "목표:", "분석 절차:", "출력 형식:", "주의사항:" 여섯 항목을 모두 유지하고 사용자가 자료를 붙이는 명확한 자리표시자를 둔다. 핵심 지시만 남기고 반복 수식어와 중복 조건을 제거한다. 근거 없는 단정 금지·불확실성 표시·민감정보 제거 등 해당 작업에 필요한 안전 조건을 간결하게 넣는다.
 
 최근 AI_TIP:
 ${recent.length?recent.map(value=>`- ${value}`).join('\n'):'- 없음'}
@@ -569,9 +573,10 @@ function pillarPrompt({pillar,research='',feedback='',performance='',mood='RANDO
   const rules={
     AI_PROMPT:`AI_PROMPT 하나만 만든다. ${aiPromptMoodRule(mood)} 반드시 body와 reply_prompt를 완전히 분리한다. body는 Threads에 실제 게시되는 한국어 설명문이다. 결과 이미지의 매력, 빛/질감/분위기/촬영 느낌 중 핵심을 3~5문장으로 충분히 설명한다. 자연스러운 반말과 가벼운 이모지 1~2개를 사용한다. 영문 이미지 프롬프트 문장이나 영어 프롬프트 일부를 body에 절대 넣지 않는다. body에는 프롬프트 제공, 첫 댓글, 댓글 작성, DM 전송을 안내하거나 유도하는 CTA를 넣지 않고 순수 콘텐츠만 쓴다.
 
-reply_prompt를 쓰기 전에 내부적으로 다음 Scene Design 20개 항목을 빠짐없이 결정하고 충돌을 제거한다: SUBJECT, IDENTITY, ACTION/POSE, EXPRESSION, WARDROBE/STYLING, LOCATION, ENVIRONMENT DETAILS, ERA/CULTURAL CONTEXT, COMPOSITION, CAMERA POSITION, LENS/FOCAL LENGTH, DEPTH OF FIELD, LIGHTING, MATERIAL/SKIN/FABRIC DETAIL, COLOR SCIENCE, FILM/DIGITAL CHARACTER, ATMOSPHERE, PHYSICAL REALISM, IDENTITY CONSTRAINTS, NEGATIVE/PROHIBITED ELEMENTS. 내부 설계 목록은 출력하지 말고 이를 자연스럽게 통합한 하나의 고밀도 영문 MASTER PROMPT만 reply_prompt에 넣는다. 일반적으로 800~1500자 정도를 목표로 하되 단순한 장면을 억지로 늘리거나 키워드를 반복하지 않는다. camera height/distance, 자연스러운 원근과 공간 관계, 장면에 맞는 렌즈와 조명 방향·부드러움·하이라이트·그림자, 재질과 피부·직물, 색 반응을 구체적으로 선택한다. cinematic, ultra detailed, 35mm 같은 장식어의 기계적 나열은 금지한다.
+reply_prompt는 하나의 완결된 영문 MASTER PROMPT로 쓴다. subject/action, location/environment, wardrobe, composition, lighting, camera/lens, mood와 photographic style을 각각 핵심 정보 한 번만 넣고 같은 의미의 형용사·품질 표현·금지 지시를 반복하지 않는다. 다음 Identity Lock 의미는 축약하거나 희생하지 말고 정확히 한 번만 포함한다: "Use the attached reference image as the PRIMARY IDENTITY REFERENCE. Preserve the exact identity and recognizable facial characteristics. Never reinterpret, replace, beautify, idealize, or age-shift the person. Identity preservation overrides styling. Keep the full face and both eyes visible and unobstructed." 얼굴 가림 요소가 장면과 충돌하면 해당 요소만 제거한다. 자연스러운 신체·원근·반사를 유지하고 복제 인물이나 추가 신체를 금지한다. 영문 프롬프트 본문만 출력하며 설명, 번역, 제목, 따옴표, Markdown은 넣지 않는다.
 
-reply_prompt는 사용자가 자신의 사진을 첨부한 뒤 그대로 복사해 사용할 수 있어야 하며 반드시 다음 정체성 의미를 자연스러운 영문 지시로 포함한다: Use the attached reference image as the PRIMARY IDENTITY REFERENCE. Preserve the exact identity and recognizable facial characteristics, including facial structure, proportions, eyes, nose, lips, jawline, skin characteristics and apparent age. Do not reinterpret, replace, beautify, idealize, age-shift or generate a different person. Identity preservation takes priority over styling, era, fashion and cinematic aesthetics. 얼굴과 양쪽 눈은 완전히 보여야 한다. sunglasses, goggles, masks, veils, hands, hair, props, deep hat shadows, dramatic shadows over the eyes, foreground objects로 얼굴을 가리지 않는다. 콘셉트에 얼굴 가림 요소가 있어도 제거하고 나머지 시대·의상·환경으로 스타일을 유지한다. 비정상 신체, 물체 관통, 불가능한 카메라·공간 관계, 부자연스러운 반사, 복제 인물, 추가 손·팔·손가락을 금지한다. 한국어 설명, 번역, Prompt:, 따옴표, Markdown은 reply_prompt에 넣지 않는다. image_brief는 reply_prompt 결과 이미지의 구도와 시각적 매력을 보충하되 별도의 텍스트 중심 썸네일로 바꾸지 않는다.`,
+FINAL PROMPT MUST BE ${GENERATED_REPLY_PROMPT_MAX_CHARS} CHARACTERS OR FEWER INCLUDING SPACES. Write a complete, compact prompt. Never sacrifice identity-preservation requirements. Avoid redundant adjectives and repeated instructions.
+image_brief는 reply_prompt 결과 이미지의 구도와 시각적 매력을 보충하되 별도의 텍스트 중심 썸네일로 바꾸지 않는다.`,
 
     AI_TIP:aiTipRule(recentAiTips),
     FOOD_PICK:`FOOD_PICK 하나만 만든다. 현재 한국 시간대를 반영해서 지금 먹기 가장 자연스러운 상황을 먼저 정한다. 점심 시간에는 점심, 저녁에는 저녁, 밤 9시 이후에는 야식/술안주 성격을 우선한다. '오늘 점심은 내가 정해줄게 😋', '오늘 저녁은 이거 먹자', '오늘 술안주는 이걸로 가자'처럼 우리가 먼저 결론을 준다. 아래 검색 결과에서 실제 확인된 전국 식당 하나를 고른다. 최근 생성 이력으로 제외된 업장은 절대 선택하지 않는다. 같은 지역/같은 장르/같은 업장을 연속 반복하지 말고 다양성을 우선한다. 식당명/지역/대표 메뉴/추천 이유를 간결하게 쓴다. 존재, 지역, 메뉴를 지어내지 않는다. 음식은 먹고 싶게 느껴지는 가볍고 맛깔나는 반말로 추천한다. 마지막에 '※ 이미지는 메뉴 이해를 돕는 AI 연출 이미지'를 넣는다.\n검색 결과:\n${research}`,
@@ -612,7 +617,8 @@ async function actionGenerate(req,res){
     if(!item.body||!item.hook)throw new Error('PILLAR_CONTENT_INVALID');
     const aiTipSelection=pillar==='AI_TIP'?validateAiTipSelection(out,item,recentAiTips):null;
     if(pillar==='AI_PROMPT'&&(
-      item.reply_prompt.length<650||
+      item.reply_prompt.length<450||
+      item.reply_prompt.length>GENERATED_REPLY_PROMPT_MAX_CHARS||
       !/PRIMARY IDENTITY REFERENCE/i.test(item.reply_prompt)||
       !/attached reference image/i.test(item.reply_prompt)
     ))throw new Error('AI_PROMPT_MASTER_PROMPT_INVALID');
@@ -652,6 +658,36 @@ async function applyAiImageCta(buffer){
   const stroke=lightBackground?'#ffffff':'#000000';
   const svg=Buffer.from(`<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"><path d="${AI_IMAGE_CTA_PATH}" transform="translate(${x.toFixed(2)} ${y.toFixed(2)}) scale(${scale.toFixed(5)})" fill="${fill}" stroke="${stroke}" stroke-opacity="0.38" stroke-width="${(1/scale).toFixed(3)}" paint-order="stroke"/></svg>`);
   return sharp(buffer).rotate().composite([{input:svg,left:0,top:0}]).jpeg({quality:92,mozjpeg:true}).toBuffer();
+}
+
+async function applyFoodIssueImageCta(buffer){
+  const {default:sharp}=await import('sharp');
+  const rotated=sharp(buffer).rotate();
+  const meta=await rotated.metadata();
+  const width=Number(meta.width)||0,height=Number(meta.height)||0;
+  if(width<200||height<250)throw new Error('FOOD_ISSUE_IMAGE_CTA_SIZE_INVALID');
+  const sampleTop=Math.max(0,Math.floor(height*.88));
+  const stats=await sharp(buffer).rotate().extract({left:0,top:sampleTop,width,height:height-sampleTop}).greyscale().stats();
+  const lightBackground=Number(stats.channels?.[0]?.mean||0)>145;
+  const fontSize=Math.max(18,Math.min(30,Math.round(width*.025)));
+  const textWidth=Math.floor(width*.86);
+  const fontfile=join(process.cwd(),'assets','fonts','NanumGothic-Regular.ttf');
+  const fill=lightBackground?'#111111':'#ffffff';
+  const textLayer=await sharp({text:{
+    text:`<span foreground="${fill}">${FOOD_ISSUE_IMAGE_CTA}</span>`,
+    font:`Nanum Gothic ${fontSize}`,
+    fontfile,
+    width:textWidth,
+    height:Math.ceil(fontSize*1.8),
+    align:'centre',
+    rgba:true
+  }}).png().toBuffer();
+  const textMeta=await sharp(textLayer).metadata();
+  return sharp(buffer).rotate().composite([{
+    input:textLayer,
+    left:Math.max(0,Math.round((width-Number(textMeta.width||textWidth))/2)),
+    top:Math.max(0,height-Number(textMeta.height||Math.ceil(fontSize*1.8))-Math.round(height*.012))
+  }]).jpeg({quality:92,mozjpeg:true}).toBuffer();
 }
 
 async function aiTipImageDirector(key,candidate,variation){
@@ -1034,6 +1070,8 @@ async function actionVariant(req,res){
 AI_TIP이면 현실 문제·손해·귀찮음·실수 같은 인간의 관심사를 먼저 보여주고, AI 기능 소개나 이미지 생성 놀이로 흐르지 않는다. 본문에는 사용자가 넣을 자료, 실제 요청 방식, 얻을 결과가 구체적으로 보여야 한다.
 AI_PROMPT와 AI_TIP은 body에는 한국어 설명만 쓰고 reply_prompt에는 실제 복붙용 프롬프트만 쓴다. 둘을 절대 섞지 않는다.
 AI_TIP reply_prompt는 한국어로 "역할:", "입력 자료:", "목표:", "분석 절차:", "출력 형식:", "주의사항:"을 모두 포함한 완성형 실용 프롬프트로 쓴다.
+AI_PROMPT와 AI_TIP reply_prompt는 모두 최대 ${GENERATED_REPLY_PROMPT_MAX_CHARS}자이며, 핵심 지시는 유지하고 반복 수식어와 중복 조건을 제거한다.
+AI_PROMPT reply_prompt는 subject/action, location/environment, wardrobe, composition, lighting, camera/lens, photographic style을 각각 한 번만 간결하게 기술한다. Identity Lock은 PRIMARY IDENTITY REFERENCE, exact identity와 recognizable facial characteristics 유지, reinterpret/replace/beautify/idealize/age-shift 금지, identity 우선, 얼굴 전체와 양쪽 눈 노출 조건을 중복 없이 한 번만 포함한다. FINAL PROMPT MUST BE ${GENERATED_REPLY_PROMPT_MAX_CHARS} CHARACTERS OR FEWER INCLUDING SPACES. Write a complete, compact prompt. Never sacrifice identity-preservation requirements. Avoid redundant adjectives and repeated instructions.
 AI_PROMPT와 AI_TIP의 body에는 프롬프트 제공, 첫 댓글, 댓글 작성, DM 전송을 안내하거나 유도하는 CTA를 넣지 않는다.
 FOOD_PICK이면 기존 검증된 식당/메뉴 사실을 바꾸거나 지어내지 말 것.
 HOT_ISSUE이면 source_notes의 사실 범위를 넘지 말 것.
@@ -1047,6 +1085,15 @@ JSON만:
 
   try{
     const v=await generateJson(key,prompt,1);
+    const nextReplyPrompt=['AI_PROMPT','AI_TIP'].includes(x.category)
+      ?String(v.reply_prompt||x.reply_prompt||'').trim():'';
+    if(['AI_PROMPT','AI_TIP'].includes(x.category)&&nextReplyPrompt.length>GENERATED_REPLY_PROMPT_MAX_CHARS){
+      throw new Error(`${x.category}_REPLY_PROMPT_TOO_LONG`);
+    }
+    if(x.category==='AI_TIP'){
+      const required=['역할:','입력 자료:','목표:','분석 절차:','출력 형식:','주의사항:'];
+      if(required.some(label=>!nextReplyPrompt.includes(label)))throw new Error('AI_TIP_REPLY_PROMPT_INCOMPLETE');
+    }
 
     return send(res,200,{
       ok:true,
@@ -1057,7 +1104,7 @@ JSON만:
           ?v.hook_candidates.slice(0,5)
           :x.hook_candidates,
         body:withoutGeneratedPromptCta(v.body||x.body,x.category).slice(0,500),
-        reply_prompt:['AI_PROMPT','AI_TIP'].includes(x.category)?String(v.reply_prompt||x.reply_prompt||'').trim():'',
+        reply_prompt:nextReplyPrompt,
         reason:String(v.reason||x.reason).slice(0,180),
         image_brief:String(v.image_brief||x.image_brief).slice(0,1200)
       }
@@ -1731,6 +1778,12 @@ function instagramCarouselImagePrompt(source,plan,slide,variation){
   if(source.category==='AI_TIP')throw new Error('AI_TIP_CUT_MODE_REQUIRED');
   const safeReplyPrompt=identitySafePrompt(source.reply_prompt);
   const fixedCta=source.category==='AI_PROMPT'?aiImageCtaInstruction():'';
+  const footerRule=['FOOD_PICK','HOT_ISSUE'].includes(source.category)
+    ?'A small fixed text-only footer is composited later directly over the finished full-bleed photograph. Do not render that footer, create a box, panel, ribbon, banner, background strip or empty footer area for it. Do not crop, shrink, shift or reframe the photograph for the footer; keep the natural scene full-bleed to every edge.'
+    :'The fixed CTA is composited later and must not be rendered by the image model.';
+  const finalCompositeRule=source.category==='AI_PROMPT'
+    ?'No Canvas, pasted headline or later story-text overlay is used; only the fixed text-only CTA footer is composited afterward.'
+    :'No Canvas or pasted headline is used; only the fixed text-only footer is composited afterward.';
   const aiPromptRule=source.category==='AI_PROMPT'
     ?`Use the attached reference image as the PRIMARY IDENTITY REFERENCE. Preserve the exact identity of that person throughout every slide: the same facial structure, proportions, eyes, nose, lips, jawline, skin characteristics, apparent age and recognizable identity. Do not reinterpret, replace, beautify, randomize, blend or generate a different person. Every human protagonist is VOA, the exact same person across the full carousel; only pose, gaze, framing and camera distance may vary. Keep the face and eyes fully visible and unobstructed. Never use sunglasses, goggles, masks, veils, face-covering hats, hands, hair, props or heavy shadows over the eyes or face. Remove any conflicting face-obscuring instruction from SOURCE REPLY_PROMPT and preserve its era or styling through non-face elements. Identity Lock overrides the source prompt. Faithfully apply the remaining world, wardrobe, location, lighting, camera and mood. IDENTITY-SAFE SOURCE REPLY_PROMPT: ${safeReplyPrompt}`
     :'If a person is useful, use the attached Character Master as the same adult Korean woman VOA; otherwise do not force a person into the scene.';
@@ -1757,19 +1810,34 @@ ${aiPromptRule}
 ${factRule}
 ${fixedCta}
 
-Continue the same coherent MASTER SCENE, palette, subject identity, typography family, text treatment, contrast and editorial mood as the series, while making this slide's actual scene, camera framing and composition visibly distinct. The visual scene is the protagonist; the short text only creates curiosity. Render the supplied DISPLAY TEXT exactly once. Never duplicate the headline, never repeat a caption, never add explanatory text, invented secondary copy, labels, logos, watermarks, fake UI, slide numbers, bottom CTA or extra facts. The fixed CTA is composited later and must not be rendered by the image model. Do not paraphrase or extend DISPLAY TEXT. Its authored line count is final and must never exceed three lines.
-Give DISPLAY TEXT one deliberate readable area chosen for this scene: authentic negative space, a restrained translucent panel, a compact solid editorial card, or a natural gradient field. Keep every pixel of DISPLAY TEXT above the strict bottom 14% CTA exclusion zone; a lower-third caption or baseline inside that zone is forbidden. Do not turn the full image into a giant text card. Reserve a generous no-text safety zone around every face, body and essential food/product/event subject. Typography and its readability treatment must remain fully outside those silhouettes with visible breathing room. Reposition the subject or camera to create the space; never cover the subject. Design the scene and its exact text together in the first generation pass. No Canvas, pasted headline or later story-text overlay is used; only the fixed text-only CTA footer is composited afterward.`;
+Continue the same coherent MASTER SCENE, palette, subject identity, typography family, text treatment, contrast and editorial mood as the series, while making this slide's actual scene, camera framing and composition visibly distinct. The visual scene is the protagonist; the short text only creates curiosity. Render the supplied DISPLAY TEXT exactly once. Never duplicate the headline, never repeat a caption, never add explanatory text, invented secondary copy, labels, logos, watermarks, fake UI, slide numbers, bottom CTA or extra facts. ${footerRule} Do not paraphrase or extend DISPLAY TEXT. Its authored line count is final and must never exceed three lines.
+Give DISPLAY TEXT one deliberate readable area chosen for this scene: authentic negative space, a restrained translucent panel, a compact solid editorial card, or a natural gradient field. ${source.category==='AI_PROMPT'?'Keep every pixel of DISPLAY TEXT above the strict bottom 14% CTA exclusion zone; a lower-third caption or baseline inside that zone is forbidden.':''} Do not turn the full image into a giant text card. Reserve a generous no-text safety zone around every face, body and essential food/product/event subject. Typography and its readability treatment must remain fully outside those silhouettes with visible breathing room. Reposition the subject or camera to create the space; never cover the subject. Design the scene and its exact text together in the first generation pass. ${finalCompositeRule}`;
 }
 
 function aiTipLayoutRects(template,count){
+  // CUT 원본을 과도하게 잘라내지 않도록 패널 높이를 확보하고,
+  // CTA용 하단 안전영역만 남긴 채 페이지의 빈 공간을 줄인다.
   const layouts={
-    HERO_REACTION:[{left:30,top:30,width:1020,height:650},{left:290,top:790,width:760,height:280}],
-    ASYMMETRIC_PAIR:[{left:30,top:30,width:690,height:500},{left:400,top:650,width:650,height:420}],
-    SPLIT_EMPHASIS:[{left:30,top:30,width:1020,height:430},{left:30,top:620,width:1020,height:450}],
-    STACKED_TRIO:[{left:30,top:30,width:1020,height:350},{left:30,top:500,width:650,height:290},{left:360,top:850,width:690,height:230}]
+    HERO_REACTION:[
+      {left:30,top:30,width:1020,height:600},
+      {left:150,top:690,width:900,height:500}
+    ],
+    ASYMMETRIC_PAIR:[
+      {left:30,top:30,width:760,height:560},
+      {left:290,top:650,width:760,height:540}
+    ],
+    SPLIT_EMPHASIS:[
+      {left:30,top:30,width:1020,height:540},
+      {left:30,top:630,width:1020,height:560}
+    ],
+    STACKED_TRIO:[
+      {left:30,top:30,width:1020,height:360},
+      {left:30,top:445,width:720,height:350},
+      {left:330,top:850,width:720,height:340}
+    ]
   };
   const selected=layouts[template]||layouts.ASYMMETRIC_PAIR;
-  if(count===1)return [{left:40,top:40,width:1000,height:980}];
+  if(count===1)return [{left:40,top:40,width:1000,height:1130}];
   return selected.slice(0,count);
 }
 
@@ -1848,7 +1916,9 @@ async function composeAiTipWebtoonPage(page,cutBuffers){
   const layers=[];
   for(let index=0;index<cutBuffers.length;index++){
     const rect=rects[index],cut=page.panels[index];
-    const image=await sharp(cutBuffers[index]).rotate().resize(rect.width,rect.height,{fit:'cover',position:'north'}).jpeg({quality:92}).toBuffer();
+    // cover는 4:5 CUT을 가로형 패널에 맞추면서 얼굴/몸/소품을 크게 잘라냈다.
+    // contain으로 전체 CUT을 보존하고 남는 영역만 페이지 배경색으로 채운다.
+    const image=await sharp(cutBuffers[index]).rotate().resize(rect.width,rect.height,{fit:'contain',background:'#fffdf8',withoutEnlargement:false}).jpeg({quality:92}).toBuffer();
     layers.push({input:image,left:rect.left,top:rect.top});
     layers.push({input:Buffer.from(`<svg width="${rect.width}" height="${rect.height}" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="${rect.width-4}" height="${rect.height-4}" fill="none" stroke="#22272d" stroke-width="4"/></svg>`),left:rect.left,top:rect.top});
     const textItems=aiTipCutTextItems(cut);
@@ -1888,7 +1958,9 @@ async function actionInstagramCarouselImage(req,res){
       const image=extractInlineImage(generated);
       if(!image)throw new Error('GEMINI_IMAGE_MISSING');
       const {default:sharp}=await import('sharp');
-      const jpeg=await sharp(Buffer.from(image.data,'base64')).rotate().resize(1024,1024,{fit:'cover',position:'attention'}).jpeg({quality:92,mozjpeg:true}).toBuffer();
+      // Gemini CUT은 4:5로 생성된다. 정사각형 cover 변환 시 원본 장면이 먼저 잘리므로
+      // 4:5 비율을 그대로 보존한 제작용 CUT으로 저장한다.
+      const jpeg=await sharp(Buffer.from(image.data,'base64')).rotate().resize(1024,1280,{fit:'contain',background:'#fffdf8',withoutEnlargement:false}).jpeg({quality:92,mozjpeg:true}).toBuffer();
       const blob=await put(`instagram-webtoon-cuts/${Date.now()}-${id}-${current.cut_id}.jpg`,jpeg,{access:'public',addRandomSuffix:true,contentType:'image/jpeg',cacheControlMaxAge:31536000});
       return send(res,200,{ok:true,mode:'cut',cut_id:current.cut_id,url:blob.url,mime_type:'image/jpeg'});
     }
@@ -1926,6 +1998,7 @@ async function actionInstagramCarouselImage(req,res){
     const sourceBuffer=Buffer.from(image.data,'base64');
     let jpeg;
     if(source.category==='AI_PROMPT')jpeg=await applyAiImageCta(sourceBuffer);
+    else if(source.category==='FOOD_PICK'||source.category==='HOT_ISSUE')jpeg=await applyFoodIssueImageCta(sourceBuffer);
     else{
       const {default:sharp}=await import('sharp');
       jpeg=await sharp(sourceBuffer).rotate().jpeg({quality:92,mozjpeg:true}).toBuffer();
@@ -2227,6 +2300,9 @@ async function actionInstagramCarouselPublish(req,res){
   const contentId=String(req.body?.content_id||'').trim().slice(0,200);
   const contentType=String(req.body?.content_type||'').trim();
   const replyPrompt=String(req.body?.reply_prompt||'').trim();
+  if(INSTAGRAM_PROMPT_CATEGORIES.includes(contentType)&&replyPrompt.length>GENERATED_REPLY_PROMPT_MAX_CHARS){
+    return send(res,400,{ok:false,error:'INSTAGRAM_REPLY_PROMPT_TOO_LONG',max_length:GENERATED_REPLY_PROMPT_MAX_CHARS});
+  }
   if(media.length<1||media.length>10||media.some(item=>!['image','video'].includes(item.type)||!item.url)){
     return send(res,400,{ok:false,error:'INSTAGRAM_MEDIA_INVALID'});
   }
