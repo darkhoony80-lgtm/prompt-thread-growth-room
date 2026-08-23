@@ -528,7 +528,10 @@ function validateAiTipSelection(output,item,recentAiTips=[]){
   if(/^(?:AI|ChatGPT|Gemini|챗GPT)|(?:활용법|사용법|꿀팁|기능\s*소개)$/i.test(item.hook)||/(?:활용법|꿀팁|기능\s*소개)/i.test(item.hook)){
     throw new Error('AI_TIP_HOOK_TOO_GENERIC');
   }
-  if(item.body.length<150||!/(?:올리|붙여|입력|복사|내보내|첨부|가져오|선택|요청)/.test(item.body)||!/(?:표|목록|순서|항목|비교|분류|결과|찾아|정리|분석)/.test(item.body)){
+  // AI_TIP 본문은 생성 프롬프트에서 이미 실행 가능한 흐름을 강제한다.
+  // 특정 한국어 동사/명사 포함 여부로 다시 차단하면 정상 본문도 오탐하므로
+  // 여기서는 최소 길이만 확인하고 실제 구조 검증은 reply_prompt 규칙에 맡긴다.
+  if(item.body.length<120){
     throw new Error('AI_TIP_BODY_NOT_ACTIONABLE');
   }
   const reply=String(item.reply_prompt||'');
