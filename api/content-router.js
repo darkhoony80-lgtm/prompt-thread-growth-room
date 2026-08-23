@@ -1358,19 +1358,17 @@ function normalizeAiTipWebtoonPlan(raw,source){
   });
   if(slides.length<2||slides.length>4)throw new Error('AI_TIP_WEBTOON_PAGE_COUNT_INVALID');
   const panels=slides.flatMap(slide=>slide.panels);
-  if(panels.length<4||panels.length>6)throw new Error('AI_TIP_WEBTOON_PANEL_COUNT_INVALID');
-  const panelIds=new Set(),visibleTexts=new Set(),sizes=new Set();
+  // Full-bleed mode uses exactly one CUT per page.
+  if(panels.length!==slides.length||slides.some(slide=>slide.panels.length!==1))throw new Error('AI_TIP_WEBTOON_PANEL_COUNT_INVALID');
+  const panelIds=new Set(),visibleTexts=new Set();
   for(const panel of panels){
     if(panelIds.has(panel.panel_id))throw new Error('AI_TIP_WEBTOON_PANEL_ID_DUPLICATE');
-    panelIds.add(panel.panel_id);sizes.add(panel.panel_size);
+    panelIds.add(panel.panel_id);
     for(const text of panel.allowed_visible_text){
       const key=text.replace(/\s+/g,'').toLocaleLowerCase('ko-KR');
       if(visibleTexts.has(key))throw new Error('AI_TIP_WEBTOON_VISIBLE_TEXT_DUPLICATE');
       visibleTexts.add(key);
     }
-  }
-  if(sizes.size<3||!slides.some(slide=>new Set(slide.panels.map(panel=>panel.panel_size)).size>1)){
-    throw new Error('AI_TIP_WEBTOON_DYNAMIC_PANEL_REQUIRED');
   }
   if(!/HOOK/i.test(panels[0].purpose))panels[0].purpose=`HOOK: ${panels[0].purpose}`.slice(0,180);
   const caption=String(raw?.caption||'').trim().slice(0,2200);
