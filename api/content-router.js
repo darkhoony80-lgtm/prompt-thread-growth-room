@@ -1655,11 +1655,11 @@ ${instagramCarouselRules(source.category)}
 - 독립 카드 모음이나 본문 요약이 아니라 응? → 무슨 일인데? → 왜? → 아, 이 얘기구나의 감정 흐름을 소재에 맞게 압축한 시각적 예고편으로 만든다.
 - 첫 장 role은 HOOK이다. 사실을 훼손하지 않는 비유·질문·반전·의외성·짧은 유머 중 콘텐츠에 맞는 방법으로 1초 안에 궁금증을 만든다. 실제 인물의 허위 사실, 무관한 선정성, 의미 없는 과장, 충격/대박/전격의 반복은 금지한다.
 - 각 message가 이미지에 표시할 최종 hook text다. 한 이미지에 하나의 메시지만, 1~2줄 우선·최대 3줄, 첫 장 34자 이내·나머지 54자 이내로 쓴다. 제목+부제+설명문을 함께 넣지 말고 본문 문장을 그대로 복사하지 않는다.
-- visual_concept, master_scene, color_palette, art_direction, typography와 text panel treatment를 시리즈 전체에서 일관되게 유지한다.
+- visual_concept, master_scene, color_palette, art_direction와 typography를 시리즈 전체에서 일관되게 유지한다. text panel treatment는 사용하지 않는다.
 - 각 장은 역할·실제 장면·카메라·구도·정보 공개량이 달라야 하며 같은 문장·의미·장면·레이아웃을 반복하지 않는다.
 - 장별 visual과 composition은 다음 장과 구별되는 구체적 장면과, message만 놓을 실제 여백·타이포그래피 위치를 정한다.
 - 텍스트는 주요 인물, 얼굴, 음식, 제품, 사건의 핵심 피사체를 가리지 않는 실제 여백에 둔다.
-- 텍스트에는 반투명 패널, 단색 카드, 자연스러운 그라데이션, negative space, editorial caption area 중 장면에 맞는 하나의 읽기 쉬운 영역을 정한다. 비주얼이 주인공이어야 하며 화면 전체를 거대한 텍스트 카드로 만들지 않는다.
+- 텍스트는 사진 자체의 자연스러운 negative space 위에 직접 배치한다. 텍스트 뒤에 반투명 패널, 단색 카드, 박스, 띠, 배경판, 그라데이션 필드, 별도 editorial caption area를 만들지 않는다. 텍스트 공간을 만들기 위해 사진을 자르거나 축소하거나 밀어내거나 상단·하단에 별도 배경 영역을 생성하지 않는다.
 - 이미지 생성 AI가 텍스트까지 직접 디자인할 것이므로 Canvas, 후합성, 별도 Hook 합성은 없다.
 - Instagram caption은 Threads 본문 복사가 아닌 별도 문장으로 쓴다. 첫 1~2줄은 강하게, 이미지 설명을 장황하게 반복하지 않고 과도한 CTA·광고 말투를 피한다.
 - AI_TIP과 AI_PROMPT caption에는 실제 reply_prompt 전문과 프롬프트 제공, 댓글 작성, 첫 댓글, DM 전송 CTA를 절대 넣지 않는다. 순수 콘텐츠 문장으로 끝낸다.
@@ -1760,7 +1760,7 @@ ${factRule}
 ${fixedCta}
 
 Continue the same coherent MASTER SCENE, palette, subject identity, typography family, text treatment, contrast and editorial mood as the series, while making this slide's actual scene, camera framing and composition visibly distinct. The visual scene is the protagonist; the short text only creates curiosity. Render the supplied DISPLAY TEXT exactly once. Never duplicate the headline, never repeat a caption, never add explanatory text, invented secondary copy, labels, logos, watermarks, fake UI, slide numbers, bottom CTA or extra facts. The fixed CTA is composited later and must not be rendered by the image model. Do not paraphrase or extend DISPLAY TEXT. Its authored line count is final and must never exceed three lines.
-Give DISPLAY TEXT one deliberate readable area chosen for this scene: authentic negative space, a restrained translucent panel, a compact solid editorial card, or a natural gradient field. Keep every pixel of DISPLAY TEXT above the strict bottom 14% CTA exclusion zone; a lower-third caption or baseline inside that zone is forbidden. Do not turn the full image into a giant text card. Reserve a generous no-text safety zone around every face, body and essential food/product/event subject. Typography and its readability treatment must remain fully outside those silhouettes with visible breathing room. Reposition the subject or camera to create the space; never cover the subject. Design the scene and its exact text together in the first generation pass. No Canvas, pasted headline or later story-text overlay is used; only the fixed text-only CTA footer is composited afterward.`;
+Place DISPLAY TEXT directly on authentic natural negative space already inside the photograph. TEXT BACKGROUND IS STRICTLY FORBIDDEN: no translucent panel, solid card, rectangle, box, ribbon, banner, strip, plate, gradient field, editorial caption block, header area, footer area or any separate background behind the text. Never crop, shorten, shrink, push, shift or reframe the photograph to manufacture a text area. The photograph must remain one continuous full-bleed image from top edge to bottom edge. Keep every pixel of DISPLAY TEXT above the strict bottom 14% CTA exclusion zone; a lower-third caption or baseline inside that zone is forbidden. Reserve a generous no-text safety zone around every face, body and essential food/product/event subject. If readability is difficult, move the text to a different natural empty area or use only subtle text shadow/outline; never create a background for the text. Reposition the subject or camera only as part of the natural photographic composition, never to create a graphic header/footer region. Design the scene and its exact text together in the first generation pass. No Canvas, pasted headline or later story-text overlay is used; only the fixed text-only CTA footer is composited afterward.`;
 }
 
 function aiTipLayoutRects(template,count){
