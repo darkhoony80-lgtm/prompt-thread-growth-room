@@ -1,7 +1,13 @@
-import {readFile} from 'node:fs/promises';
-import {join} from 'node:path';
-import {createHmac,timingSafeEqual} from 'node:crypto';
-import {put} from '@vercel/blob';
+const {readFile}=require('node:fs/promises');
+const {join}=require('node:path');
+const {createHmac,timingSafeEqual}=require('node:crypto');
+
+let vercelBlobModulePromise=null;
+async function blobPut(...args){
+  if(!vercelBlobModulePromise)vercelBlobModulePromise=import('@vercel/blob');
+  const {put}=await vercelBlobModulePromise;
+  return put(...args);
+}
 
 const TEXT_MODEL='gemini-3.6-flash';
 const IMAGE_MODEL='gemini-3.1-flash-image';
@@ -580,7 +586,7 @@ image_brief는 선택된 현실 문제와 반전이 한눈에 이해되는 장�
 }
 
 function pillarPrompt({pillar,research='',feedback='',performance='',mood='RANDOM',recentAiTips=[]}){
-  const common=`너는 한국 Threads 계정을 팔로워 성장시키는 콘텐츠 편집장이다.\n목표는 광고가 아니라 저장, 공유, 댓글, 팔로우를 부르는 원본 콘텐츠다.\n본문은 스레드에서 실제 사람이 말하듯 자연스러운 반말로 쓴다. 딱딱한 기사체, 보도자료체, 존댓말, 교과서식 설명은 피한다.\n짧은 문장과 줄바꿈을 활용하고, 귀엽고 친근한 리액션을 자연스럽게 섞는다. 이모지는 보통 1~3개만 사용하고 과하게 도배하지 않는다.\n사건사고·재난·피해자가 있는 내용에서는 장난스러운 표현을 피하고 친근하지만 차분한 반말을 사용한다.\n후킹은 6~10자 우선, 최대 14자. 기사 제목이나 흔한 문구를 복사하지 않는다.\n모든 category의 body 본문 맨 마지막 줄에는 게시물 내용과 직접 관련된 검색용 해시태그를 정확히 5개 넣는다. 형식은 `#키워드1 #키워드2 #키워드3 #키워드4 #키워드5`이며 한 줄에만 작성한다. 실제 검색할 법한 짧고 구체적인 핵심어를 사용하고, 문장형·광고문구·억지 신조어·중복 키워드는 금지한다. 이 5개 해시태그는 오직 body에만 포함하며 hook, topic, topic_tag, topic_tag_candidates, reply_prompt, reason, image_brief, source_notes 등 다른 필드에는 절대 넣지 않는다.\nThreads 주제 태그도 함께 추천한다. 내부 소재명 topic과 Threads 주제 태그 topic_tag는 절대 같은 필드로 취급하지 않는다. topic_tag_candidates는 게시물 내용과 직접 관련된 후보 3개를 만든다. 한국 계정이므로 자연스럽고 실제 사람들이 찾을 법한 한글 Topic을 우선하되, AI Art처럼 영어명이 더 보편적인 주제는 영어도 허용한다. # 기호는 넣지 않는다. 너무 길거나 문장형인 태그, 광고 문구, 억지 신조어는 금지한다. topic_tag에는 후보 중 가장 적합한 하나를 넣는다.\nimage_brief는 본문과 직접 연결되는 시각적 핵심만 설명한다. 실제 썸네일 문구와 타이포그래피 구성은 카테고리별 이미지 생성 단계가 별도로 결정한다.\n최근 피드백: ${feedback||'없음'}\n실제 성과: ${performance||'없음'}`;
+  const common=`너는 한국 Threads 계정을 팔로워 성장시키는 콘텐츠 편집장이다.\n목표는 광고가 아니라 저장, 공유, 댓글, 팔로우를 부르는 원본 콘텐츠다.\n본문은 스레드에서 실제 사람이 말하듯 자연스러운 반말로 쓴다. 딱딱한 기사체, 보도자료체, 존댓말, 교과서식 설명은 피한다.\n짧은 문장과 줄바꿈을 활용하고, 귀엽고 친근한 리액션을 자연스럽게 섞는다. 이모지는 보통 1~3개만 사용하고 과하게 도배하지 않는다.\n사건사고·재난·피해자가 있는 내용에서는 장난스러운 표현을 피하고 친근하지만 차분한 반말을 사용한다.\n후킹은 6~10자 우선, 최대 14자. 기사 제목이나 흔한 문구를 복사하지 않는다.\n모든 category의 body 본문 맨 마지막 줄에는 게시물 내용과 직접 관련된 검색용 해시태그를 정확히 5개 넣는다. 형식은 "#키워드1 #키워드2 #키워드3 #키워드4 #키워드5"이며 한 줄에만 작성한다. 실제 검색할 법한 짧고 구체적인 핵심어를 사용하고, 문장형·광고문구·억지 신조어·중복 키워드는 금지한다. 이 5개 해시태그는 오직 body에만 포함하며 hook, topic, topic_tag, topic_tag_candidates, reply_prompt, reason, image_brief, source_notes 등 다른 필드에는 절대 넣지 않는다.\nThreads 주제 태그도 함께 추천한다. 내부 소재명 topic과 Threads 주제 태그 topic_tag는 절대 같은 필드로 취급하지 않는다. topic_tag_candidates는 게시물 내용과 직접 관련된 후보 3개를 만든다. 한국 계정이므로 자연스럽고 실제 사람들이 찾을 법한 한글 Topic을 우선하되, AI Art처럼 영어명이 더 보편적인 주제는 영어도 허용한다. # 기호는 넣지 않는다. 너무 길거나 문장형인 태그, 광고 문구, 억지 신조어는 금지한다. topic_tag에는 후보 중 가장 적합한 하나를 넣는다.\nimage_brief는 본문과 직접 연결되는 시각적 핵심만 설명한다. 실제 썸네일 문구와 타이포그래피 구성은 카테고리별 이미지 생성 단계가 별도로 결정한다.\n최근 피드백: ${feedback||'없음'}\n실제 성과: ${performance||'없음'}`;
 
   const rules={
     AI_PROMPT:`AI_PROMPT 하나만 만든다. ${aiPromptMoodRule(mood)} 반드시 body와 reply_prompt를 완전히 분리한다. body는 Threads에 실제 게시되는 한국어 설명문이다. 결과 이미지의 매력, 빛/질감/분위기/촬영 느낌 중 핵심을 3~5문장으로 충분히 설명한다. 자연스러운 반말과 가벼운 이모지 1~2개를 사용한다. 영문 이미지 프롬프트 문장이나 영어 프롬프트 일부를 body에 절대 넣지 않는다. body에는 프롬프트 제공, 첫 댓글, 댓글 작성, DM 전송을 안내하거나 유도하는 CTA를 넣지 않고 순수 콘텐츠만 쓴다.
@@ -1041,7 +1047,7 @@ async function actionStoreImage(req,res){
     d.mime==='image/webp'?'webp':'jpg';
 
   try{
-    const blob=await put(
+    const blob=await blobPut(
       `threads-growth/${Date.now()}-${id}.${ext}`,
       d.buffer,
       {
@@ -1980,7 +1986,7 @@ async function actionInstagramCarouselImage(req,res){
       // Gemini CUT은 4:5로 생성된다. 정사각형 cover 변환 시 원본 장면이 먼저 잘리므로
       // 4:5 비율을 그대로 보존한 제작용 CUT으로 저장한다.
       const jpeg=await sharp(Buffer.from(image.data,'base64')).rotate().resize(1024,1280,{fit:'contain',background:'#fffdf8',withoutEnlargement:false}).jpeg({quality:92,mozjpeg:true}).toBuffer();
-      const blob=await put(`instagram-webtoon-cuts/${Date.now()}-${id}-${current.cut_id}.jpg`,jpeg,{access:'public',addRandomSuffix:true,contentType:'image/jpeg',cacheControlMaxAge:31536000});
+      const blob=await blobPut(`instagram-webtoon-cuts/${Date.now()}-${id}-${current.cut_id}.jpg`,jpeg,{access:'public',addRandomSuffix:true,contentType:'image/jpeg',cacheControlMaxAge:31536000});
       return send(res,200,{ok:true,mode:'cut',cut_id:current.cut_id,url:blob.url,mime_type:'image/jpeg'});
     }
     if(source.category==='AI_TIP'&&mode==='compose'){
@@ -1996,7 +2002,7 @@ async function actionInstagramCarouselImage(req,res){
       }
       const composed=await composeAiTipWebtoonPage(page,buffers);
       const jpeg=await applyAiImageCta(composed);
-      const blob=await put(`instagram-carousel/${Date.now()}-${id}-slide-${page.number}.jpg`,jpeg,{access:'public',addRandomSuffix:true,contentType:'image/jpeg',cacheControlMaxAge:31536000});
+      const blob=await blobPut(`instagram-carousel/${Date.now()}-${id}-slide-${page.number}.jpg`,jpeg,{access:'public',addRandomSuffix:true,contentType:'image/jpeg',cacheControlMaxAge:31536000});
       return send(res,200,{ok:true,mode:'compose',slide_number:page.number,url:blob.url,mime_type:'image/jpeg',layout_template:page.layout_template});
     }
     let referenceImage=null;
@@ -2023,7 +2029,7 @@ async function actionInstagramCarouselImage(req,res){
       jpeg=await sharp(sourceBuffer).rotate().jpeg({quality:92,mozjpeg:true}).toBuffer();
     }
     if(jpeg.length>4_000_000)throw new Error('INSTAGRAM_CAROUSEL_IMAGE_TOO_LARGE');
-    const blob=await put(
+    const blob=await blobPut(
       `instagram-carousel/${Date.now()}-${id}-slide-${slide.number}.jpg`,
       jpeg,
       {access:'public',addRandomSuffix:true,contentType:'image/jpeg',cacheControlMaxAge:31536000}
@@ -2552,7 +2558,7 @@ async function actionInstagramStatus(req,res){
   });
 }
 
-export default async function handler(req,res){
+async function handler(req,res){
   res.setHeader('Cache-Control','no-store');
 
   const queryAction=String(req.query?.action||'').trim();
@@ -2597,4 +2603,5 @@ export default async function handler(req,res){
   });
 }
 
-export const config={api:{bodyParser:false}};
+module.exports=handler;
+module.exports.config={api:{bodyParser:false}};
