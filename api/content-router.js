@@ -535,9 +535,9 @@ function validateAiTipSelection(output,item,recentAiTips=[]){
     throw new Error('AI_TIP_BODY_NOT_ACTIONABLE');
   }
   const reply=String(item.reply_prompt||'');
-  const required=['Role:','Input Materials:','Objective:','Analysis Process:','Output Format:','Precautions:'];
+  const required=['역할:','입력 자료:','목표:','분석 절차:','출력 형식:','주의사항:'];
   if(reply.length<260||required.some(label=>!reply.includes(label)))throw new Error('AI_TIP_REPLY_PROMPT_INCOMPLETE');
-  if(/[가-힣]/.test(reply))throw new Error('AI_TIP_REPLY_PROMPT_NOT_ENGLISH');
+  if(!/[가-힣]/.test(reply))throw new Error('AI_TIP_REPLY_PROMPT_NOT_KOREAN');
   if(reply.length>GENERATED_REPLY_PROMPT_MAX_CHARS)throw new Error('AI_TIP_REPLY_PROMPT_TOO_LONG');
 
   const selectedText=`${item.topic} ${item.hook}`;
@@ -559,7 +559,7 @@ AI 이미지 생성 놀이, 참조사진 변환, 스타일 변환은 AI_PROMPT �
 
 body는 자연스러운 한국어 반말로 150~500자 안에서 현실 상황 → 어떤 AI/도구에 무엇을 넣는지 → 어떤 식으로 요청하는지 → 어떤 결과를 얻고 어디에 쓰는지를 구체적으로 보여준다. CSV, 계약서, 메일, 영수증 같은 입력 자료와 실제 행동이 보이게 하되 매뉴얼처럼 늘이지 않는다. 과장만 있고 쓸모없는 본문, "시간을 절약할 수 있다" 같은 추상 문장은 금지한다. 프롬프트 제공·댓글·첫 댓글·DM CTA는 body에 넣지 않는다.
 
-reply_prompt는 사용자가 그대로 복사해 실행할 수 있는 최대 ${GENERATED_REPLY_PROMPT_MAX_CHARS}자의 완성형 영문 실용 프롬프트다. reply_prompt 전체는 영어로만 작성하고 한국어를 섞지 않는다. 반드시 "Role:", "Input Materials:", "Objective:", "Analysis Process:", "Output Format:", "Precautions:" 여섯 항목을 모두 유지하고 사용자가 자료를 붙이는 명확한 placeholder를 둔다. 핵심 지시만 남기고 반복 수식어와 중복 조건을 제거한다. 근거 없는 단정 금지·불확실성 표시·민감정보 제거 등 해당 작업에 필요한 안전 조건도 영어로 간결하게 넣는다.
+reply_prompt는 사용자가 그대로 복사해 실행할 수 있는 최대 ${GENERATED_REPLY_PROMPT_MAX_CHARS}자의 완성형 한국어 실용 프롬프트다. reply_prompt 전체는 자연스러운 한국어로 작성한다. 반드시 "역할:", "입력 자료:", "목표:", "분석 절차:", "출력 형식:", "주의사항:" 여섯 항목을 모두 유지하고 사용자가 자료를 붙이는 명확한 placeholder를 둔다. 핵심 지시만 남기고 반복 수식어와 중복 조건을 제거한다. 근거 없는 단정 금지·불확실성 표시·민감정보 제거 등 해당 작업에 필요한 안전 조건도 한국어로 간결하게 넣는다. 950자에 맞추기 위해 뒤를 자르거나 문장을 끊지 말고 처음부터 제한 안에서 완결되게 작성한다.
 
 최근 AI_TIP:
 ${recent.length?recent.map(value=>`- ${value}`).join('\n'):'- 없음'}
@@ -1071,7 +1071,7 @@ async function actionVariant(req,res){
 사건사고·재난·피해자가 있는 내용은 장난스럽게 표현하지 않는다.
 AI_TIP이면 현실 문제·손해·귀찮음·실수 같은 인간의 관심사를 먼저 보여주고, AI 기능 소개나 이미지 생성 놀이로 흐르지 않는다. 본문에는 사용자가 넣을 자료, 실제 요청 방식, 얻을 결과가 구체적으로 보여야 한다.
 AI_PROMPT와 AI_TIP은 body에는 한국어 설명만 쓰고 reply_prompt에는 실제 복붙용 프롬프트만 쓴다. 둘을 절대 섞지 않는다.
-AI_TIP reply_prompt는 영어로만 작성하고 "Role:", "Input Materials:", "Objective:", "Analysis Process:", "Output Format:", "Precautions:"을 모두 포함한 완성형 실용 프롬프트로 쓴다. 한국어를 섞지 않는다.
+AI_TIP reply_prompt는 한국어로 작성하고 "역할:", "입력 자료:", "목표:", "분석 절차:", "출력 형식:", "주의사항:"을 모두 포함한 완성형 실용 프롬프트로 쓴다.
 AI_PROMPT와 AI_TIP reply_prompt는 모두 최대 ${GENERATED_REPLY_PROMPT_MAX_CHARS}자이며, 핵심 지시는 유지하고 반복 수식어와 중복 조건을 제거한다.
 AI_PROMPT reply_prompt는 subject/action, location/environment, wardrobe, composition, lighting, camera/lens, photographic style을 각각 한 번만 간결하게 기술한다. Identity Lock은 PRIMARY IDENTITY REFERENCE, exact identity와 recognizable facial characteristics 유지, reinterpret/replace/beautify/idealize/age-shift 금지, identity 우선, 얼굴 전체와 양쪽 눈 노출 조건을 중복 없이 한 번만 포함한다. FINAL PROMPT MUST BE ${GENERATED_REPLY_PROMPT_MAX_CHARS} CHARACTERS OR FEWER INCLUDING SPACES. Write a complete, compact prompt. Never sacrifice identity-preservation requirements. Avoid redundant adjectives and repeated instructions.
 AI_PROMPT와 AI_TIP의 body에는 프롬프트 제공, 첫 댓글, 댓글 작성, DM 전송을 안내하거나 유도하는 CTA를 넣지 않는다.
@@ -1083,20 +1083,23 @@ hook 6~10자 우선 최대 14자.
 기존:${JSON.stringify(x).slice(0,6000)}
 
 JSON만:
-{"hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reply_prompt":"AI_PROMPT is a detailed English image prompt; AI_TIP is an English practical prompt with all six required sections","reason":"...","image_brief":"..."}`;
+{"hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reply_prompt":"AI_PROMPT is a detailed English image prompt; AI_TIP은 한국어 실용 프롬프트이며 여섯 필수 항목을 모두 포함","reason":"...","image_brief":"..."}`;
 
   try{
     const v=await generateJson(key,prompt,1);
     const nextReplyPrompt=['AI_PROMPT','AI_TIP'].includes(x.category)
       ?String(v.reply_prompt||x.reply_prompt||'').trim():'';
-    if(['AI_PROMPT','AI_TIP'].includes(x.category)&&/[가-힣]/.test(nextReplyPrompt)){
-      throw new Error(`${x.category}_REPLY_PROMPT_NOT_ENGLISH`);
+    if(x.category==='AI_PROMPT'&&/[가-힣]/.test(nextReplyPrompt)){
+      throw new Error('AI_PROMPT_REPLY_PROMPT_NOT_ENGLISH');
+    }
+    if(x.category==='AI_TIP'&&!/[가-힣]/.test(nextReplyPrompt)){
+      throw new Error('AI_TIP_REPLY_PROMPT_NOT_KOREAN');
     }
     if(['AI_PROMPT','AI_TIP'].includes(x.category)&&nextReplyPrompt.length>GENERATED_REPLY_PROMPT_MAX_CHARS){
       throw new Error(`${x.category}_REPLY_PROMPT_TOO_LONG`);
     }
     if(x.category==='AI_TIP'){
-      const required=['Role:','Input Materials:','Objective:','Analysis Process:','Output Format:','Precautions:'];
+      const required=['역할:','입력 자료:','목표:','분석 절차:','출력 형식:','주의사항:'];
       if(required.some(label=>!nextReplyPrompt.includes(label)))throw new Error('AI_TIP_REPLY_PROMPT_INCOMPLETE');
     }
 
