@@ -2759,15 +2759,15 @@ function oxGenerationPrompt(type,candidate,context=null){
       continuity_notes:context.continuity_notes||''
     }:null;
     return `${common}
-연재 가능한 한국어 장르소설 한 화를 완결성 있게 작성한다. 기존 작품 맥락이 있으면 세계관과 인물 연속성을 지킨다.
+연재 가능한 한국어 장르소설 한 화를 완결성 있게 작성한다. episode_body는 2,500~3,500자 안에서 도입·전개·회차 결말을 갖춘다. 기존 작품 맥락이 있으면 세계관과 인물 연속성을 지킨다.
 기존 작품 맥락: ${JSON.stringify(continuity)}
 정확한 스키마: {"type":"novel","title":"","genre":"","premise":"","world_bible":"","characters":[],"master_plot":"","episode_number":1,"episode_title":"","episode_body":"충분한 분량의 소설 본문","foreshadowing":[],"continuity_notes":"","next_episode_direction":"","memory_summary":"","tags":[]}`;
   }
   if(type==='longform')return `${common}
-약 10분 영상용 한국어 원고를 만든다. 내레이션은 실제 목표 시간에 맞는 충분한 분량이어야 한다. 각 scene의 source_queries는 무료 사진/영상 검색 API가 그대로 사용할 구체적인 영어 검색어 배열이다. 이미지나 영상을 생성하지 않는다.
+약 10분 영상용 한국어 원고를 만든다. 전체 내레이션은 약 3,000~4,000자이며 실제 목표 시간에 맞는 챕터와 장면 흐름을 갖춘다. 각 scene의 source_queries는 무료 사진/영상 검색 API가 그대로 사용할 구체적인 영어 검색어 배열이다. 이미지나 영상을 생성하지 않는다.
 정확한 스키마: {"type":"longform","title_candidates":[],"selected_title":"","thumbnail_hook":"","opening_hook":"","target_duration_sec":600,"summary":"","chapters":[{"chapter_number":1,"title":"","narration":"","scenes":[{"scene_number":1,"narration":"","visual_description":"","source_type":"photo|video|either","source_queries":[],"estimated_duration_sec":0}]}],"fact_check_items":[],"ending":"","next_video_hook":"","tags":[]}`;
   return `${common}
-사실 기반 한국어 블로그 글을 작성한다. 과학·우주·기술·역사·자연현상·검증 가능한 발견만 다룬다. 출처를 지어내지 말고 불확실한 항목은 source_notes와 fact_check_needed에 명시한다.
+사실 기반 한국어 블로그 글을 2,000~3,000자로 완결성 있게 작성한다. 과학·우주·기술·역사·자연현상·검증 가능한 발견만 다룬다. 출처를 지어내지 말고 불확실한 항목은 source_notes와 fact_check_needed에 명시한다.
 정확한 스키마: {"type":"blog","title_candidates":[],"selected_title":"","topic":"","category":"","key_question":"","fact_summary":"","source_notes":[],"fact_check_needed":false,"primary_keyword":"","secondary_keywords":[],"outline":[{"heading":"","body":""}],"faq":[],"meta_description":"","tags":[]}`;
 }
 
@@ -2859,7 +2859,7 @@ async function actionOxGenerate(req,res){
     const completion=await oxCompletion([
       {role:'system',content:'You are OX, a long-form Korean content production engine. Follow the requested schema and return JSON only.'},
       {role:'user',content:prompt}
-    ],{maxTokens:16000,temperature:type==='blog'?.35:.72});
+    ],{maxTokens:type==='longform'?5500:type==='novel'?4800:4200,temperature:type==='blog'?.35:.72});
     let parsed;
     try{parsed=parseJson(completion.text)}catch{
       return send(res,502,{ok:false,error:'OX_JSON_PARSE_FAILED',raw_text:completion.text});
