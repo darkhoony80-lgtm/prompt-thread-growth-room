@@ -2659,6 +2659,57 @@ async function actionInstagramStatus(req,res){
   });
 }
 
+async function actionOpenRouterTest(req,res){
+  if(req.method!=='GET'){
+    res.setHeader('Allow','GET');
+    return send(res,405,{ok:false,error:'METHOD_NOT_ALLOWED'});
+  }
+
+  const apiKey=String(process.env.OPENROUTER_API_KEY||'').trim();
+  if(!apiKey){
+    return send(res,500,{ok:false,error:'OPENROUTER_API_KEY_MISSING'});
+  }
+
+  let response;
+  let body;
+  try{
+    response=await fetch('https://openrouter.ai/api/v1/chat/completions',{
+      method:'POST',
+      headers:{
+        Authorization:`Bearer ${apiKey}`,
+        'Content-Type':'application/json'
+      },
+      body:JSON.stringify({
+        model:'openrouter/free',
+        messages:[{role:'user',content:'Reply with exactly: VOARA_OPENROUTER_OK'}],
+        max_tokens:16,
+        temperature:0
+      })
+    });
+    body=await response.json().catch(()=>({}));
+  }catch{
+    return send(res,502,{ok:false,error:'OPENROUTER_NETWORK_ERROR'});
+  }
+
+  if(!response.ok){
+    const message=String(body?.error?.message||'OPENROUTER_REQUEST_FAILED')
+      .trim()
+      .slice(0,300);
+    return send(res,response.status,{
+      ok:false,
+      status:response.status,
+      error:message||'OPENROUTER_REQUEST_FAILED'
+    });
+  }
+
+  return send(res,200,{
+    ok:true,
+    model:body?.model||null,
+    text:body?.choices?.[0]?.message?.content||'',
+    usage:body?.usage||null
+  });
+}
+
 async function handler(req,res){
   res.setHeader('Cache-Control','no-store');
 
@@ -2674,6 +2725,7 @@ async function handler(req,res){
   }
   if(queryAction==='instagram_webhook')return actionInstagramWebhook(req,res,rawBody);
   if(queryAction==='instagram_status')return actionInstagramStatus(req,res);
+  if(queryAction==='openrouter_test')return actionOpenRouterTest(req,res);
   if(queryAction==='supabase_status')return actionSupabaseStatus(req,res);
   if(queryAction==='instagram_prompt_lookup')return actionInstagramPromptLookup(req,res);
 
