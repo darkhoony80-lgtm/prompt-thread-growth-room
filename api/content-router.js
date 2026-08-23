@@ -2779,7 +2779,7 @@ function oxGenerationPrompt(type,candidate,context=null){
 정확한 스키마: {"type":"novel","title":"","genre":"","premise":"","world_bible":"","characters":[],"master_plot":"","episode_number":1,"episode_title":"","episode_body":"충분한 분량의 소설 본문","foreshadowing":[],"continuity_notes":"","next_episode_direction":"","memory_summary":"","tags":[]}`;
   }
   if(type==='longform')return `${common}
-약 10분 영상용 한국어 원고를 만든다. 실제 낭독에 쓰는 전체 scene narration 합계는 공백 포함 3,000~3,500자로 작성한다. 의미 없는 반복이나 수식어로 분량을 채우지 않는다.
+약 10분 영상용 한국어 원고를 만든다. 4~6개 chapter와 총 10~14개 scene으로 구성하고, 각 scene narration을 약 230~320자로 충분히 작성한다. 실제 낭독에 쓰는 전체 scene narration 합계는 공백 포함 반드시 3,000~3,500자로 작성한다. 의미 없는 반복이나 수식어로 분량을 채우지 않는다. JSON 반환 전에 scene narration 합계가 최소 3,000자인지 확인한다.
 각 scenes[].narration은 요약이 아니라 그 장면에서 그대로 읽는 완전한 대본이다. 각 장면의 narration, visual_description, source_type, source_queries, estimated_duration_sec를 1:1로 연결한다. scene narration을 순서대로 이으면 전체 완성 대본이 되어야 한다.
 chapter.narration은 중복 대본을 만들지 않도록 빈 문자열로 반환한다. 서버가 해당 chapter의 scene narration을 순서대로 연결해 채운다.
 각 scene의 source_queries는 무료 사진/영상 검색 API가 그대로 사용할 구체적인 영어 검색어 배열이다. 확인되지 않은 사실을 단정하지 않으며 이미지나 영상을 생성하지 않는다.
@@ -2923,12 +2923,16 @@ async function actionOxGenerate(req,res){
     const completion=await oxCompletion([
       {role:'system',content:'You are OX, a long-form Korean content production engine. Follow the requested schema and return JSON only.'},
       {role:'user',content:prompt}
-    ],{maxTokens:type==='longform'?5500:type==='novel'?4800:4200,temperature:type==='blog'?.35:.72});
+    ],{maxTokens:type==='longform'?6500:type==='novel'?4800:4200,temperature:type==='blog'?.35:.72});
     let parsed;
     try{parsed=parseJson(completion.text)}catch{
       return send(res,502,{ok:false,error:'OX_JSON_PARSE_FAILED',raw_text:completion.text});
     }
-    const item=normalizeOxItem(parsed,type);
+    let item;
+    try{item=normalizeOxItem(parsed,type)}catch(error){
+      error.meta={...(error?.meta||{}),model:completion.model,usage:completion.usage};
+      throw error;
+    }
     return send(res,200,{ok:true,item,model:completion.model,usage:completion.usage});
   }catch(error){return sendOxError(res,error)}
 }
