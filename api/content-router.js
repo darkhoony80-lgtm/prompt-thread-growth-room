@@ -2779,7 +2779,7 @@ function oxGenerationPrompt(type,candidate,context=null){
 정확한 스키마: {"type":"novel","title":"","genre":"","premise":"","world_bible":"","characters":[],"master_plot":"","episode_number":1,"episode_title":"","episode_body":"충분한 분량의 소설 본문","foreshadowing":[],"continuity_notes":"","next_episode_direction":"","memory_summary":"","tags":[]}`;
   }
   if(type==='longform')return `${common}
-약 10분 영상용 한국어 원고를 만든다. 4~6개 chapter와 총 10~14개 scene으로 구성하고, 각 scene narration을 약 230~320자로 충분히 작성한다. 실제 낭독에 쓰는 전체 scene narration 합계는 공백 포함 반드시 3,000~3,500자로 작성한다. 의미 없는 반복이나 수식어로 분량을 채우지 않는다. JSON 반환 전에 scene narration 합계가 최소 3,000자인지 확인한다.
+약 10분 영상용 한국어 원고를 만든다. 4~6개 chapter와 총 10~12개 scene으로 구성하고, 각 scene narration을 약 300~360자로 충분히 작성한다. 실제 낭독에 쓰는 전체 scene narration 합계는 공백 포함 반드시 3,200~3,500자로 작성한다. 의미 없는 반복이나 수식어로 분량을 채우지 않는다. JSON 반환 전에 scene narration 합계가 최소 3,000자인지 확인한다.
 각 scenes[].narration은 요약이 아니라 그 장면에서 그대로 읽는 완전한 대본이다. 각 장면의 narration, visual_description, source_type, source_queries, estimated_duration_sec를 1:1로 연결한다. scene narration을 순서대로 이으면 전체 완성 대본이 되어야 한다.
 chapter.narration은 중복 대본을 만들지 않도록 빈 문자열로 반환한다. 서버가 해당 chapter의 scene narration을 순서대로 연결해 채운다.
 각 scene의 source_queries는 무료 사진/영상 검색 API가 그대로 사용할 구체적인 영어 검색어 배열이다. 확인되지 않은 사실을 단정하지 않으며 이미지나 영상을 생성하지 않는다.
@@ -2837,9 +2837,9 @@ function normalizeOxItem(input,expectedType){
       };
     });
     const narrationCharCount=scenes.map(scene=>scene.narration).join('\n\n').length;
-    if(narrationCharCount<2800||narrationCharCount>3800){
+    if(narrationCharCount<3000||narrationCharCount>3800){
       const error=new Error('OX_LONGFORM_NARRATION_LENGTH_INVALID');
-      error.meta={narration_char_count:narrationCharCount,expected_min:2800,expected_max:3800};
+      error.meta={narration_char_count:narrationCharCount,expected_min:3000,expected_max:3800};
       throw error;
     }
     const estimatedNarrationSec=Math.round(narrationCharCount/5.5);
