@@ -213,7 +213,7 @@ function emptyCard(pillar,i){
 </div>`:`<button class="btn p" id="v3gen-${i}" onclick="PostAuto.generate(${i})">✨ 생성</button>`}</article>`;
 }
 function mediaEditorHtml(i,master){
- return `<section class="cm-editor"><div class="section"><div><b>공통 미디어</b><p class="mut">현재 배열 순서가 Threads와 Instagram의 실제 게시 순서입니다. 직접 추가한 미디어와 AI 이미지 스토리는 삭제·이동 전까지 그대로 유지됩니다.</p></div><label class="btn">사진/영상 추가<input type="file" accept="image/jpeg,video/mp4,video/quicktime" multiple hidden onchange="PostAuto.addMedia(${i},this.files);this.value=''" /></label></div><div id="v3media-${i}" class="cm-media"></div></section>`;
+ return `<section class="cm-editor"><div class="section"><div><b>공통 미디어</b><p class="mut">현재 배열 순서가 Threads와 Instagram의 실제 게시 순서입니다. 직접 추가한 미디어와 AI 이미지 스토리는 삭제·이동 전까지 그대로 유지됩니다.</p></div><label class="btn">사진/영상 추가<input type="file" accept="image/jpeg,image/png,video/mp4,video/quicktime" multiple hidden onchange="PostAuto.addMedia(${i},this.files);this.value=''" /></label></div><div id="v3media-${i}" class="cm-media"></div></section>`;
 }
 function render(){
  const box=document.getElementById('v3list');if(!box)return;
@@ -232,7 +232,23 @@ function validateLocalMedia(file){
  const type=String(file?.type||'').toLowerCase();
  if(type==='image/jpeg'){if(file.size>8*1024*1024)throw new Error(`${file.name}: JPEG 이미지는 8MB 이하여야 합니다.`);return 'image'}
  if(type==='video/mp4'||type==='video/quicktime'){if(file.size>1024*1024*1024)throw new Error(`${file.name}: 영상은 1GB 이하여야 합니다.`);return 'video'}
- throw new Error(`${file?.name||'파일'}: JPEG 사진 또는 MP4/MOV 영상만 추가할 수 있습니다.`);
+ throw new Error(`${file?.name||'파일'}: JPEG/PNG 사진 또는 MP4/MOV 영상만 추가할 수 있습니다.`);
+}
+async function pngToJpeg(file){
+ const mime=String(file?.type||'').toLowerCase();
+ if(mime!=='image/png')return file;
+ if(file.size>20*1024*1024)throw new Error(`${file.name}: PNG 이미지는 20MB 이하여야 합니다.`);
+ const url=URL.createObjectURL(file);
+ try{
+  const image=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error(`${file.name}: PNG 이미지를 읽지 못했습니다.`));img.src=url});
+  const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;
+  const ctx=canvas.getContext('2d');if(!ctx)throw new Error(`${file.name}: 이미지 변환을 시작하지 못했습니다.`);
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0);
+  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.92));
+  if(!blob)throw new Error(`${file.name}: JPEG 변환에 실패했습니다.`);
+  const name=String(file.name||'image.png').replace(/\.png$/i,'')+'.jpg';
+  return new File([blob],name,{type:'image/jpeg',lastModified:file.lastModified||Date.now()});
+ }finally{URL.revokeObjectURL(url)}
 }
 async function uploadLocalMedia(file,i,type){
  const safe=String(file.name||`${type}-${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g,'-').slice(-100);
@@ -243,9 +259,15 @@ async function uploadLocalMedia(file,i,type){
 async function addLocalMedia(i,fileList){
  const files=Array.from(fileList||[]);if(!files.length)return;
  const status=document.getElementById('v3status');
- for(const file of files){
-  try{const type=validateLocalMedia(file);if(status)status.textContent=`${file.name} 업로드 중…`;const duration=type==='video'?await videoDuration(file):0;const blob=await uploadLocalMedia(file,i,type);appendMasterMedia(i,{id:mediaId('upload'),type,source:'upload',url:blob.url,previewUrl:blob.url,mime_type:file.type,size:file.size,duration});}
-  catch(e){alert('미디어 추가 실패: '+e.message)}
+ for(const original of files){
+  try{
+   if(status&&String(original?.type||'').toLowerCase()==='image/png')status.textContent=`${original.name} JPEG 변환 중…`;
+   const file=await pngToJpeg(original),type=validateLocalMedia(file);
+   if(status)status.textContent=`${file.name} 업로드 중…`;
+   const duration=type==='video'?await videoDuration(file):0;
+   const blob=await uploadLocalMedia(file,i,type);
+   appendMasterMedia(i,{id:mediaId('upload'),type,source:'upload',url:blob.url,previewUrl:blob.url,mime_type:file.type,size:file.size,duration});
+  }catch(e){alert('미디어 추가 실패: '+e.message)}
  }
  if(status)status.textContent='공통 미디어 저장 완료';
 }
