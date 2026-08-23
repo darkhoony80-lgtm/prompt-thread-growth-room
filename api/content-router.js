@@ -1336,15 +1336,9 @@ function normalizeAiTipWebtoonPlan(raw,source){
       normalizeAiTipWebtoonPanel(panel,{pageNumber:index+1,panelIndex:panelIndex+1,characterIds})
     );
     if(!panels.length)throw new Error(`AI_TIP_WEBTOON_PAGE_EMPTY_${index+1}`);
-    const transition={
-      type:aiTipWebtoonString(slide?.transition?.type,80),
-      object:aiTipWebtoonString(slide?.transition?.object,160),
-      motion:aiTipWebtoonString(slide?.transition?.motion,240),
-      meaning:aiTipWebtoonString(slide?.transition?.meaning,240)
-    };
-    if(transition.type!=='vertical_whitespace'||Object.values(transition).some(value=>!value)){
-      throw new Error(`AI_TIP_WEBTOON_TRANSITION_INVALID_${index+1}`);
-    }
+    // Full-bleed AI_TIP pages no longer use page-internal transition gutters/objects.
+    // Keep a normalized placeholder for backward-compatible downstream shape only.
+    const transition={type:'none',object:'none',motion:'none',meaning:'none'};
     const visible=panels.flatMap(panel=>panel.allowed_visible_text);
     return {
       number:index+1,
@@ -1613,7 +1607,7 @@ JSON만 반환:
   "caption":"...",
   "slides":[{
     "role":"Story page role",
-    "transition":{"type":"vertical_whitespace","object":"story-specific object or none","motion":"...","meaning":"..."},
+    "transition":{"type":"none","object":"none","motion":"none","meaning":"none"},
     "cuts":[{
       "cut_id":"C1","purpose":"HOOK ...","panel_size":"establishing_tall","location":"...","time":"...",
       "characters":["HANAREUM"],"character_count":1,"character_action":"...","facial_expression":"...","camera":"...",
