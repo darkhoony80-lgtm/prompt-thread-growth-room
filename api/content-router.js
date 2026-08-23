@@ -15,6 +15,7 @@ const IMAGE_MODEL='gemini-3.1-flash-image';
 const TEXT_URL=`https://generativelanguage.googleapis.com/v1beta/models/${TEXT_MODEL}:generateContent`;
 const IMAGE_URL=`https://generativelanguage.googleapis.com/v1/models/${IMAGE_MODEL}:generateContent`;
 const INSTAGRAM_API='https://graph.instagram.com/v25.0';
+const FACEBOOK_API='https://graph.facebook.com/v26.0';
 const INSTAGRAM_PROFILE_FIELDS='user_id,username,account_type';
 const INSTAGRAM_CATEGORIES=['AI_TIP','AI_PROMPT','FOOD_PICK','HOT_ISSUE'];
 const INSTAGRAM_PROMPT_CATEGORIES=['AI_TIP','AI_PROMPT'];
@@ -2431,6 +2432,73 @@ async function actionInstagramCarouselPublish(req,res){
   }
 }
 
+function safeFacebookMetaError(error,token){
+  let message=String(error?.message||'').trim();
+  if(token)message=message.split(token).join('[REDACTED]');
+  return {
+    ...(error?.code?{code:Number(error.code)}:{}),
+    ...(error?.type?{type:String(error.type).slice(0,80)}:{}),
+    ...(message?{message:message.replace(/(access[_\s-]?token\s*[=:]\s*)[^\s,;]+/gi,'$1[REDACTED]').slice(0,300)}:{})
+  };
+}
+
+async function facebookGraph(token,path,params){
+  const response=await fetch(`${FACEBOOK_API}/${String(path).replace(/^\/+/, '')}`,{
+    method:'POST',
+    headers:{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded'},
+    body:new URLSearchParams(params||{})
+  });
+  const body=await response.json().catch(()=>({}));
+  if(!response.ok){
+    const error=new Error('FACEBOOK_GRAPH_REQUEST_FAILED');
+    error.status=response.status;
+    error.meta=safeFacebookMetaError(body?.error||{},token);
+    throw error;
+  }
+  return body;
+}
+
+async function actionFacebookPublish(req,res){
+  const token=String(process.env.FACEBOOK_PAGE_ACCESS_TOKEN||'').trim();
+  const pageId=String(process.env.FACEBOOK_PAGE_ID||'').trim();
+  if(!token)return send(res,503,{ok:false,error:'FACEBOOK_PAGE_ACCESS_TOKEN_NOT_CONFIGURED'});
+  if(!/^\d{5,40}$/.test(pageId))return send(res,503,{ok:false,error:'FACEBOOK_PAGE_ID_NOT_CONFIGURED'});
+  const message=String(req.body?.message||'').trim();
+  const media=(Array.isArray(req.body?.media)?req.body.media:[]).map(item=>({type:String(item?.type||'').toLowerCase(),url:String(item?.url||'').trim()}));
+  if(!message)return send(res,400,{ok:false,error:'FACEBOOK_MESSAGE_REQUIRED'});
+  if(media.length>10)return send(res,400,{ok:false,error:'FACEBOOK_MEDIA_TOO_MANY',max_media:10});
+  if(media.some(item=>item.type!=='image'||!/^https:\/\//i.test(item.url)))return send(res,400,{ok:false,error:'FACEBOOK_MEDIA_INVALID'});
+  let stage='feed';
+  try{
+    let published;
+    if(media.length===0){
+      published=await facebookGraph(token,`${pageId}/feed`,{message,access_token:token});
+    }else if(media.length===1){
+      stage='single_photo';
+      published=await facebookGraph(token,`${pageId}/photos`,{url:media[0].url,caption:message,published:'true',access_token:token});
+    }else{
+      stage='photo_uploads';
+      const uploaded=[];
+      for(const item of media){
+        const photo=await facebookGraph(token,`${pageId}/photos`,{url:item.url,published:'false',access_token:token});
+        const id=String(photo?.id||'');
+        if(!id)throw new Error('FACEBOOK_PHOTO_ID_MISSING');
+        uploaded.push(id);
+      }
+      stage='multi_photo_feed';
+      const params={message,access_token:token};
+      uploaded.forEach((id,index)=>{params[`attached_media[${index}]`]=JSON.stringify({media_fbid:id})});
+      published=await facebookGraph(token,`${pageId}/feed`,params);
+    }
+    const postId=String(published?.post_id||published?.id||'');
+    if(!postId)throw new Error('FACEBOOK_POST_ID_MISSING');
+    return send(res,200,{ok:true,published:true,post_id:postId,page_id:pageId});
+  }catch(e){
+    console.error('[FACEBOOK_PUBLISH_FAILED]',JSON.stringify({stage,message:e?.message||String(e),status:e?.status||null,meta:e?.meta||null}));
+    return send(res,Number(e?.status)>=400&&Number(e?.status)<600?Number(e.status):502,{ok:false,error:'FACEBOOK_PUBLISH_FAILED',detail:{stage,message:e?.message||'FACEBOOK_PUBLISH_FAILED',...(e?.meta?{meta:e.meta}:{})}});
+  }
+}
+
 async function actionInstagramPromptStore(req,res){
   try{
     const record=await upsertInstagramPromptPost(req.body||{});
@@ -2594,12 +2662,13 @@ async function handler(req,res){
   if(action==='instagram_carousel_prepare')return actionInstagramCarouselPrepare(req,res);
   if(action==='instagram_carousel_image')return actionInstagramCarouselImage(req,res);
   if(action==='instagram_carousel_publish')return actionInstagramCarouselPublish(req,res);
+  if(action==='facebook_publish')return actionFacebookPublish(req,res);
   if(action==='instagram_prompt_store')return actionInstagramPromptStore(req,res);
 
   return send(res,400,{
     ok:false,
     error:'UNKNOWN_CONTENT_ACTION',
-    allowed:['generate','image','store-image','media_upload','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish','instagram_prompt_store','instagram_prompt_lookup','supabase_status']
+    allowed:['generate','image','store-image','media_upload','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish','facebook_publish','instagram_prompt_store','instagram_prompt_lookup','supabase_status']
   });
 }
 
