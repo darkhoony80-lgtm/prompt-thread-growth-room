@@ -2458,19 +2458,52 @@ async function facebookGraph(token,path,params){
   return body;
 }
 
+async function facebookGraphGet(token,path,params={}){
+  const query=new URLSearchParams({...params,access_token:token});
+  const response=await fetch(`${FACEBOOK_API}/${String(path).replace(/^\/+/, '')}?${query.toString()}`,{
+    method:'GET',headers:{Accept:'application/json'}
+  });
+  const body=await response.json().catch(()=>({}));
+  if(!response.ok){
+    const error=new Error('FACEBOOK_GRAPH_REQUEST_FAILED');
+    error.status=response.status;
+    error.meta=safeFacebookMetaError(body?.error||{},token);
+    throw error;
+  }
+  return body;
+}
+
+async function resolveFacebookPageToken(configuredToken,pageId){
+  const identity=await facebookGraphGet(configuredToken,'me',{fields:'id'});
+  if(String(identity?.id||'')===pageId)return configuredToken;
+
+  const accounts=await facebookGraphGet(configuredToken,'me/accounts',{fields:'id,access_token',limit:'100'});
+  const page=(Array.isArray(accounts?.data)?accounts.data:[]).find(item=>String(item?.id||'')===pageId);
+  const pageToken=String(page?.access_token||'').trim();
+  if(!pageToken){
+    const error=new Error('FACEBOOK_PAGE_IDENTITY_NOT_AVAILABLE');
+    error.status=403;
+    error.meta={message:'Configured Facebook token is not the target Page token and no Page access token for FACEBOOK_PAGE_ID was available.'};
+    throw error;
+  }
+  return pageToken;
+}
+
 async function actionFacebookPublish(req,res){
-  const token=String(process.env.FACEBOOK_PAGE_ACCESS_TOKEN||'').trim();
+  const configuredToken=String(process.env.FACEBOOK_PAGE_ACCESS_TOKEN||'').trim();
   const pageId=String(process.env.FACEBOOK_PAGE_ID||'').trim();
-  if(!token)return send(res,503,{ok:false,error:'FACEBOOK_PAGE_ACCESS_TOKEN_NOT_CONFIGURED'});
+  if(!configuredToken)return send(res,503,{ok:false,error:'FACEBOOK_PAGE_ACCESS_TOKEN_NOT_CONFIGURED'});
   if(!/^\d{5,40}$/.test(pageId))return send(res,503,{ok:false,error:'FACEBOOK_PAGE_ID_NOT_CONFIGURED'});
   const message=String(req.body?.message||'').trim();
   const media=(Array.isArray(req.body?.media)?req.body.media:[]).map(item=>({type:String(item?.type||'').toLowerCase(),url:String(item?.url||'').trim()}));
   if(!message)return send(res,400,{ok:false,error:'FACEBOOK_MESSAGE_REQUIRED'});
   if(media.length>10)return send(res,400,{ok:false,error:'FACEBOOK_MEDIA_TOO_MANY',max_media:10});
   if(media.some(item=>item.type!=='image'||!/^https:\/\//i.test(item.url)))return send(res,400,{ok:false,error:'FACEBOOK_MEDIA_INVALID'});
-  let stage='feed';
+  let stage='page_identity';
   try{
+    const token=await resolveFacebookPageToken(configuredToken,pageId);
     let published;
+    stage='feed';
     if(media.length===0){
       published=await facebookGraph(token,`${pageId}/feed`,{message,access_token:token});
     }else if(media.length===1){
