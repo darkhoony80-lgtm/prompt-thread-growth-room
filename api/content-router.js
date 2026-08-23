@@ -1297,6 +1297,7 @@ function normalizeAiTipWebtoonPanel(input,{pageNumber,panelIndex,characterIds}){
     panel_size:panelSize,
     location:aiTipWebtoonString(input?.location,300)||'the same continuous Korean everyday environment',
     time:aiTipWebtoonString(input?.time,160)||'continuous time from the previous panel',
+    wardrobe:aiTipWebtoonString(input?.wardrobe,500)||'story-appropriate clothing for the current location, activity, season and social context',
     characters,
     character_count:characterCount,
     importance,
@@ -1316,7 +1317,7 @@ function normalizeAiTipWebtoonPanel(input,{pageNumber,panelIndex,characterIds}){
     ])],
     transition_to_next:aiTipWebtoonString(input?.transition_to_next,400)||'visual motion continues downward into the next panel'
   };
-  const required=['purpose','location','time','character_action','facial_expression','camera','props','surreal_element','transition_to_next'];
+  const required=['purpose','location','time','wardrobe','character_action','facial_expression','camera','props','surreal_element','transition_to_next'];
   if(required.some(field=>!panel[field]))throw new Error(`AI_TIP_PANEL_FIELDS_REQUIRED_${panelId}`);
   return panel;
 }
@@ -1563,8 +1564,8 @@ function aiTipDynamicWebtoonPlannerPrompt(sourceMaterial){
 고정 Visual Direction:
 - 얇고 깔끔한 2D 선화, 부드러운 평면 채색, 밝고 따뜻한 색감, 표현력이 큰 눈과 명확한 표정, 생활감 있는 한국 배경
 - 카드뉴스, 인포그래픽, 포스터, 동일 크기 Grid, 과도한 실사·3D, 교육용 생활만화 금지
-- 주인공 HANAREUM은 성인 여성 VOARA AI_TIP Signature Character다. 황금빛 금발 계열 짧은 보브, 큰 청록색 눈, 밝고 친근한 얼굴, 상아색 블라우스, 청록색 카디건, 겨자색 스커트, 작은 금색 별 브로치를 고정한다. 특정 동화·코스프레 표현 금지
-- Character Bible에서 얼굴·눈·코·입·피부·헤어·체형·의상·색상·액세서리를 영어로 구체적으로 한 번 확정하고 모든 패널에서 바꾸지 않는다
+- 주인공 HANAREUM은 성인 여성 VOARA AI_TIP Signature Character다. 황금빛 금발 계열 짧은 보브, 큰 청록색 눈, 밝고 친근한 얼굴과 작은 금색 별 브로치를 정체성 앵커로 고정한다. 특정 동화·코스프레 표현 금지
+- Character Bible에서는 얼굴·눈·코·입·피부·헤어·체형과 시그니처 액세서리를 영어로 구체적으로 고정한다. 의상은 정체성 요소가 아니며 본문·장소·시간·직업 상황·계절에 맞게 CUT별로 자연스럽게 바꾼다. 같은 카디건·스커트 조합을 모든 소재에 반복하지 않는다
 - 얼굴과 양쪽 눈은 sunglasses, goggles, mask, veil, hat, hand, prop, hair, heavy shadow로 가리지 않는다
 
 Story 원칙:
@@ -1581,7 +1582,9 @@ CUT LOCK:
 - cut_id는 C1, C2처럼 전체 Story에서 고유하다
 - characters에는 Character Bible의 ID만 넣고 중복 금지. character_count는 호환용 값이며 서버가 characters 길이에서 확정한다
 - 해당 컷에 HANAREUM 1명이면 characters:["HANAREUM"], character_count:1이다. 한 컷은 ONE IMAGE, ONE MOMENT, ONE COMPOSITION이며 복제, 거울 속 두 번째 인물, 다른 포즈의 같은 인물, 임의 배경 인물을 만들지 않는다
-- location, time, character_action, facial_expression, camera, props, surreal_element, transition_to_next를 영어로 실제 촬영 가능한 수준으로 확정한다
+- location, time, wardrobe, character_action, facial_expression, camera, props, surreal_element, transition_to_next를 영어로 실제 촬영 가능한 수준으로 확정한다
+- location은 원본 본문에서 가장 자연스러운 실제 환경을 선택한다. 집·책상·노트북을 기본값으로 반복하지 말고 회사, 매장, 카페, 식당, 거리, 대중교통, 자동차, 공항, 호텔, 학교, 관공서, 병원, 시장, 여행지 등 본문 상황이 요구하는 장소를 적극 사용한다
+- supporting character는 장면 이해에 실제 도움이 될 때만 Character Bible에 추가한다. 동료, 고객, 점원, 친구, 가족, 전문가 등 역할에 맞게 성별·연령·외형을 다양화하되 억지로 군중을 넣지 않는다. 한 CUT에 등장하는 인물은 characters에 명시한 사람만 정확히 한 번씩 보여준다
 - 문서와 화면이 필요하면 정면의 읽을 수 있는 표면을 피하고 비스듬한 폴더·접힌 모서리·추상 도형만 사용한다
 - text_safe_area는 top_left, top_right, bottom_left, bottom_right, top, bottom, none 중 하나다. 문구가 있으면 none 금지다
 - importance는 1~10 정수다. HOOK와 핵심 AI 활용/HUMAN CHECK 장면을 높게 준다
@@ -1618,7 +1621,7 @@ JSON만 반환:
     "role":"Story page role",
     "transition":{"type":"none","object":"none","motion":"none","meaning":"none"},
     "cuts":[{
-      "cut_id":"C1","purpose":"HOOK ...","panel_size":"establishing_tall","location":"...","time":"...",
+      "cut_id":"C1","purpose":"HOOK ...","panel_size":"establishing_tall","location":"...","time":"...","wardrobe":"story-appropriate outfit for this cut...",
       "characters":["HANAREUM"],"character_count":1,"character_action":"...","facial_expression":"...","camera":"...",
       "props":"...","surreal_element":"...",
       "importance":9,"text_safe_area":"top_left",
@@ -1684,7 +1687,7 @@ const AI_TIP_IMAGE_PROMPT_META_RISKS=[
 ];
 
 function aiTipCharacterPrompt(character,label){
-  return `${label} is an adult with ${character.face}, ${character.eyes}, ${character.nose}, ${character.mouth}, ${character.skin_tone}, ${character.hair}, ${character.body}, wearing ${character.outfit} in ${character.outfit_colors}, with ${character.accessories}.`;
+  return `${label} is an adult with ${character.face}, ${character.eyes}, ${character.nose}, ${character.mouth}, ${character.skin_tone}, ${character.hair}, ${character.body}, with ${character.accessories}.`;
 }
 
 function aiTipImagePromptMetaRisk(prompt){
@@ -1718,9 +1721,9 @@ function aiTipCutImagePrompt(source,plan,cut){
   const safeArea=current.text_safe_area==='none'?'Keep balanced breathing room around the subject.':`Keep the ${current.text_safe_area.replace(/_/g,' ')} area visually quiet for later lettering.`;
   const prompt=`Create one clean portrait-oriented comic cut as a single image, a single moment in time and a single composition. Do not divide it into multiple frames, montage, before-and-after views or inset portraits.
 
-Use clean thin two-dimensional line art, soft flat coloring, a bright warm palette, expressive facial acting and a polished modern webtoon illustration style in a believable Korean everyday environment. Avoid photorealism, three-dimensional rendering, fan art, information graphics, card news and poster design. ${characterDescriptions} Keep these exact physical details, outfit colors and accessories unchanged. Keep every face and both eyes clear and unobstructed.
+Use clean thin two-dimensional line art, soft flat coloring, a bright warm palette, expressive facial acting and a polished modern webtoon illustration style. Avoid photorealism, three-dimensional rendering, fan art, information graphics, card news and poster design. ${characterDescriptions} Keep these exact identity details and signature accessories consistent, but do not lock the protagonist to one repeated outfit. Keep every face and both eyes clear and unobstructed.
 
-The setting is ${current.location} at ${current.time}. ${cast} Show ${current.character_action}, with ${current.facial_expression}. Use ${current.camera}. Include ${current.props}. Express the real problem through ${current.surreal_element}. ${safeArea}
+The setting is ${current.location} at ${current.time}. Treat this story-specific location as an important part of the image, with distinctive architecture, furniture, objects, weather, activity and social context appropriate to the source story instead of defaulting to a generic room, desk, laptop or phone scene. ${cast} Dress the listed characters in ${current.wardrobe}. Show ${current.character_action}, with ${current.facial_expression}. Use ${current.camera}. Include ${current.props}. Express the real problem through ${current.surreal_element}. ${safeArea}
 
 The artwork is completely text-free. Do not draw speech balloons, narration boxes, sound effects, letters, words, numbers, captions, labels, logos or watermarks. Documents and electronic displays contain only abstract colored rectangles, simple check icons, bars and non-linguistic geometric shapes viewed from an angle or readable only as shapes.`;
   return assertAiTipImagePromptSafe(prompt,[]);
