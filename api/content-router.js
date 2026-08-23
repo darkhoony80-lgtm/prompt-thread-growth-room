@@ -111,6 +111,16 @@ async function supabaseRest(path,{method='GET',body=null,prefer=''}={}){
   }
   return responseBody;
 }
+
+async function oxSupabaseRest(path,options={}){
+  const {keyType}=supabaseConfig();
+  if(keyType!=='secret'){
+    const error=new Error('OX_SUPABASE_SECRET_KEY_REQUIRED');
+    error.status=503;
+    throw error;
+  }
+  return supabaseRest(path,options);
+}
 function instagramPromptRecord(input){
   const mediaId=String(input?.instagram_media_id||'').trim();
   const contentId=String(input?.content_id||'').trim().slice(0,200);
@@ -2735,10 +2745,13 @@ async function oxCompletion(messages,{maxTokens=12000,temperature=.7}={}){
 function oxTopicPrompt(type){
   const directions={
     novel:'연재 가능한 오리지널 장르소설. 서로 다른 장르와 갈등을 제안한다.',
-    longform:'약 10분 영상으로 확장 가능한 지식·역사·문화·기술 소재. 시각 자료 검색이 가능한 주제를 제안한다.',
+    longform:'약 10분 영상으로 확장 가능하고 신뢰할 수 있는 자료로 추적 가능한 소재를 제안한다.',
     blog:'과학·우주·기술·역사·자연현상·검증 가능한 발견만 다룬다. 불확실한 사실을 지어내지 않는다.'
   };
-  return `OX 콘텐츠 스튜디오의 ${type} 소재 후보를 만든다. ${directions[type]}
+  const longformRules=type==='longform'?`
+5개는 서로 다른 분위기로 구성한다. 과학·우주·역사·기술 같은 전문 교양 후보를 유지하면서, 최소 2개는 다음 계열에서 고른다: 황당하지만 실제 있었던 해외 사건, 기묘한 역사 기록, 기막힌 우연, 황당한 과학 실험, 실패한 발명·프로젝트, UFO/UAP 공식 기록, 역사·우주 미스터리, 미해결 현상, 기묘한 발견, 전설·괴담의 사실 추적.
+실화형 후보는 정부·공공기관·박물관·대학·연구기관·논문·신뢰할 수 있는 언론·역사 문서 아카이브에서 검증 가능한 사건을 우선한다. 자극적인 허구를 만들지 않는다. UFO/UAP와 미스터리는 확인된 사실, 당시 주장, 공식 조사, 가능한 설명, 반론, 현재 미해결 부분을 구분할 수 있는 소재만 고른다. 외계인이나 초자연 현상을 사실로 단정하지 않는다.`:'';
+  return `OX 콘텐츠 스튜디오의 ${type} 소재 후보를 만든다. ${directions[type]}${longformRules}
 정확히 5개를 서로 겹치지 않게 제안하라. 장문 본문은 쓰지 않는다.
 JSON만 반환한다. 스키마: {"items":[{"title":"짧은 제목","one_line":"한 문장 소재 설명","tag":"분류 또는 태그"}]}`;
 }
@@ -2766,8 +2779,11 @@ function oxGenerationPrompt(type,candidate,context=null){
 정확한 스키마: {"type":"novel","title":"","genre":"","premise":"","world_bible":"","characters":[],"master_plot":"","episode_number":1,"episode_title":"","episode_body":"충분한 분량의 소설 본문","foreshadowing":[],"continuity_notes":"","next_episode_direction":"","memory_summary":"","tags":[]}`;
   }
   if(type==='longform')return `${common}
-약 10분 영상용 한국어 원고를 만든다. 전체 내레이션은 약 3,000~4,000자이며 실제 목표 시간에 맞는 챕터와 장면 흐름을 갖춘다. 각 scene의 source_queries는 무료 사진/영상 검색 API가 그대로 사용할 구체적인 영어 검색어 배열이다. 이미지나 영상을 생성하지 않는다.
-정확한 스키마: {"type":"longform","title_candidates":[],"selected_title":"","thumbnail_hook":"","opening_hook":"","target_duration_sec":600,"summary":"","chapters":[{"chapter_number":1,"title":"","narration":"","scenes":[{"scene_number":1,"narration":"","visual_description":"","source_type":"photo|video|either","source_queries":[],"estimated_duration_sec":0}]}],"fact_check_items":[],"ending":"","next_video_hook":"","tags":[]}`;
+약 10분 영상용 한국어 원고를 만든다. 실제 낭독에 쓰는 전체 scene narration 합계는 공백 포함 3,000~3,500자로 작성한다. 의미 없는 반복이나 수식어로 분량을 채우지 않는다.
+각 scenes[].narration은 요약이 아니라 그 장면에서 그대로 읽는 완전한 대본이다. 각 장면의 narration, visual_description, source_type, source_queries, estimated_duration_sec를 1:1로 연결한다. scene narration을 순서대로 이으면 전체 완성 대본이 되어야 한다.
+chapter.narration은 중복 대본을 만들지 않도록 빈 문자열로 반환한다. 서버가 해당 chapter의 scene narration을 순서대로 연결해 채운다.
+각 scene의 source_queries는 무료 사진/영상 검색 API가 그대로 사용할 구체적인 영어 검색어 배열이다. 확인되지 않은 사실을 단정하지 않으며 이미지나 영상을 생성하지 않는다.
+정확한 스키마: {"type":"longform","title_candidates":[],"selected_title":"","thumbnail_hook":"","opening_hook":"","target_duration_sec":600,"summary":"","chapters":[{"chapter_number":1,"title":"","narration":"","scenes":[{"scene_number":1,"narration":"실제 낭독 대본","visual_description":"","source_type":"photo|video|either","source_queries":[],"estimated_duration_sec":0}]}],"fact_check_items":[],"ending":"","next_video_hook":"","tags":[]}`;
   return `${common}
 사실 기반 한국어 블로그 글을 2,000~3,000자로 완결성 있게 작성한다. 과학·우주·기술·역사·자연현상·검증 가능한 발견만 다룬다. 출처를 지어내지 말고 불확실한 항목은 source_notes와 fact_check_needed에 명시한다.
 정확한 스키마: {"type":"blog","title_candidates":[],"selected_title":"","topic":"","category":"","key_question":"","fact_summary":"","source_notes":[],"fact_check_needed":false,"primary_keyword":"","secondary_keywords":[],"outline":[{"heading":"","body":""}],"faq":[],"meta_description":"","tags":[]}`;
@@ -2792,6 +2808,52 @@ function normalizeOxItem(input,expectedType){
     item.fact_check_items=Array.isArray(item.fact_check_items)?item.fact_check_items:[];
     item.tags=Array.isArray(item.tags)?item.tags:[];
     if(!item.selected_title||!item.chapters.length)throw new Error('OX_LONGFORM_RESULT_INCOMPLETE');
+    const scenes=[];
+    item.chapters=item.chapters.map((chapter,chapterIndex)=>{
+      const chapterScenes=(Array.isArray(chapter?.scenes)?chapter.scenes:[]).map((scene,sceneIndex)=>{
+        const narration=String(scene?.narration||'').trim();
+        const sourceQueries=(Array.isArray(scene?.source_queries)?scene.source_queries:[])
+          .map(value=>String(value||'').trim()).filter(Boolean);
+        if(!narration||!String(scene?.visual_description||'').trim()||!sourceQueries.length){
+          throw new Error('OX_LONGFORM_SCENE_INCOMPLETE');
+        }
+        const normalized={
+          ...scene,
+          scene_number:Number(scene?.scene_number)||sceneIndex+1,
+          narration,
+          visual_description:String(scene.visual_description).trim(),
+          source_type:String(scene?.source_type||'either').trim(),
+          source_queries:sourceQueries
+        };
+        scenes.push(normalized);
+        return normalized;
+      });
+      if(!chapterScenes.length)throw new Error('OX_LONGFORM_CHAPTER_SCENES_REQUIRED');
+      return {
+        ...chapter,
+        chapter_number:Number(chapter?.chapter_number)||chapterIndex+1,
+        narration:chapterScenes.map(scene=>scene.narration).join('\n\n'),
+        scenes:chapterScenes
+      };
+    });
+    const narrationCharCount=scenes.map(scene=>scene.narration).join('\n\n').length;
+    if(narrationCharCount<2800||narrationCharCount>3800){
+      const error=new Error('OX_LONGFORM_NARRATION_LENGTH_INVALID');
+      error.meta={narration_char_count:narrationCharCount,expected_min:2800,expected_max:3800};
+      throw error;
+    }
+    const estimatedNarrationSec=Math.round(narrationCharCount/5.5);
+    let assignedDuration=0;
+    scenes.forEach((scene,index)=>{
+      const duration=index===scenes.length-1
+        ?Math.max(1,estimatedNarrationSec-assignedDuration)
+        :Math.max(1,Math.round(estimatedNarrationSec*(scene.narration.length/narrationCharCount)));
+      scene.estimated_duration_sec=duration;
+      assignedDuration+=duration;
+    });
+    item.target_duration_sec=600;
+    item.narration_char_count=narrationCharCount;
+    item.estimated_narration_sec=estimatedNarrationSec;
   }else{
     item.title_candidates=Array.isArray(item.title_candidates)?item.title_candidates:[];
     item.selected_title=String(item.selected_title||item.title_candidates[0]||'').trim();
@@ -2873,7 +2935,7 @@ async function actionOxGenerate(req,res){
 
 async function actionOxLibraryList(req,res){
   try{
-    const rows=await supabaseRest(`${OX_CONTENT_TABLE}?select=id,type,title,status,topic,tags,content_json,created_at,updated_at&order=updated_at.desc&limit=250`);
+    const rows=await oxSupabaseRest(`${OX_CONTENT_TABLE}?select=id,type,title,status,topic,tags,content_json,created_at,updated_at&order=updated_at.desc&limit=250`);
     return send(res,200,{ok:true,items:Array.isArray(rows)?rows:[]});
   }catch(error){return sendOxError(res,error)}
 }
@@ -2882,7 +2944,7 @@ async function actionOxLibraryGet(req,res){
   try{
     const id=String(req.body?.id||'').trim();
     if(!id)throw new Error('OX_ID_REQUIRED');
-    const rows=await supabaseRest(`${OX_CONTENT_TABLE}?id=eq.${encodeURIComponent(id)}&select=id,type,title,status,topic,tags,content_json,created_at,updated_at&limit=1`);
+    const rows=await oxSupabaseRest(`${OX_CONTENT_TABLE}?id=eq.${encodeURIComponent(id)}&select=id,type,title,status,topic,tags,content_json,created_at,updated_at&limit=1`);
     if(!Array.isArray(rows)||!rows[0])return send(res,404,{ok:false,error:'OX_CONTENT_NOT_FOUND'});
     return send(res,200,{ok:true,item:rows[0]});
   }catch(error){return sendOxError(res,error)}
@@ -2891,15 +2953,15 @@ async function actionOxLibraryGet(req,res){
 async function actionOxLibrarySave(req,res){
   try{
     const record=oxRecordFromInput(req.body?.item);
-    const existing=await supabaseRest(`${OX_CONTENT_TABLE}?id=eq.${encodeURIComponent(record.id)}&select=id,created_at&limit=1`);
+    const existing=await oxSupabaseRest(`${OX_CONTENT_TABLE}?id=eq.${encodeURIComponent(record.id)}&select=id,created_at&limit=1`);
     if(Array.isArray(existing)&&existing[0]){
       record.created_at=String(existing[0].created_at||record.created_at);
-      const rows=await supabaseRest(`${OX_CONTENT_TABLE}?id=eq.${encodeURIComponent(record.id)}`,{
+      const rows=await oxSupabaseRest(`${OX_CONTENT_TABLE}?id=eq.${encodeURIComponent(record.id)}`,{
         method:'PATCH',body:record,prefer:'return=representation'
       });
       return send(res,200,{ok:true,item:rows?.[0]||record});
     }
-    const rows=await supabaseRest(OX_CONTENT_TABLE,{method:'POST',body:record,prefer:'return=representation'});
+    const rows=await oxSupabaseRest(OX_CONTENT_TABLE,{method:'POST',body:record,prefer:'return=representation'});
     return send(res,201,{ok:true,item:rows?.[0]||record});
   }catch(error){return sendOxError(res,error)}
 }
@@ -2909,7 +2971,7 @@ async function actionOxLibraryStatus(req,res){
     const id=String(req.body?.id||'').trim();
     if(!id)throw new Error('OX_ID_REQUIRED');
     const status=oxStatus(req.body?.status);
-    const rows=await supabaseRest(`${OX_CONTENT_TABLE}?id=eq.${encodeURIComponent(id)}`,{
+    const rows=await oxSupabaseRest(`${OX_CONTENT_TABLE}?id=eq.${encodeURIComponent(id)}`,{
       method:'PATCH',body:{status,updated_at:new Date().toISOString()},prefer:'return=representation'
     });
     if(!Array.isArray(rows)||!rows[0])return send(res,404,{ok:false,error:'OX_CONTENT_NOT_FOUND'});

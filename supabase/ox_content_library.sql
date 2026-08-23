@@ -20,6 +20,7 @@ create index if not exists ox_content_library_updated_at_idx
 
 alter table public.ox_content_library enable row level security;
 revoke all on table public.ox_content_library from anon, authenticated;
+grant select, insert, update on table public.ox_content_library to service_role;
 
 comment on table public.ox_content_library is
   'Structured text-only content generated and managed by the OX Content Studio.';
