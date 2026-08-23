@@ -2706,7 +2706,9 @@ async function oxCompletion(messages,{maxTokens=12000,temperature=.7}={}){
         model:OX_MODEL,
         messages,
         temperature,
-        max_tokens:maxTokens
+        max_tokens:maxTokens,
+        reasoning:{effort:'low',exclude:true},
+        response_format:{type:'json_object'}
       })
     });
     body=await response.json().catch(()=>({}));
