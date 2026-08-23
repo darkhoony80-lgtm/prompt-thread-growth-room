@@ -1219,7 +1219,9 @@ function aiTipWebtoonVisibleText(value){
   const text=String(value||'').split(/\r?\n|\\n/)
     .map(line=>line.replace(/\s+/g,' ').trim()).filter(Boolean).join('\n');
   const lines=text.split('\n').filter(Boolean);
-  if(!text||lines.length>2||[...text.replace(/\s/g,'')].length>32){
+  // Current full-bleed AI_TIP uses short narration, not speech bubbles.
+  // Match the planner contract: up to 3 lines and 72 visible characters.
+  if(!text||lines.length>3||[...text.replace(/\s/g,'')].length>72){
     throw new Error('AI_TIP_WEBTOON_VISIBLE_TEXT_INVALID');
   }
   return text;
@@ -1260,24 +1262,21 @@ function normalizeAiTipCharacterBible(input){
 }
 
 function normalizeAiTipWebtoonPanel(input,{pageNumber,panelIndex,characterIds}){
-  const panelId=aiTipWebtoonString(input?.cut_id||input?.panel_id,50).toUpperCase();
-  const panelSize=aiTipWebtoonString(input?.panel_size,50).toLowerCase();
-  const characters=aiTipWebtoonStringArray(input?.characters,{maxItems:4,maxLength:40}).map(value=>value.toUpperCase());
-  // characters is the single source of truth; character_count is redundant model metadata.
+  const panelId=(aiTipWebtoonString(input?.cut_id||input?.panel_id,50)||`C${pageNumber}`).toUpperCase();
+  const requestedPanelSize=aiTipWebtoonString(input?.panel_size,50).toLowerCase();
+  const panelSize=AI_TIP_WEBTOON_PANEL_SIZES.has(requestedPanelSize)?requestedPanelSize:'action_tall';
+  const rawCharacters=aiTipWebtoonStringArray(input?.characters,{maxItems:4,maxLength:40}).map(value=>value.toUpperCase());
+  // Keep only known, unique character IDs. character_count is derived server-side.
+  const characters=[...new Set(rawCharacters.filter(id=>characterIds.has(id)))];
   const characterCount=characters.length;
-  const textSafeArea=aiTipWebtoonString(input?.text_safe_area,30).toLowerCase();
-  const importance=Math.max(1,Math.min(10,Math.round(Number(input?.importance)||5)));
-  if(!panelId||!AI_TIP_WEBTOON_PANEL_SIZES.has(panelSize))throw new Error(`AI_TIP_PANEL_STRUCTURE_INVALID_${pageNumber}_${panelIndex}`);
-  if(!AI_TIP_TEXT_SAFE_AREAS.has(textSafeArea))throw new Error(`AI_TIP_CUT_TEXT_SAFE_AREA_INVALID_${panelId}`);
-  if(new Set(characters).size!==characters.length||characters.some(id=>!characterIds.has(id))){
-    throw new Error(`AI_TIP_PANEL_CHARACTER_UNKNOWN_${panelId}`);
-  }
   const dialogue=[];
-  const narration=aiTipWebtoonStringArray(input?.narration,{maxItems:1,maxLength:120}).map(aiTipWebtoonVisibleText);
+  const narration=aiTipWebtoonStringArray(input?.narration,{maxItems:1,maxLength:160}).map(aiTipWebtoonVisibleText);
   const soundEffect=[];
   const lockedText=[...narration];
-  if(lockedText.length>1)throw new Error(`AI_TIP_CUT_VISIBLE_TEXT_COUNT_INVALID_${panelId}`);
-  if(lockedText.length&&textSafeArea==='none')throw new Error(`AI_TIP_CUT_TEXT_SAFE_AREA_REQUIRED_${panelId}`);
+  let textSafeArea=aiTipWebtoonString(input?.text_safe_area,30).toLowerCase();
+  if(!AI_TIP_TEXT_SAFE_AREAS.has(textSafeArea))textSafeArea=lockedText.length?'top_left':'none';
+  if(lockedText.length&&textSafeArea==='none')textSafeArea='top_left';
+  const importance=Math.max(1,Math.min(10,Math.round(Number(input?.importance)||5)));
   const allowedVisibleText=[...lockedText];
   let props=aiTipWebtoonString(input?.props,600);
   let camera=aiTipWebtoonString(input?.camera,500);
@@ -1354,18 +1353,32 @@ function normalizeAiTipWebtoonPlan(raw,source){
       panels
     };
   });
-  if(slides.length<2||slides.length>4)throw new Error('AI_TIP_WEBTOON_PAGE_COUNT_INVALID');
+  // Current full-bleed format is adaptive: 2~5 pages, exactly one CUT per page.
+  // The previous 2~4 cap conflicted with the planner's 4~5 CUT instruction.
+  if(slides.length<2||slides.length>5)throw new Error('AI_TIP_WEBTOON_PAGE_COUNT_INVALID');
   const panels=slides.flatMap(slide=>slide.panels);
-  // Full-bleed mode uses exactly one CUT per page.
   if(panels.length!==slides.length||slides.some(slide=>slide.panels.length!==1))throw new Error('AI_TIP_WEBTOON_PANEL_COUNT_INVALID');
   const panelIds=new Set(),visibleTexts=new Set();
-  for(const panel of panels){
-    if(panelIds.has(panel.panel_id))throw new Error('AI_TIP_WEBTOON_PANEL_ID_DUPLICATE');
+  for(let index=0;index<panels.length;index++){
+    const panel=panels[index];
+    if(panelIds.has(panel.panel_id)){
+      panel.panel_id=`C${index+1}`;
+      panel.cut_id=panel.panel_id;
+      slides[index].cut_ids=[panel.cut_id];
+    }
     panelIds.add(panel.panel_id);
+    const uniqueText=[];
     for(const text of panel.allowed_visible_text){
       const key=text.replace(/\s+/g,'').toLocaleLowerCase('ko-KR');
-      if(visibleTexts.has(key))throw new Error('AI_TIP_WEBTOON_VISIBLE_TEXT_DUPLICATE');
-      visibleTexts.add(key);
+      if(!visibleTexts.has(key)){
+        visibleTexts.add(key);
+        uniqueText.push(text);
+      }
+    }
+    if(uniqueText.length!==panel.allowed_visible_text.length){
+      panel.narration=[...uniqueText];
+      panel.allowed_visible_text=[...uniqueText];
+      slides[index].message=uniqueText.join(' / ')||'NO VISIBLE TEXT';
     }
   }
   if(!/HOOK/i.test(panels[0].purpose))panels[0].purpose=`HOOK: ${panels[0].purpose}`.slice(0,180);
@@ -1379,14 +1392,11 @@ function normalizeAiTipWebtoonPlan(raw,source){
   if(promptPrefix.length>=20&&allCopy.replace(/\s+/g,' ').includes(promptPrefix)){
     throw new Error('INSTAGRAM_CAROUSEL_PROMPT_IN_CAPTION_FORBIDDEN');
   }
-  const visualConcept=aiTipWebtoonString(raw?.visual_concept,900);
-  const masterScene=aiTipWebtoonString(raw?.master_scene,1600);
-  const colorPalette=aiTipWebtoonString(raw?.color_palette,400);
-  const artDirection=aiTipWebtoonString(raw?.art_direction,1000);
-  const characterDirection=aiTipWebtoonString(raw?.character_direction,600);
-  if(!visualConcept||!masterScene||!colorPalette||!artDirection||!characterDirection){
-    throw new Error('AI_TIP_WEBTOON_VISUAL_DIRECTION_INVALID');
-  }
+  const visualConcept=aiTipWebtoonString(raw?.visual_concept,900)||aiTipWebtoonString(source?.image_brief,900)||'A clear visual story based on the source problem and practical AI use.';
+  const masterScene=aiTipWebtoonString(raw?.master_scene,1600)||'A coherent warm Korean everyday environment shared across the episode.';
+  const colorPalette=aiTipWebtoonString(raw?.color_palette,400)||'warm cream, teal, mustard and natural wood tones';
+  const artDirection=aiTipWebtoonString(raw?.art_direction,1000)||'clean thin 2D line art, soft flat colors, expressive modern webtoon illustration';
+  const characterDirection=aiTipWebtoonString(raw?.character_direction,600)||'keep the VOARA AI_TIP signature adult woman visually consistent across every cut';
   return {
     category:'AI_TIP',
     format:'cut_composed_webtoon',
@@ -1559,10 +1569,10 @@ function aiTipDynamicWebtoonPlannerPrompt(sourceMaterial){
 
 Story 원칙:
 - REAL KOREAN LIFE + VOARA AI_TIP SIGNATURE CHARACTER + 본문 문제와 직접 연결된 SURREAL OVERSIZED PROBLEM + USEFUL AI TIP
-- HOOK → DISCOVERY → AI 활용 → HUMAN CHECK → PAYOFF 흐름을 정보량에 맞게 4~5개 CUT으로 압축한다. 본문의 핵심 문제, 실제 활용 과정, 사람이 확인할 지점, 결과가 빠지지 않도록 각 CUT이 서로 다른 정보를 담당한다
+- HOOK → DISCOVERY → AI 활용 → HUMAN CHECK → PAYOFF 흐름을 정보량에 맞게 3~5개 CUT으로 압축한다. 본문의 핵심 문제, 실제 활용 과정, 사람이 확인할 지점, 결과가 빠지지 않도록 각 CUT이 서로 다른 정보를 담당한다
 - AI는 초안·분석·정리·반복 작업을 돕고 사람이 확인·수정해 실제로 활용한다. 마법 수익, 확정 수익, 돈 자동 생성 금지
 - 첫 PANEL은 결론을 말하지 않는 Scroll Stopper다. 설명보다 비정상적으로 거대한 현실 문제를 먼저 보여준다
-- CUT 하나를 PAGE 하나로 사용한다. 즉 4~5 CUT이면 4~5 PAGE다. PAGE당 정확히 1 CUT이며 panel_size는 다음 값만 사용한다: establishing_tall, wide, medium, reaction_close_up, object_detail, action_tall, narrow_bridge
+- CUT 하나를 PAGE 하나로 사용한다. 즉 3~5 CUT이면 3~5 PAGE다. PAGE당 정확히 1 CUT이며 panel_size는 다음 값만 사용한다: establishing_tall, wide, medium, reaction_close_up, object_detail, action_tall, narrow_bridge
 - panel_size는 장면 목적에 맞게 선택하며 페이지당 1 CUT 구조를 우선한다
 - PAGE grouping만 정하고 최종 좌표와 크기는 코드 Composer가 4개 고정 템플릿에서 선택한다
 - PAGE 내부 전환 여백과 장식 오브젝트를 만들지 않는다. transition.type은 none, transition.object는 none으로 고정한다
