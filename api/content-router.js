@@ -1263,16 +1263,14 @@ function normalizeAiTipWebtoonPanel(input,{pageNumber,panelIndex,characterIds}){
   const panelId=aiTipWebtoonString(input?.cut_id||input?.panel_id,50).toUpperCase();
   const panelSize=aiTipWebtoonString(input?.panel_size,50).toLowerCase();
   const characters=aiTipWebtoonStringArray(input?.characters,{maxItems:4,maxLength:40}).map(value=>value.toUpperCase());
-  const characterCount=Number(input?.character_count);
+  // characters is the single source of truth; character_count is redundant model metadata.
+  const characterCount=characters.length;
   const textSafeArea=aiTipWebtoonString(input?.text_safe_area,30).toLowerCase();
   const importance=Math.max(1,Math.min(10,Math.round(Number(input?.importance)||5)));
   if(!panelId||!AI_TIP_WEBTOON_PANEL_SIZES.has(panelSize))throw new Error(`AI_TIP_PANEL_STRUCTURE_INVALID_${pageNumber}_${panelIndex}`);
   if(!AI_TIP_TEXT_SAFE_AREAS.has(textSafeArea))throw new Error(`AI_TIP_CUT_TEXT_SAFE_AREA_INVALID_${panelId}`);
   if(new Set(characters).size!==characters.length||characters.some(id=>!characterIds.has(id))){
     throw new Error(`AI_TIP_PANEL_CHARACTER_UNKNOWN_${panelId}`);
-  }
-  if(!Number.isInteger(characterCount)||characterCount!==characters.length){
-    throw new Error(`AI_TIP_PANEL_CHARACTER_COUNT_LOCK_${panelId}`);
   }
   const dialogue=[];
   const narration=aiTipWebtoonStringArray(input?.narration,{maxItems:1,maxLength:120}).map(aiTipWebtoonVisibleText);
@@ -1565,13 +1563,13 @@ Story 원칙:
 - AI는 초안·분석·정리·반복 작업을 돕고 사람이 확인·수정해 실제로 활용한다. 마법 수익, 확정 수익, 돈 자동 생성 금지
 - 첫 PANEL은 결론을 말하지 않는 Scroll Stopper다. 설명보다 비정상적으로 거대한 현실 문제를 먼저 보여준다
 - CUT 하나를 PAGE 하나로 사용한다. 즉 4~5 CUT이면 4~5 PAGE다. PAGE당 정확히 1 CUT이며 panel_size는 다음 값만 사용한다: establishing_tall, wide, medium, reaction_close_up, object_detail, action_tall, narrow_bridge
-- 전체에서 최소 3가지 panel_size를 사용하고 같은 크기 Grid를 만들지 않는다. establishing, reaction close-up, object detail, action을 Story에 맞게 섞는다
+- panel_size는 장면 목적에 맞게 선택하며 페이지당 1 CUT 구조를 우선한다
 - PAGE grouping만 정하고 최종 좌표와 크기는 코드 Composer가 4개 고정 템플릿에서 선택한다
 - PAGE 내부 전환 여백과 장식 오브젝트를 만들지 않는다. transition.type은 none, transition.object는 none으로 고정한다
 
 CUT LOCK:
 - cut_id는 C1, C2처럼 전체 Story에서 고유하다
-- characters에는 Character Bible의 ID만 넣고 중복 금지. character_count는 characters 길이와 정확히 같아야 한다
+- characters에는 Character Bible의 ID만 넣고 중복 금지. character_count는 호환용 값이며 서버가 characters 길이에서 확정한다
 - 해당 컷에 HANAREUM 1명이면 characters:["HANAREUM"], character_count:1이다. 한 컷은 ONE IMAGE, ONE MOMENT, ONE COMPOSITION이며 복제, 거울 속 두 번째 인물, 다른 포즈의 같은 인물, 임의 배경 인물을 만들지 않는다
 - location, time, character_action, facial_expression, camera, props, surreal_element, transition_to_next를 영어로 실제 촬영 가능한 수준으로 확정한다
 - 문서와 화면이 필요하면 정면의 읽을 수 있는 표면을 피하고 비스듬한 폴더·접힌 모서리·추상 도형만 사용한다
