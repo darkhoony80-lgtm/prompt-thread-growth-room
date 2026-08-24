@@ -232,8 +232,29 @@ batchReply.onclick=async()=>{
 async function syncReplies(postIds){if(!postIds?.length)return;const r=await fetch('/api/threads/comments?post_ids='+encodeURIComponent(postIds.join(',')),{cache:'no-store'});const j=await r.json();if(!r.ok)throw new Error(j.error||'COMMENTS_FAILED');renderReplies(j);return j}
 document.getElementById('syncNow').onclick=async()=>{const b=document.getElementById('syncNow');b.disabled=true;b.textContent='확인 중…';try{const j=await syncPosts();b.textContent=`원본 확인 (${j.summary.my_posts})`;setTimeout(()=>{b.textContent='새로 확인';b.disabled=false},1800)}catch(e){b.textContent='확인 실패';setTimeout(()=>{b.textContent='새로 확인';b.disabled=false},1800)}};
 fetch('/api/system-status',{cache:'no-store'}).then(r=>r.json()).then(s=>{td.className='dot'+(s.threads?' ok':'');ts.textContent=s.threads?'연결됨':'연결 안 됨';tb.textContent=s.threads?'연결됨':(s.threadsAppConfigured?'연결 준비됨':'App 설정 필요');gd.className='dot'+(s.gemini?' ok':'');gs.textContent=s.gemini?'연결됨':'연결 안 됨';gb.textContent=s.gemini?'연결됨':'연결 안 됨';connect.disabled=!s.threadsAppConfigured;connect.textContent=s.threads?'Threads 다시 연결':'Threads 계정 연결';connect.onclick=()=>location.href='/api/threads/oauth/start';if(s.threadsUserId) account.textContent='@voara0616 · ID '+s.threadsUserId;if(s.threads)syncPosts().catch(()=>{})}).catch(()=>{ts.textContent='상태 확인 실패'})
-async function loadInstagramStatus(){const badge=document.getElementById('ib'),account=document.getElementById('instagramAccount');try{const r=await fetch('/api/content-router?action=instagram_status',{cache:'no-store'}),j=await r.json().catch(()=>({}));if(r.ok&&j.ok&&j.connected&&j.account?.username){badge.textContent='연결됨';badge.classList.remove('negative');badge.classList.add('positive');account.textContent='@'+j.account.username;account.title=j.account.account_type||'';return}badge.textContent='연결 안 됨';badge.classList.remove('positive');badge.classList.add('negative');account.textContent='연결 안 됨';account.removeAttribute('title')}catch{badge.textContent='연결 확인 실패';badge.classList.remove('positive');badge.classList.add('negative');account.textContent='연결 안 됨';account.removeAttribute('title')}}
-loadInstagramStatus()
+async function loadInstagramStatus(){const badge=document.getElementById('ib'),account=document.getElementById('instagramAccount');try{const r=await fetch('/api/content-router?action=instagram_status',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}',cache:'no-store'}),j=await r.json().catch(()=>({}));if(r.ok&&j.ok&&j.connected&&j.account?.username){badge.textContent='연결됨';badge.classList.remove('negative');badge.classList.add('positive');account.textContent='@'+j.account.username;account.title=j.account.account_type||'';return}badge.textContent='연결 안 됨';badge.classList.remove('positive');badge.classList.add('negative');account.textContent='연결 안 됨';account.removeAttribute('title')}catch{badge.textContent='연결 확인 실패';badge.classList.remove('positive');badge.classList.add('negative');account.textContent='연결 안 됨';account.removeAttribute('title')}}
+async function ensureAdminSession(){
+  try{
+    const statusResponse=await fetch('/api/content-router?action=admin_status',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}',cache:'no-store'});
+    const status=await statusResponse.json().catch(()=>({}));
+    if(statusResponse.ok&&status.authenticated===true)return true;
+    if(statusResponse.status===503){alert('운영실 관리자 인증이 서버에 설정되지 않았습니다.');return false}
+  }catch{}
+
+  for(let attempt=0;attempt<3;attempt++){
+    const token=prompt('운영실 관리자 토큰을 입력하세요.\n토큰은 이 로그인 요청에만 사용되고 브라우저 JavaScript에 저장되지 않습니다.');
+    if(token===null)return false;
+    try{
+      const response=await fetch('/api/content-router?action=admin_login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token}),cache:'no-store'});
+      const data=await response.json().catch(()=>({}));
+      if(response.ok&&data.authenticated===true)return true;
+      alert('관리자 토큰이 올바르지 않습니다.');
+    }catch{alert('관리자 인증 요청에 실패했습니다.')}
+  }
+  return false;
+}
+window.voaraAdminReady=ensureAdminSession();
+window.voaraAdminReady.then(ok=>{if(ok)loadInstagramStatus();else console.warn('[ADMIN_AUTH_REQUIRED] 운영실 API 기능이 잠겨 있습니다.')});
 </script>
 <script src="/sthari-growth-v1.js"></script>
 <script src="/post-auto-v1.js"></script>

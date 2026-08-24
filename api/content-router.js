@@ -45,22 +45,78 @@ function send(res,status,body){
   return res.status(status).json(body);
 }
 
+const ADMIN_SESSION_COOKIE='pgr_admin_session';
+const ADMIN_SESSION_MAX_AGE=60*60*24*7;
+
+function adminToken(){return String(process.env.ADMIN_API_TOKEN||'').trim()}
+function adminSignature(value){return createHmac('sha256',adminToken()).update(String(value)).digest('base64url')}
+function adminCookieValue(){
+  const expires=Math.floor(Date.now()/1000)+ADMIN_SESSION_MAX_AGE;
+  const nonce=randomUUID();
+  const payload=`v1.${expires}.${nonce}`;
+  return `${payload}.${adminSignature(payload)}`;
+}
+function readCookie(req,name){
+  const raw=String(req.headers?.cookie||'');
+  const prefix=`${name}=`;
+  const pair=raw.split(';').map(value=>value.trim()).find(value=>value.startsWith(prefix));
+  if(!pair)return '';
+  try{return decodeURIComponent(pair.slice(prefix.length))}catch{return ''}
+}
+function validAdminSession(req){
+  const expected=adminToken();
+  if(!expected)return false;
+  const value=readCookie(req,ADMIN_SESSION_COOKIE);
+  const parts=value.split('.');
+  if(parts.length!==4||parts[0]!=='v1')return false;
+  const expires=Number(parts[1]);
+  if(!Number.isFinite(expires)||expires<=Math.floor(Date.now()/1000))return false;
+  const payload=parts.slice(0,3).join('.');
+  const supplied=Buffer.from(parts[3]||'','utf8');
+  const signature=Buffer.from(adminSignature(payload),'utf8');
+  return supplied.length===signature.length&&timingSafeEqual(supplied,signature);
+}
+function validAdminHeader(req){
+  const expected=adminToken();
+  const supplied=String(req.headers?.['x-admin-token']||'').trim();
+  if(!expected||!supplied)return false;
+  const expectedBuffer=Buffer.from(expected,'utf8');
+  const suppliedBuffer=Buffer.from(supplied,'utf8');
+  return suppliedBuffer.length===expectedBuffer.length&&timingSafeEqual(suppliedBuffer,expectedBuffer);
+}
+function setAdminSession(res){
+  res.setHeader('Set-Cookie',`${ADMIN_SESSION_COOKIE}=${encodeURIComponent(adminCookieValue())}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${ADMIN_SESSION_MAX_AGE}`);
+}
+function clearAdminSession(res){
+  res.setHeader('Set-Cookie',`${ADMIN_SESSION_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`);
+}
 function requireAdmin(req,res){
-  const expected=String(process.env.ADMIN_API_TOKEN||'').trim();
-  if(!expected){
+  if(!adminToken()){
     send(res,503,{ok:false,error:'ADMIN_AUTH_NOT_CONFIGURED'});
     return false;
   }
-
-  const supplied=String(req.headers?.['x-admin-token']||'').trim();
+  if(validAdminSession(req)||validAdminHeader(req))return true;
+  send(res,401,{ok:false,error:'UNAUTHORIZED'});
+  return false;
+}
+function actionAdminStatus(req,res){
+  if(!adminToken())return send(res,503,{ok:false,error:'ADMIN_AUTH_NOT_CONFIGURED'});
+  return send(res,200,{ok:true,authenticated:validAdminSession(req)||validAdminHeader(req)});
+}
+function actionAdminLogin(req,res){
+  const expected=adminToken();
+  if(!expected)return send(res,503,{ok:false,error:'ADMIN_AUTH_NOT_CONFIGURED'});
+  const supplied=String(req.body?.token||'').trim();
   const expectedBuffer=Buffer.from(expected,'utf8');
   const suppliedBuffer=Buffer.from(supplied,'utf8');
   const valid=suppliedBuffer.length===expectedBuffer.length&&timingSafeEqual(suppliedBuffer,expectedBuffer);
-  if(!valid){
-    send(res,401,{ok:false,error:'UNAUTHORIZED'});
-    return false;
-  }
-  return true;
+  if(!valid)return send(res,401,{ok:false,error:'UNAUTHORIZED'});
+  setAdminSession(res);
+  return send(res,200,{ok:true,authenticated:true});
+}
+function actionAdminLogout(req,res){
+  clearAdminSession(res);
+  return send(res,200,{ok:true});
 }
 function safeInstagramMetaError(error,token){
   const code=Number(error?.code)||null;
@@ -3076,14 +3132,19 @@ async function handler(req,res){
       return send(res,error?.message==='REQUEST_BODY_TOO_LARGE'?413:400,{ok:false,error:error?.message==='REQUEST_BODY_TOO_LARGE'?'REQUEST_BODY_TOO_LARGE':'INVALID_JSON_BODY'});
     }
   }
-  // Meta must reach the webhook without our admin token. Its own verification/signature checks remain inside actionInstagramWebhook.
+  // Meta must reach the webhook without our admin session. Its own verification/signature checks remain inside actionInstagramWebhook.
   if(queryAction==='instagram_webhook')return actionInstagramWebhook(req,res,rawBody);
 
   if(req.method!=='POST'){
     return send(res,405,{ok:false,error:'METHOD_NOT_ALLOWED'});
   }
 
-  // Every non-webhook operation is private to the operations room.
+  // Public authentication handshake. The admin token is sent once over HTTPS and is never stored in browser JavaScript.
+  if(queryAction==='admin_status')return actionAdminStatus(req,res);
+  if(queryAction==='admin_login')return actionAdminLogin(req,res);
+  if(queryAction==='admin_logout')return actionAdminLogout(req,res);
+
+  // Every other content-router operation is private to the operations room.
   // Fail closed before any Gemini/OpenRouter/Blob/Supabase/Meta action can run.
   if(!requireAdmin(req,res))return;
 
