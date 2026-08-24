@@ -261,7 +261,7 @@
     });
   }
 
-  function temporaryAutoError(error){return error?.status===429||error?.status>=500||/NETWORK|TIMEOUT|EMPTY_RESPONSE|OPENROUTER_REQUEST_FAILED/i.test(String(error?.message||''))}
+  function temporaryAutoError(error){return error?.status===429||error?.status>=500||/NETWORK|TIMEOUT|EMPTY_RESPONSE|OPENROUTER_REQUEST_FAILED|OPENROUTER_RESPONSE_TRUNCATED|FAILED TO FETCH/i.test(String(error?.message||''))}
   function autoDelay(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
 
   async function fetchAutoTopics(run,type){
@@ -287,7 +287,13 @@
       }catch(error){
         lastError=error;
         if(error?.message==='OX_RELIABILITY_RED_REJECTED')break;
-        if(attempt===0){addAutoLog(run,'RETRY',`${candidate.title} · ${error.message}`);persistAutoRun();renderAutoRun();if(temporaryAutoError(error))await autoDelay(3000)}
+        const temporary=temporaryAutoError(error);
+        if(attempt===0&&temporary){
+          addAutoLog(run,'RETRY',`${candidate.title} · ${error.message}`);
+          persistAutoRun();renderAutoRun();await autoDelay(5000);
+          continue;
+        }
+        break;
       }
     }
     if(!generated){run.progress[type].failed++;addAutoLog(run,'FAIL',`${candidate.title} · ${lastError?.message||'UNKNOWN'}`);return false}
