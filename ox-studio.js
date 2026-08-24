@@ -193,7 +193,7 @@
   function addAutoLog(run,kind,text){
     run.logs=Array.isArray(run.logs)?run.logs:[];
     run.logs.unshift({kind,text:String(text||''),time:new Date().toISOString()});
-    run.logs=run.logs.slice(0,150);
+    run.logs=run.logs.slice(0,30);
   }
 
   function renderAutoRun(){
@@ -208,7 +208,11 @@
     const stateText=!run?'대기 중':run.done?'완료':run.stopped?'중단됨':run.stopRequested?'중단 대기':run.paused&&run.active?'일시 중지 대기':run.paused?'일시 중지':run.active?'실행 중':'대기 중';
     value('oxAutoState',stateText);
     const start=document.getElementById('oxAutoStart'),pause=document.getElementById('oxAutoPause'),stop=document.getElementById('oxAutoStop');
-    if(start){start.disabled=Boolean(state.autoLoop);start.textContent=run?.paused&&!run?.stopped&&!run?.done?'자동 비축 재개':'자동 비축 시작'}
+    if(start){
+      const running=Boolean(run?.active&&!run?.paused&&!run?.stopRequested&&!run?.done&&!run?.stopped);
+      start.disabled=Boolean(state.autoLoop)||running;
+      start.textContent=running?'자동 비축 실행 중…':run?.paused&&!run?.stopped&&!run?.done?'자동 비축 재개':'자동 비축 시작';
+    }
     if(pause)pause.disabled=!run?.active||run?.paused||run?.stopRequested;
     if(stop)stop.disabled=!run||run.done||run.stopped||run.stopRequested;
     ['oxAutoMode','oxAutoLongformTarget','oxAutoBlogTarget'].forEach(id=>{const node=document.getElementById(id);if(node)node.disabled=Boolean(run?.active)});
@@ -282,7 +286,6 @@
         generated=data;break;
       }catch(error){
         lastError=error;
-        if(error?.message==='OX_RELIABILITY_RED_REJECTED')break;
         if(attempt===0){addAutoLog(run,'RETRY',`${candidate.title} · ${error.message}`);persistAutoRun();renderAutoRun();if(temporaryAutoError(error))await autoDelay(3000)}
       }
     }
@@ -303,7 +306,7 @@
       if(run.stopRequested){run.active=false;run.stopped=true;run.phase='사용자 중단';persistAutoRun();renderAutoRun();return}
       if(run.paused){run.active=false;run.phase='일시 중지';persistAutoRun();renderAutoRun();return}
       if(!run.candidates.length||run.candidateIndex>=run.candidates.length){
-        if(run.batchAttempts[type]>=run.maxBatches[type]){const remaining=Math.max(0,target-run.progress[type].completed);addAutoLog(run,'FAIL',`${TYPE_META[type].noun} 최대 배치 도달 · 목표 ${remaining}개 미달 종료`);run.typeIndex++;run.candidates=[];run.candidateIndex=0;continue}
+        if(run.batchAttempts[type]>=run.maxBatches[type]){run.progress[type].failed+=Math.max(0,target-run.progress[type].completed);addAutoLog(run,'FAIL',`${TYPE_META[type].noun} 최대 배치 도달 · 목표 미달 종료`);run.typeIndex++;run.candidates=[];run.candidateIndex=0;continue}
         run.batchAttempts[type]++;run.current=`소재 5개 생성 중 · 배치 ${run.batchAttempts[type]}`;run.phase=run.current;persistAutoRun();renderAutoRun();
         const candidates=await fetchAutoTopics(run,type);
         run.candidates=Array.isArray(candidates)?candidates:[];run.candidateIndex=0;persistAutoRun();
