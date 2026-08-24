@@ -3116,6 +3116,19 @@ async function actionOxGenerate(req,res){
             model:completion.model,
             usage:oxUsageMerge(completion.usage,repairUsage)
           };
+          // [DIAG-ONLY] 분량 repair 실패 진단 로그 · 로직 변경 없음
+          console.error('[OX_LONGFORM_LENGTH_DIAG]',JSON.stringify({
+            repair_stage:'narration_length',
+            repair_outcome:String(repairError.message)==='OX_LONGFORM_NARRATION_LENGTH_INVALID'
+              ?'REPAIRED_STILL_INVALID'
+              :'REPAIR_CRASHED',
+            title:String(parsed?.selected_title||parsed?.title_candidates?.[0]||'').trim().slice(0,80)||null,
+            original_narration_char_count:repairError.meta.original_narration_char_count,
+            narration_char_count:Number(repairError.meta.narration_char_count)||null,
+            expected_min:Number(repairError.meta.expected_min)||3000,
+            expected_max:Number(repairError.meta.expected_max)||3800,
+            repair_error:String(repairError.message||'UNKNOWN')
+          }));
           throw repairError;
         }
       }else{
