@@ -2813,7 +2813,62 @@ async function oxCompletion(messages,{maxTokens=12000,temperature=.7}={}){
     error.status=502;
     throw error;
   }
-  return {text,model:String(body?.model||OX_MODEL),usage:body?.usage||null};
+  const finishReason=String(body?.choices?.[0]?.finish_reason||'').trim();
+  if(finishReason==='length'){
+    const error=new Error('OPENROUTER_RESPONSE_TRUNCATED');
+    error.status=502;
+    error.meta={finish_reason:finishReason,usage:body?.usage||null};
+    throw error;
+  }
+  return {text,model:String(body?.model||OX_MODEL),usage:body?.usage||null,finish_reason:finishReason||null};
+}
+
+
+function oxUsageMerge(...values){
+  const usages=values.filter(value=>value&&typeof value==='object');
+  if(!usages.length)return null;
+  const number=(key)=>usages.reduce((sum,value)=>sum+(Number(value?.[key])||0),0);
+  return {
+    prompt_tokens:number('prompt_tokens'),
+    completion_tokens:number('completion_tokens'),
+    total_tokens:number('total_tokens'),
+    cost:usages.reduce((sum,value)=>sum+(Number(value?.cost)||0),0)
+  };
+}
+
+async function repairOxJson(rawText,type){
+  const raw=String(rawText||'').trim();
+  if(!raw)throw new Error('OX_JSON_PARSE_FAILED');
+  const completion=await oxCompletion([
+    {role:'system',content:'You repair malformed JSON for the OX content pipeline. Return one valid JSON object only. Preserve all recoverable facts, wording, structure and fields. Do not add new factual claims merely to fill missing content.'},
+    {role:'user',content:`콘텐츠 유형은 ${type}이다. 아래 응답은 JSON 형식만 깨져 있다. 가능한 내용을 그대로 보존하면서 문법, 따옴표, 쉼표, 괄호, 잘린 문자열 등 JSON 구조만 복구하라. 원문에 없는 사건·수치·인물·출처를 새로 지어내지 마라. 복구 불가능한 일부 선택 필드는 빈 배열/빈 문자열로 둘 수 있지만 필수 본문 내용을 임의 창작하지 마라.\n\nRAW RESPONSE:\n${raw.slice(0,50000)}`}
+  ],{maxTokens:type==='longform'?9000:type==='novel'?6000:5200,temperature:.1});
+  return {parsed:parseJson(completion.text),completion};
+}
+
+async function repairOxLongformLength(item,lengthMeta){
+  const count=Number(lengthMeta?.narration_char_count)||0;
+  const direction=count<3000?'expand':'compress';
+  const targetMin=3200,targetMax=3500;
+  const completion=await oxCompletion([
+    {role:'system',content:'You are OX long-form script editor. Return JSON only. Preserve factual integrity and the existing story design.'},
+    {role:'user',content:`다음 longform JSON은 내용·구조는 유지할 가치가 있지만 scene narration 총합이 현재 ${count}자로 길이 검증에 실패했다.
+목표는 공백 포함 ${targetMin}~${targetMax}자다.
+
+작업:
+- ${direction==='expand'?'기존 장면의 구체적 행동, 인과, 긴장, 맥락을 자연스럽게 보강한다.':'중복 설명, 군더더기, 반복만 압축한다.'}
+- title_candidates, selected_title, thumbnail_hook, opening_hook, reliability_level, fact_basis, fact_check_items, reconstruction_notes의 사실 의미를 바꾸지 않는다.
+- chapter 수와 scene 수, scene_number, visual_description, source_type, source_queries는 그대로 유지한다.
+- 새로운 사건·인물·날짜·숫자·인용·출처를 만들어내지 않는다.
+- 0~3초 훅과 스토리 엔터테인먼트 톤을 유지한다.
+- 각 scene.narration만 필요한 만큼 편집하고 나머지 필드는 원본을 보존한다.
+- chapter.narration은 빈 문자열로 반환한다.
+- 최종 scene narration 총합을 ${targetMin}~${targetMax}자로 맞춘 뒤 JSON만 반환한다.
+
+ORIGINAL JSON:
+${JSON.stringify(item)}`}
+  ],{maxTokens:9000,temperature:.25});
+  return {parsed:parseJson(completion.text),completion};
 }
 
 function oxTopicPrompt(type){
@@ -3016,20 +3071,70 @@ async function actionOxGenerate(req,res){
   try{
     const type=oxType(req.body?.type);
     const prompt=oxGenerationPrompt(type,req.body?.candidate,req.body?.context);
-    const completion=await oxCompletion([
+    let completion=await oxCompletion([
       {role:'system',content:'You are OX, a long-form Korean content production engine. Follow the requested schema and return JSON only.'},
       {role:'user',content:prompt}
-    ],{maxTokens:type==='longform'?6500:type==='novel'?4800:4200,temperature:type==='blog'?.35:.72});
+    ],{maxTokens:type==='longform'?12000:type==='novel'?4800:4200,temperature:type==='blog'?.35:.72});
+
     let parsed;
-    try{parsed=parseJson(completion.text)}catch{
-      return send(res,502,{ok:false,error:'OX_JSON_PARSE_FAILED',raw_text:completion.text});
+    let repairUsage=null;
+    let repairedJson=false;
+    try{
+      parsed=parseJson(completion.text);
+    }catch{
+      try{
+        const repaired=await repairOxJson(completion.text,type);
+        parsed=repaired.parsed;
+        repairUsage=repaired.completion.usage;
+        repairedJson=true;
+      }catch(error){
+        error.meta={...(error?.meta||{}),repair_stage:'json',model:completion.model,usage:oxUsageMerge(completion.usage,repairUsage)};
+        throw error;
+      }
     }
+
     let item;
-    try{item=normalizeOxItem(parsed,type)}catch(error){
-      error.meta={...(error?.meta||{}),model:completion.model,usage:completion.usage};
-      throw error;
+    try{
+      item=normalizeOxItem(parsed,type);
+    }catch(error){
+      if(type==='longform'&&error?.message==='OX_LONGFORM_NARRATION_LENGTH_INVALID'){
+        const firstMeta=error.meta||{};
+        try{
+          const repaired=await repairOxLongformLength(parsed,firstMeta);
+          repairUsage=oxUsageMerge(repairUsage,repaired.completion.usage);
+          item=normalizeOxItem(repaired.parsed,type);
+          item.generation_repair={
+            applied:true,
+            reason:'NARRATION_LENGTH',
+            original_narration_char_count:Number(firstMeta.narration_char_count)||null
+          };
+        }catch(repairError){
+          repairError.meta={
+            ...(repairError?.meta||{}),
+            repair_stage:'narration_length',
+            original_narration_char_count:Number(firstMeta.narration_char_count)||null,
+            model:completion.model,
+            usage:oxUsageMerge(completion.usage,repairUsage)
+          };
+          throw repairError;
+        }
+      }else{
+        error.meta={...(error?.meta||{}),model:completion.model,usage:oxUsageMerge(completion.usage,repairUsage)};
+        throw error;
+      }
     }
-    return send(res,200,{ok:true,item,model:completion.model,usage:completion.usage});
+
+    if(repairedJson){
+      item.generation_repair={...(item.generation_repair||{}),applied:true,json_repaired:true};
+    }
+
+    return send(res,200,{
+      ok:true,
+      item,
+      model:completion.model,
+      usage:oxUsageMerge(completion.usage,repairUsage),
+      repaired:Boolean(item.generation_repair?.applied)
+    });
   }catch(error){return sendOxError(res,error)}
 }
 
