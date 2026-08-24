@@ -262,6 +262,19 @@
   }
 
   function temporaryAutoError(error){return error?.status===429||error?.status>=500||/NETWORK|TIMEOUT|EMPTY_RESPONSE|OPENROUTER_REQUEST_FAILED|OPENROUTER_RESPONSE_TRUNCATED|FAILED TO FETCH/i.test(String(error?.message||''))}
+  function autoFailDetail(error){
+    const message=String(error?.message||'UNKNOWN');
+    const meta=(error?.meta&&typeof error.meta==='object')?error.meta:null;
+    const original=Number(meta?.original_narration_char_count);
+    if(!meta||!Number.isFinite(original))return message;
+    const repaired=Number(meta?.narration_char_count);
+    const tail=Number.isFinite(repaired)&&repaired>0
+      ?`원본 ${original}자 → repair ${repaired}자`
+      :`원본 ${original}자 → repair 실패`;
+    return message==='OX_LONGFORM_NARRATION_LENGTH_INVALID'
+      ?`LENGTH_INVALID · ${tail}`
+      :`${tail} (${message})`;
+  }
   function autoDelay(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
 
   async function fetchAutoTopics(run,type){
@@ -296,7 +309,7 @@
         break;
       }
     }
-    if(!generated){run.progress[type].failed++;addAutoLog(run,'FAIL',`${candidate.title} · ${lastError?.message||'UNKNOWN'}`);return false}
+    if(!generated){run.progress[type].failed++;addAutoLog(run,'FAIL',`${candidate.title} · ${autoFailDetail(lastError)}`);return false}
     const record={id:null,type,title:itemTitle(generated.item),status:'DRAFT',topic:candidate.one_line,tags:generated.item.tags||[candidate.tag].filter(Boolean),content_json:generated.item,created_at:null};
     let saved=null;
     for(let attempt=0;attempt<2;attempt++){
