@@ -44,6 +44,24 @@ const LABELS={
 function send(res,status,body){
   return res.status(status).json(body);
 }
+
+function requireAdmin(req,res){
+  const expected=String(process.env.ADMIN_API_TOKEN||'').trim();
+  if(!expected){
+    send(res,503,{ok:false,error:'ADMIN_AUTH_NOT_CONFIGURED'});
+    return false;
+  }
+
+  const supplied=String(req.headers?.['x-admin-token']||'').trim();
+  const expectedBuffer=Buffer.from(expected,'utf8');
+  const suppliedBuffer=Buffer.from(supplied,'utf8');
+  const valid=suppliedBuffer.length===expectedBuffer.length&&timingSafeEqual(suppliedBuffer,expectedBuffer);
+  if(!valid){
+    send(res,401,{ok:false,error:'UNAUTHORIZED'});
+    return false;
+  }
+  return true;
+}
 function safeInstagramMetaError(error,token){
   const code=Number(error?.code)||null;
   const type=String(error?.type||'').slice(0,80)||null;
@@ -3058,15 +3076,21 @@ async function handler(req,res){
       return send(res,error?.message==='REQUEST_BODY_TOO_LARGE'?413:400,{ok:false,error:error?.message==='REQUEST_BODY_TOO_LARGE'?'REQUEST_BODY_TOO_LARGE':'INVALID_JSON_BODY'});
     }
   }
+  // Meta must reach the webhook without our admin token. Its own verification/signature checks remain inside actionInstagramWebhook.
   if(queryAction==='instagram_webhook')return actionInstagramWebhook(req,res,rawBody);
-  if(queryAction==='instagram_status')return actionInstagramStatus(req,res);
-  if(queryAction==='openrouter_test')return actionOpenRouterTest(req,res);
-  if(queryAction==='supabase_status')return actionSupabaseStatus(req,res);
-  if(queryAction==='instagram_prompt_lookup')return actionInstagramPromptLookup(req,res);
 
   if(req.method!=='POST'){
     return send(res,405,{ok:false,error:'METHOD_NOT_ALLOWED'});
   }
+
+  // Every non-webhook operation is private to the operations room.
+  // Fail closed before any Gemini/OpenRouter/Blob/Supabase/Meta action can run.
+  if(!requireAdmin(req,res))return;
+
+  if(queryAction==='instagram_status')return actionInstagramStatus(req,res);
+  if(queryAction==='openrouter_test')return actionOpenRouterTest(req,res);
+  if(queryAction==='supabase_status')return actionSupabaseStatus(req,res);
+  if(queryAction==='instagram_prompt_lookup')return actionInstagramPromptLookup(req,res);
 
   const action=String(
     queryAction||
