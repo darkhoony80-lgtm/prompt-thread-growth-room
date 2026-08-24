@@ -193,7 +193,7 @@
   function addAutoLog(run,kind,text){
     run.logs=Array.isArray(run.logs)?run.logs:[];
     run.logs.unshift({kind,text:String(text||''),time:new Date().toISOString()});
-    run.logs=run.logs.slice(0,30);
+    run.logs=run.logs.slice(0,150);
   }
 
   function renderAutoRun(){
@@ -282,6 +282,7 @@
         generated=data;break;
       }catch(error){
         lastError=error;
+        if(error?.message==='OX_RELIABILITY_RED_REJECTED')break;
         if(attempt===0){addAutoLog(run,'RETRY',`${candidate.title} · ${error.message}`);persistAutoRun();renderAutoRun();if(temporaryAutoError(error))await autoDelay(3000)}
       }
     }
@@ -302,7 +303,7 @@
       if(run.stopRequested){run.active=false;run.stopped=true;run.phase='사용자 중단';persistAutoRun();renderAutoRun();return}
       if(run.paused){run.active=false;run.phase='일시 중지';persistAutoRun();renderAutoRun();return}
       if(!run.candidates.length||run.candidateIndex>=run.candidates.length){
-        if(run.batchAttempts[type]>=run.maxBatches[type]){run.progress[type].failed+=Math.max(0,target-run.progress[type].completed);addAutoLog(run,'FAIL',`${TYPE_META[type].noun} 최대 배치 도달 · 목표 미달 종료`);run.typeIndex++;run.candidates=[];run.candidateIndex=0;continue}
+        if(run.batchAttempts[type]>=run.maxBatches[type]){const remaining=Math.max(0,target-run.progress[type].completed);addAutoLog(run,'FAIL',`${TYPE_META[type].noun} 최대 배치 도달 · 목표 ${remaining}개 미달 종료`);run.typeIndex++;run.candidates=[];run.candidateIndex=0;continue}
         run.batchAttempts[type]++;run.current=`소재 5개 생성 중 · 배치 ${run.batchAttempts[type]}`;run.phase=run.current;persistAutoRun();renderAutoRun();
         const candidates=await fetchAutoTopics(run,type);
         run.candidates=Array.isArray(candidates)?candidates:[];run.candidateIndex=0;persistAutoRun();
