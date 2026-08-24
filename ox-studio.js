@@ -4,7 +4,10 @@
     longform:{label:'🎬 롱폼',noun:'롱폼'},
     blog:{label:'📝 블로그',noun:'블로그'}
   };
-  const state={type:'novel',candidates:[],selected:-1,current:null,library:[],loaded:false};
+  const AUTO_STATE_KEY='voara_ox_auto_stock_v1';
+  const AUTO_VERSION='ox-auto-stock-v1';
+  const AUTO_DUPLICATE_STOP_WORDS=new Set(['longform','blog','novel','topic','tag','content','롱폼','블로그','소설','콘텐츠','소재','주제','사건','이야기','실화']);
+  const state={type:'novel',candidates:[],selected:-1,current:null,library:[],loaded:false,autoRun:null,autoLoop:null};
   const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 
   function install(){
@@ -28,8 +31,10 @@
       if(!state.loaded)loadLibrary();
     });
     bind();
+    restoreAutoRun();
     renderCandidates();
     renderLibrary();
+    renderAutoRun();
   }
 
   function viewHtml(){return `<section class="view" id="ox-studio"><div class="ox-shell">
@@ -39,6 +44,7 @@
       <div class="card"><div class="section"><div><b id="oxModeTitle">소설 소재</b><p class="mut">랜덤 소재는 짧은 후보 5개만 만듭니다.</p></div><button class="btn p" id="oxTopicsBtn">🎲 랜덤 소재</button></div><div id="oxCandidateStatus" class="ox-status">소재 후보를 먼저 생성하세요.</div><div id="oxCandidates" class="ox-candidates"></div><button class="btn p" id="oxGenerateBtn" disabled style="width:100%;margin-top:12px">선택 소재로 본문 생성</button></div>
       <div class="card"><div class="section"><div><b>결과 검토·수정</b><p class="mut">구조화 JSON을 직접 수정한 뒤 저장할 수 있습니다.</p></div><span class="badge" id="oxCurrentBadge">새 콘텐츠</span></div><div class="ox-meta"><label class="ox-field"><span class="mut">제목</span><input id="oxTitle" placeholder="생성 후 제목이 표시됩니다"></label><label class="ox-field"><span class="mut">상태</span><select id="oxStatus"><option>IDEA</option><option selected>DRAFT</option><option>READY</option><option>USED</option></select></label></div><textarea id="oxEditor" class="ox-editor" spellcheck="false" placeholder="생성 결과 JSON"></textarea><div id="oxEditorStatus" class="ox-status"></div><div class="ox-actions" style="margin-top:10px"><button class="btn p" id="oxSaveBtn" disabled>저장</button><button class="btn" id="oxJsonBtn" disabled>JSON</button><button class="btn" id="oxTxtBtn" disabled>TXT</button><button class="btn" id="oxZipBtn" disabled>ZIP 다운로드</button></div></div>
     </div>
+    <div class="card"><div class="section"><div><b>🐂 OX 자동 비축</b><p class="mut">5개 소재 배치를 순차 생성·검증·저장합니다. 목표 수량에 도달하면 종료합니다.</p></div><span class="badge" id="oxAutoState">대기 중</span></div><div class="ox-auto-settings"><label class="ox-field"><span class="mut">콘텐츠 종류</span><select id="oxAutoMode"><option value="longform">롱폼</option><option value="blog">블로그</option><option value="sequence">롱폼 → 블로그 순차</option></select></label><label class="ox-field"><span class="mut">롱폼 목표</span><input id="oxAutoLongformTarget" type="number" min="0" max="500" value="5"></label><label class="ox-field"><span class="mut">블로그 목표</span><input id="oxAutoBlogTarget" type="number" min="0" max="500" value="5"></label><div class="ox-actions"><button class="btn p" id="oxAutoStart">자동 비축 시작</button><button class="btn" id="oxAutoPause" disabled>일시 중지</button><button class="btn" id="oxAutoStop" disabled>중단</button></div></div><div class="ox-auto-progress"><div><b>🎬 롱폼</b><div class="ox-auto-counts"><span>목표 <strong id="oxAutoLongTargetView">0</strong></span><span>완료 <strong id="oxAutoLongDone">0</strong></span><span>실패 <strong id="oxAutoLongFail">0</strong></span></div><p class="mut" id="oxAutoLongNow">대기 중</p></div><div><b>📝 블로그</b><div class="ox-auto-counts"><span>목표 <strong id="oxAutoBlogTargetView">0</strong></span><span>완료 <strong id="oxAutoBlogDone">0</strong></span><span>실패 <strong id="oxAutoBlogFail">0</strong></span></div><p class="mut" id="oxAutoBlogNow">대기 중</p></div></div><div id="oxAutoLog" class="ox-auto-log"><div class="mut">아직 자동 비축 기록이 없습니다.</div></div></div>
     <div class="card"><div class="section"><div><b>저장된 콘텐츠</b><p class="mut">제목·주제·태그 검색과 유형·상태 필터를 지원합니다.</p></div><button class="btn" id="oxRefreshBtn">새로고침</button></div><div class="ox-library-tools"><input class="ox-search" id="oxSearch" placeholder="제목, 주제, 태그 검색"><div class="ox-filters" id="oxFilters"><button class="btn ox-filter on" data-filter="all">전체</button><button class="btn ox-filter" data-filter="novel">소설</button><button class="btn ox-filter" data-filter="longform">롱폼</button><button class="btn ox-filter" data-filter="blog">블로그</button><button class="btn ox-filter" data-filter="DRAFT">DRAFT</button><button class="btn ox-filter" data-filter="READY">READY</button><button class="btn ox-filter" data-filter="USED">USED</button></div></div><div id="oxLibraryStatus" class="ox-status"></div><div id="oxLibrary" class="ox-library-grid"></div></div>
   </div></section>`}
 
@@ -59,12 +65,17 @@
     document.getElementById('oxJsonBtn').onclick=()=>downloadCurrent('json');
     document.getElementById('oxTxtBtn').onclick=()=>downloadCurrent('txt');
     document.getElementById('oxZipBtn').onclick=()=>downloadCurrent('zip');
+    document.getElementById('oxAutoStart').onclick=startAutoStock;
+    document.getElementById('oxAutoPause').onclick=pauseAutoStock;
+    document.getElementById('oxAutoStop').onclick=stopAutoStock;
+    document.getElementById('oxAutoMode').onchange=syncAutoTargetInputs;
+    syncAutoTargetInputs();
   }
 
   async function api(action,payload={}){
     const response=await fetch(`/api/content-router?action=${encodeURIComponent(action)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const data=await response.json().catch(()=>({}));
-    if(!response.ok||!data.ok){const error=new Error(data.error||`HTTP_${response.status}`);error.raw=data.raw_text||data.meta?.message||'';throw error}
+    if(!response.ok||!data.ok){const error=new Error(data.error||`HTTP_${response.status}`);error.raw=data.raw_text||data.meta?.message||'';error.status=response.status;error.meta=data.meta||null;throw error}
     return data;
   }
 
@@ -124,6 +135,187 @@
     try{const record=editedRecord();setStatus('oxEditorStatus','Supabase 저장 중…');const data=await api('ox_library_save',{item:record});state.current=data.item;syncEditor();setStatus('oxEditorStatus','저장 완료','ok');await loadLibrary()}
     catch(error){setStatus('oxEditorStatus',`저장 실패: ${error.message}${error.raw?` · ${error.raw}`:''}`,'error')}
     finally{button.disabled=!state.current}
+  }
+
+  function syncAutoTargetInputs(){
+    const mode=document.getElementById('oxAutoMode')?.value||'longform';
+    const longInput=document.getElementById('oxAutoLongformTarget');
+    const blogInput=document.getElementById('oxAutoBlogTarget');
+    if(longInput)longInput.disabled=mode==='blog';
+    if(blogInput)blogInput.disabled=mode==='longform';
+  }
+
+  function autoTargetsFromUi(){
+    const mode=document.getElementById('oxAutoMode').value;
+    const clamp=value=>Math.max(0,Math.min(500,Math.floor(Number(value)||0)));
+    const targets={longform:clamp(document.getElementById('oxAutoLongformTarget').value),blog:clamp(document.getElementById('oxAutoBlogTarget').value)};
+    if(mode==='longform')targets.blog=0;
+    if(mode==='blog')targets.longform=0;
+    if((mode==='longform'&&!targets.longform)||(mode==='blog'&&!targets.blog)||(mode==='sequence'&&(!targets.longform||!targets.blog)))throw new Error('선택한 종류의 목표 수량을 1개 이상 입력하세요.');
+    return {mode,targets};
+  }
+
+  function createAutoRun(mode,targets){
+    const types=mode==='sequence'?['longform','blog']:[mode];
+    return {
+      id:globalThis.crypto?.randomUUID?.()||`ox-${Date.now()}`,
+      version:AUTO_VERSION,mode,types,typeIndex:0,targets,
+      progress:{longform:{completed:0,failed:0},blog:{completed:0,failed:0}},
+      batchAttempts:{longform:0,blog:0},
+      maxBatches:{
+        longform:Math.max(2,Math.ceil((targets.longform||0)/5)*4+2),
+        blog:Math.max(2,Math.ceil((targets.blog||0)/5)*4+2)
+      },
+      candidates:[],candidateIndex:0,current:null,logs:[],
+      active:false,paused:false,stopRequested:false,stopped:false,done:false,
+      phase:'시작 대기',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()
+    };
+  }
+
+  function persistAutoRun(){
+    if(!state.autoRun)return;
+    state.autoRun.updatedAt=new Date().toISOString();
+    try{localStorage.setItem(AUTO_STATE_KEY,JSON.stringify(state.autoRun))}catch{}
+  }
+
+  function restoreAutoRun(){
+    let run=null;
+    try{run=JSON.parse(localStorage.getItem(AUTO_STATE_KEY)||'null')}catch{}
+    if(!run||run.version!==AUTO_VERSION)return;
+    if(run.active&&!run.done&&!run.stopped){run.active=false;run.paused=true;run.phase='새로고침 후 일시 중지';addAutoLog(run,'RETRY','새로고침 감지 · 저장 목록 확인 후 재개 가능')}
+    state.autoRun=run;
+    document.getElementById('oxAutoMode').value=run.mode||'longform';
+    document.getElementById('oxAutoLongformTarget').value=run.targets?.longform||0;
+    document.getElementById('oxAutoBlogTarget').value=run.targets?.blog||0;
+    syncAutoTargetInputs();persistAutoRun();
+  }
+
+  function addAutoLog(run,kind,text){
+    run.logs=Array.isArray(run.logs)?run.logs:[];
+    run.logs.unshift({kind,text:String(text||''),time:new Date().toISOString()});
+    run.logs=run.logs.slice(0,30);
+  }
+
+  function renderAutoRun(){
+    const run=state.autoRun;
+    const value=(id,text)=>{const node=document.getElementById(id);if(node)node.textContent=String(text)};
+    const progress=run?.progress||{longform:{completed:0,failed:0},blog:{completed:0,failed:0}};
+    value('oxAutoLongTargetView',run?.targets?.longform||0);value('oxAutoLongDone',progress.longform.completed||0);value('oxAutoLongFail',progress.longform.failed||0);
+    value('oxAutoBlogTargetView',run?.targets?.blog||0);value('oxAutoBlogDone',progress.blog.completed||0);value('oxAutoBlogFail',progress.blog.failed||0);
+    const currentType=run?.types?.[run.typeIndex];
+    value('oxAutoLongNow',currentType==='longform'?(run.current||run.phase||'실행 중'):(progress.longform.completed>=(run?.targets?.longform||0)&&run?.targets?.longform?'완료':'대기 중'));
+    value('oxAutoBlogNow',currentType==='blog'?(run.current||run.phase||'실행 중'):(progress.blog.completed>=(run?.targets?.blog||0)&&run?.targets?.blog?'완료':'대기 중'));
+    const stateText=!run?'대기 중':run.done?'완료':run.stopped?'중단됨':run.stopRequested?'중단 대기':run.paused&&run.active?'일시 중지 대기':run.paused?'일시 중지':run.active?'실행 중':'대기 중';
+    value('oxAutoState',stateText);
+    const start=document.getElementById('oxAutoStart'),pause=document.getElementById('oxAutoPause'),stop=document.getElementById('oxAutoStop');
+    if(start){start.disabled=Boolean(state.autoLoop);start.textContent=run?.paused&&!run?.stopped&&!run?.done?'자동 비축 재개':'자동 비축 시작'}
+    if(pause)pause.disabled=!run?.active||run?.paused||run?.stopRequested;
+    if(stop)stop.disabled=!run||run.done||run.stopped||run.stopRequested;
+    ['oxAutoMode','oxAutoLongformTarget','oxAutoBlogTarget'].forEach(id=>{const node=document.getElementById(id);if(node)node.disabled=Boolean(run?.active)});
+    if(!run?.active)syncAutoTargetInputs();
+    const log=document.getElementById('oxAutoLog');if(log)log.innerHTML=run?.logs?.length?run.logs.map(entry=>`<div class="ox-auto-${String(entry.kind).toLowerCase()}">[${escapeHtml(entry.kind)}] ${escapeHtml(entry.text)}</div>`).join(''):'<div class="mut">아직 자동 비축 기록이 없습니다.</div>';
+  }
+
+  async function startAutoStock(){
+    if(state.autoLoop)return;
+    try{
+      let run=state.autoRun;
+      if(!run||run.done||run.stopped){const settings=autoTargetsFromUi();run=createAutoRun(settings.mode,settings.targets);state.autoRun=run}
+      run.active=true;run.paused=false;run.stopRequested=false;run.phase='저장 목록 확인 중';persistAutoRun();renderAutoRun();
+      await loadLibrary();
+      state.autoLoop=runAutoStock(run).finally(()=>{state.autoLoop=null;renderAutoRun()});
+      await state.autoLoop;
+    }catch(error){
+      if(state.autoRun){state.autoRun.active=false;state.autoRun.paused=true;state.autoRun.phase=error.message;addAutoLog(state.autoRun,'FAIL',error.message);persistAutoRun()}
+      renderAutoRun();
+    }
+  }
+
+  function pauseAutoStock(){
+    const run=state.autoRun;if(!run||!run.active)return;
+    run.paused=true;run.phase='현재 요청 완료 후 일시 중지';addAutoLog(run,'RETRY','일시 중지 요청 · 현재 작업 안전 마무리 중');persistAutoRun();renderAutoRun();
+  }
+
+  function stopAutoStock(){
+    const run=state.autoRun;if(!run||run.done||run.stopped)return;
+    run.stopRequested=true;run.phase='현재 요청 완료 후 중단';addAutoLog(run,'FAIL','중단 요청 · 다음 콘텐츠를 시작하지 않음');persistAutoRun();renderAutoRun();
+  }
+
+  function normalizeFingerprint(value){return String(value||'').normalize('NFKC').toLocaleLowerCase().replace(/[^0-9a-z가-힣]+/g,' ').trim()}
+  function fingerprintTokens(value){return new Set(normalizeFingerprint(value).split(/\s+/).filter(token=>token.length>1&&!AUTO_DUPLICATE_STOP_WORDS.has(token)))}
+  function candidateDuplicate(candidate){
+    const candidateTitle=normalizeFingerprint(candidate?.title);
+    const candidateText=[candidate?.title,candidate?.one_line,candidate?.tag].join(' ');
+    const a=fingerprintTokens(candidateText);
+    return state.library.some(row=>{
+      const rowTitle=normalizeFingerprint(row?.title);
+      if(candidateTitle.length>=6&&rowTitle.length>=6&&(candidateTitle.includes(rowTitle)||rowTitle.includes(candidateTitle)))return true;
+      const b=fingerprintTokens([row?.title,row?.topic,...(Array.isArray(row?.tags)?row.tags:[])].join(' '));
+      if(!a.size||!b.size)return false;
+      let overlap=0;a.forEach(token=>{if(b.has(token))overlap++});
+      return overlap>=2&&overlap/Math.min(a.size,b.size)>=.65;
+    });
+  }
+
+  function temporaryAutoError(error){return error?.status===429||error?.status>=500||/NETWORK|TIMEOUT|EMPTY_RESPONSE|OPENROUTER_REQUEST_FAILED/i.test(String(error?.message||''))}
+  function autoDelay(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
+
+  async function fetchAutoTopics(run,type){
+    let lastError=null;
+    for(let attempt=0;attempt<2;attempt++){
+      try{return (await api('ox_topics',{type})).items}catch(error){
+        lastError=error;
+        if(attempt===0){addAutoLog(run,'RETRY',`${TYPE_META[type].noun} 소재 배치 · ${error.message}`);persistAutoRun();renderAutoRun();if(temporaryAutoError(error))await autoDelay(3000)}
+      }
+    }
+    addAutoLog(run,'FAIL',`${TYPE_META[type].noun} 소재 배치 실패 · ${lastError?.message||'UNKNOWN'}`);return null;
+  }
+
+  async function generateAutoCandidate(run,type,candidate){
+    let generated=null,lastError=null;
+    for(let attempt=0;attempt<2;attempt++){
+      try{
+        const data=await api('ox_generate',{type,candidate});
+        const reliability=String(data.item?.reliability_level||'YELLOW').toUpperCase();
+        if(reliability==='RED'){const error=new Error('OX_RELIABILITY_RED_REJECTED');error.status=422;throw error}
+        data.item.generation_meta={model:data.model||'stealth/ox-alpha',generated_at:new Date().toISOString(),generation_version:AUTO_VERSION,automation_run_id:run.id,usage:data.usage||null};
+        generated=data;break;
+      }catch(error){
+        lastError=error;
+        if(attempt===0){addAutoLog(run,'RETRY',`${candidate.title} · ${error.message}`);persistAutoRun();renderAutoRun();if(temporaryAutoError(error))await autoDelay(3000)}
+      }
+    }
+    if(!generated){run.progress[type].failed++;addAutoLog(run,'FAIL',`${candidate.title} · ${lastError?.message||'UNKNOWN'}`);return false}
+    const record={id:null,type,title:itemTitle(generated.item),status:'DRAFT',topic:candidate.one_line,tags:generated.item.tags||[candidate.tag].filter(Boolean),content_json:generated.item,created_at:null};
+    let saved=null;
+    for(let attempt=0;attempt<2;attempt++){
+      try{saved=(await api('ox_library_save',{item:record})).item;break}catch(error){lastError=error;if(attempt===0){addAutoLog(run,'RETRY',`${candidate.title} · 저장 ${error.message}`);persistAutoRun();renderAutoRun();if(temporaryAutoError(error))await autoDelay(3000)}}
+    }
+    if(!saved){run.progress[type].failed++;addAutoLog(run,'FAIL',`${candidate.title} · 저장 ${lastError?.message||'UNKNOWN'}`);return false}
+    state.library.unshift(saved);run.progress[type].completed++;addAutoLog(run,'PASS',saved.title);renderLibrary();return true;
+  }
+
+  async function runAutoStock(run){
+    while(run.typeIndex<run.types.length){
+      const type=run.types[run.typeIndex],target=run.targets[type]||0;
+      if(run.progress[type].completed>=target){run.typeIndex++;run.candidates=[];run.candidateIndex=0;continue}
+      if(run.stopRequested){run.active=false;run.stopped=true;run.phase='사용자 중단';persistAutoRun();renderAutoRun();return}
+      if(run.paused){run.active=false;run.phase='일시 중지';persistAutoRun();renderAutoRun();return}
+      if(!run.candidates.length||run.candidateIndex>=run.candidates.length){
+        if(run.batchAttempts[type]>=run.maxBatches[type]){run.progress[type].failed+=Math.max(0,target-run.progress[type].completed);addAutoLog(run,'FAIL',`${TYPE_META[type].noun} 최대 배치 도달 · 목표 미달 종료`);run.typeIndex++;run.candidates=[];run.candidateIndex=0;continue}
+        run.batchAttempts[type]++;run.current=`소재 5개 생성 중 · 배치 ${run.batchAttempts[type]}`;run.phase=run.current;persistAutoRun();renderAutoRun();
+        const candidates=await fetchAutoTopics(run,type);
+        run.candidates=Array.isArray(candidates)?candidates:[];run.candidateIndex=0;persistAutoRun();
+        if(!run.candidates.length)continue;
+        if(run.stopRequested||run.paused)continue;
+      }
+      const candidate=run.candidates[run.candidateIndex];
+      if(candidateDuplicate(candidate)){addAutoLog(run,'SKIP',`${candidate.title} · 저장 소재와 유사`);run.candidateIndex++;persistAutoRun();renderAutoRun();continue}
+      run.current=`${run.progress[type].completed+1}번째 생성 중 · ${candidate.title}`;run.phase=run.current;persistAutoRun();renderAutoRun();
+      await generateAutoCandidate(run,type,candidate);
+      run.candidateIndex++;run.current=null;persistAutoRun();renderAutoRun();
+    }
+    run.active=false;run.done=true;run.phase='목표 수량 처리 완료';addAutoLog(run,'PASS','자동 비축 전체 종료');persistAutoRun();renderAutoRun();await loadLibrary();
   }
 
   async function loadLibrary(){

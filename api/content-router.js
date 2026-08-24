@@ -2746,12 +2746,14 @@ function oxTopicPrompt(type){
   const directions={
     novel:'연재 가능한 오리지널 장르소설. 서로 다른 장르와 갈등을 제안한다.',
     longform:'약 10분 영상으로 확장 가능하고 신뢰할 수 있는 자료로 추적 가능한 소재를 제안한다.',
-    blog:'과학·우주·기술·역사·자연현상·검증 가능한 발견만 다룬다. 불확실한 사실을 지어내지 않는다.'
+    blog:'과학·우주·기술·역사·자연현상·검증 가능한 발견만 다룬다. 한국 역사·과학·기술 소재도 자연스럽게 포함하고 불확실한 사실을 지어내지 않는다.'
   };
   const longformRules=type==='longform'?`
-5개는 서로 다른 분위기로 구성한다. 과학·우주·역사·기술 같은 전문 교양 후보를 유지하면서, 최소 2개는 다음 계열에서 고른다: 황당하지만 실제 있었던 해외 사건, 기묘한 역사 기록, 기막힌 우연, 황당한 과학 실험, 실패한 발명·프로젝트, UFO/UAP 공식 기록, 역사·우주 미스터리, 미해결 현상, 기묘한 발견, 전설·괴담의 사실 추적.
+5개는 특정 국가나 장르에 몰리지 않게 서로 다른 분위기로 구성한다. 가능하면 한국 관련 1~2개, 해외·세계 소재 2~3개, 자유 소재 1개를 포함한다. 한국 후보는 한국의 기묘한 실화, 조선왕조실록 등 기록 속 사건, 잘 알려지지 않은 근현대사, 한국 과학·기술사, 사라진 장소·폐광·폐역·도시, 실패한 발명·사업·프로젝트를 폭넓게 사용한다. 과학·우주·역사·기술 같은 전문 교양 후보를 유지하면서, 최소 2개는 다음 계열에서 고른다: 황당하지만 실제 있었던 사건, 기묘한 역사 기록, 기막힌 우연, 황당한 과학 실험, 실패한 발명·프로젝트, UFO/UAP 공식 기록, 역사·우주 미스터리, 미해결 현상, 기묘한 발견, 전설·괴담의 사실 추적.
 실화형 후보는 정부·공공기관·박물관·대학·연구기관·논문·신뢰할 수 있는 언론·역사 문서 아카이브에서 검증 가능한 사건을 우선한다. 자극적인 허구를 만들지 않는다. UFO/UAP와 미스터리는 확인된 사실, 당시 주장, 공식 조사, 가능한 설명, 반론, 현재 미해결 부분을 구분할 수 있는 소재만 고른다. 외계인이나 초자연 현상을 사실로 단정하지 않는다.`:'';
-  return `OX 콘텐츠 스튜디오의 ${type} 소재 후보를 만든다. ${directions[type]}${longformRules}
+  const blogRules=type==='blog'?`
+5개가 한 분야에 몰리지 않게 과학·우주·기술·역사·한국 역사·한국 과학기술·발명·산업·자연현상·문명·검증 가능한 실제 사건을 섞는다. 최소 1개는 한국 관련 소재로 한다. 신뢰할 수 있는 자료와 검색 키워드를 확보하기 쉬운 주제를 우선한다.`:'';
+  return `OX 콘텐츠 스튜디오의 ${type} 소재 후보를 만든다. ${directions[type]}${longformRules}${blogRules}
 정확히 5개를 서로 겹치지 않게 제안하라. 장문 본문은 쓰지 않는다.
 JSON만 반환한다. 스키마: {"items":[{"title":"짧은 제목","one_line":"한 문장 소재 설명","tag":"분류 또는 태그"}]}`;
 }
@@ -2779,14 +2781,16 @@ function oxGenerationPrompt(type,candidate,context=null){
 정확한 스키마: {"type":"novel","title":"","genre":"","premise":"","world_bible":"","characters":[],"master_plot":"","episode_number":1,"episode_title":"","episode_body":"충분한 분량의 소설 본문","foreshadowing":[],"continuity_notes":"","next_episode_direction":"","memory_summary":"","tags":[]}`;
   }
   if(type==='longform')return `${common}
-약 10분 영상용 한국어 원고를 만든다. 4~6개 chapter와 총 10~12개 scene으로 구성하고, 각 scene narration을 약 300~360자로 충분히 작성한다. 실제 낭독에 쓰는 전체 scene narration 합계는 공백 포함 반드시 3,200~3,500자로 작성한다. 의미 없는 반복이나 수식어로 분량을 채우지 않는다. JSON 반환 전에 scene narration 합계가 최소 3,000자인지 확인한다.
+약 10분 영상용 한국어 원고를 만든다. 핵심 원칙은 "사실을 설명하지 말고, 사실 속을 걷게 만들어라"이다. 사실 나열형 다큐가 아니라 HOOK → 장면 진입 → 인물·상황 → 궁금증 → 사건 진행 → 새로운 단서 → 감정 변화 → 반전 또는 예상 밖의 사실 → 다른 해석·논쟁 → 결말 → 여운의 리듬으로 단편소설처럼 들리게 한다. 정보는 장면과 사건 속에 자연스럽게 녹인다. 확인되지 않은 대화를 실제 기록처럼 만들지 않으며, 제한적으로 재구성한 장면은 "기록을 바탕으로 재구성하면"처럼 사실과 재구성을 구분한다.
+4~6개 chapter와 총 10~12개 scene으로 구성하고, 각 scene narration을 약 300~360자로 충분히 작성한다. 실제 낭독에 쓰는 전체 scene narration 합계는 공백 포함 반드시 3,200~3,500자로 작성한다. 의미 없는 반복이나 수식어로 분량을 채우지 않는다. JSON 반환 전에 scene narration 합계가 최소 3,000자인지 확인한다.
 각 scenes[].narration은 요약이 아니라 그 장면에서 그대로 읽는 완전한 대본이다. 각 장면의 narration, visual_description, source_type, source_queries, estimated_duration_sec를 1:1로 연결한다. scene narration을 순서대로 이으면 전체 완성 대본이 되어야 한다.
 chapter.narration은 중복 대본을 만들지 않도록 빈 문자열로 반환한다. 서버가 해당 chapter의 scene narration을 순서대로 연결해 채운다.
 각 scene의 source_queries는 무료 사진/영상 검색 API가 그대로 사용할 구체적인 영어 검색어 배열이다. 확인되지 않은 사실을 단정하지 않으며 이미지나 영상을 생성하지 않는다.
-정확한 스키마: {"type":"longform","title_candidates":[],"selected_title":"","thumbnail_hook":"","opening_hook":"","target_duration_sec":600,"summary":"","chapters":[{"chapter_number":1,"title":"","narration":"","scenes":[{"scene_number":1,"narration":"실제 낭독 대본","visual_description":"","source_type":"photo|video|either","source_queries":[],"estimated_duration_sec":0}]}],"fact_check_items":[],"ending":"","next_video_hook":"","tags":[]}`;
+신뢰도는 GREEN(검증 가능한 사건·공식 기록 중심), YELLOW(실제 기록·전승 기반이나 일부 세부·해석 불확실), RED(근거가 거의 없어 사실형 콘텐츠로 위험) 중 하나로 판정한다. fact_check_items는 검증이 필요한 주장 목록이며 검증 완료를 뜻하지 않는다. fact_basis에는 확인 가능한 기관·기록 유형·검색 단서를 적고, reconstruction_notes에는 재구성된 부분만 적는다.
+정확한 스키마: {"type":"longform","title_candidates":[],"selected_title":"","thumbnail_hook":"","opening_hook":"","target_duration_sec":600,"summary":"","reliability_level":"GREEN|YELLOW|RED","fact_basis":[],"reconstruction_notes":[],"chapters":[{"chapter_number":1,"title":"","narration":"","scenes":[{"scene_number":1,"narration":"실제 낭독 대본","visual_description":"","source_type":"photo|video|either","source_queries":[],"estimated_duration_sec":0}]}],"fact_check_items":[],"ending":"","next_video_hook":"","tags":[]}`;
   return `${common}
 사실 기반 한국어 블로그 글을 2,000~3,000자로 완결성 있게 작성한다. 과학·우주·기술·역사·자연현상·검증 가능한 발견만 다룬다. 출처를 지어내지 말고 불확실한 항목은 source_notes와 fact_check_needed에 명시한다.
-정확한 스키마: {"type":"blog","title_candidates":[],"selected_title":"","topic":"","category":"","key_question":"","fact_summary":"","source_notes":[],"fact_check_needed":false,"primary_keyword":"","secondary_keywords":[],"outline":[{"heading":"","body":""}],"faq":[],"meta_description":"","tags":[]}`;
+정확한 스키마: {"type":"blog","title_candidates":[],"selected_title":"","topic":"","category":"","key_question":"","fact_summary":"","source_notes":[],"fact_check_needed":false,"reliability_level":"GREEN|YELLOW|RED","search_keywords":[],"primary_keyword":"","secondary_keywords":[],"outline":[{"heading":"","body":""}],"faq":[],"meta_description":"","tags":[]}`;
 }
 
 function normalizeOxItem(input,expectedType){
@@ -2806,6 +2810,10 @@ function normalizeOxItem(input,expectedType){
     item.selected_title=String(item.selected_title||item.title_candidates[0]||'').trim();
     item.chapters=Array.isArray(item.chapters)?item.chapters:[];
     item.fact_check_items=Array.isArray(item.fact_check_items)?item.fact_check_items:[];
+    item.fact_basis=Array.isArray(item.fact_basis)?item.fact_basis:[];
+    item.reconstruction_notes=Array.isArray(item.reconstruction_notes)?item.reconstruction_notes:[];
+    item.reliability_level=String(item.reliability_level||'YELLOW').trim().toUpperCase();
+    if(!['GREEN','YELLOW','RED'].includes(item.reliability_level))item.reliability_level='YELLOW';
     item.tags=Array.isArray(item.tags)?item.tags:[];
     if(!item.selected_title||!item.chapters.length)throw new Error('OX_LONGFORM_RESULT_INCOMPLETE');
     const scenes=[];
@@ -2859,6 +2867,9 @@ function normalizeOxItem(input,expectedType){
     item.selected_title=String(item.selected_title||item.title_candidates[0]||'').trim();
     item.outline=Array.isArray(item.outline)?item.outline:[];
     item.source_notes=Array.isArray(item.source_notes)?item.source_notes:[];
+    item.search_keywords=Array.isArray(item.search_keywords)?item.search_keywords:[];
+    item.reliability_level=String(item.reliability_level||'YELLOW').trim().toUpperCase();
+    if(!['GREEN','YELLOW','RED'].includes(item.reliability_level))item.reliability_level='YELLOW';
     item.secondary_keywords=Array.isArray(item.secondary_keywords)?item.secondary_keywords:[];
     item.faq=Array.isArray(item.faq)?item.faq:[];
     item.tags=Array.isArray(item.tags)?item.tags:[];
