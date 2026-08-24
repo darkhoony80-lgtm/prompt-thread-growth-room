@@ -2323,13 +2323,13 @@ async function processInstagramCommentEvent(event){
   }
 }
 
-async function readRawRequest(req){
+async function readRawRequest(req,maxBytes=1_000_000){
   const chunks=[];
   let length=0;
   for await(const chunk of req){
     const buffer=Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk);
     length+=buffer.length;
-    if(length>1_000_000)throw new Error('REQUEST_BODY_TOO_LARGE');
+    if(length>maxBytes)throw new Error('REQUEST_BODY_TOO_LARGE');
     chunks.push(buffer);
   }
   return Buffer.concat(chunks);
@@ -3126,7 +3126,8 @@ async function handler(req,res){
   let rawBody=null;
   if(req.method==='POST'){
     try{
-      rawBody=await readRawRequest(req);
+      const maxBodyBytes=queryAction==='store-image'?5_500_000:1_000_000;
+      rawBody=await readRawRequest(req,maxBodyBytes);
       req.body=rawBody.length?JSON.parse(rawBody.toString('utf8')):{};
     }catch(error){
       return send(res,error?.message==='REQUEST_BODY_TOO_LARGE'?413:400,{ok:false,error:error?.message==='REQUEST_BODY_TOO_LARGE'?'REQUEST_BODY_TOO_LARGE':'INVALID_JSON_BODY'});
