@@ -162,6 +162,7 @@
       version:AUTO_VERSION,mode,types,typeIndex:0,targets,
       progress:{longform:{completed:0,failed:0},blog:{completed:0,failed:0}},
       batchAttempts:{longform:0,blog:0},
+      topicFailureStreak:0,
       maxBatches:{
         longform:Math.max(2,Math.ceil((targets.longform||0)/5)*4+2),
         blog:Math.max(2,Math.ceil((targets.blog||0)/5)*4+2)
@@ -182,6 +183,7 @@
     let run=null;
     try{run=JSON.parse(localStorage.getItem(AUTO_STATE_KEY)||'null')}catch{}
     if(!run||run.version!==AUTO_VERSION)return;
+    run.topicFailureStreak=Number.isFinite(run.topicFailureStreak)?run.topicFailureStreak:0;
     if(run.active&&!run.done&&!run.stopped){run.active=false;run.paused=true;run.phase='새로고침 후 일시 중지';addAutoLog(run,'RETRY','새로고침 감지 · 저장 목록 확인 후 재개 가능')}
     state.autoRun=run;
     document.getElementById('oxAutoMode').value=run.mode||'longform';
@@ -276,16 +278,32 @@
       :`${tail} (${message})`;
   }
   function autoDelay(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
+  function autoRandomDelay(min,max){return Math.floor(min+Math.random()*(max-min+1))}
 
   async function fetchAutoTopics(run,type){
-    let lastError=null;
-    for(let attempt=0;attempt<2;attempt++){
-      try{return (await api('ox_topics',{type})).items}catch(error){
-        lastError=error;
-        if(attempt===0){addAutoLog(run,'RETRY',`${TYPE_META[type].noun} 소재 배치 · ${error.message}`);persistAutoRun();renderAutoRun();if(temporaryAutoError(error))await autoDelay(3000)}
+    while(!run.stopRequested&&!run.paused){
+      try{
+        const items=(await api('ox_topics',{type})).items;
+        if(!Array.isArray(items)||!items.length)throw new Error('EMPTY_RESPONSE');
+        if(run.topicFailureStreak>0)addAutoLog(run,'PASS',`${TYPE_META[type].noun} 소재 배치 자동 재개 성공 · 연속 실패 ${run.topicFailureStreak}회 → 0회`);
+        run.topicFailureStreak=0;
+        return items;
+      }catch(error){
+        run.topicFailureStreak=(Number(run.topicFailureStreak)||0)+1;
+        const cooldown=run.topicFailureStreak%5===0;
+        const waitSeconds=cooldown?autoRandomDelay(30,60):autoRandomDelay(5,10);
+        const waitMs=waitSeconds*1000;
+        run.current=cooldown
+          ?`소재 배치 연속 실패 ${run.topicFailureStreak}회 · ${waitSeconds}초 쿨다운 중`
+          :`소재 배치 실패 ${run.topicFailureStreak}회 · ${waitSeconds}초 후 자동 재시도`;
+        run.phase=run.current;
+        addAutoLog(run,cooldown?'COOLDOWN':'RETRY',`${TYPE_META[type].noun} 소재 배치 실패 · 연속 ${run.topicFailureStreak}회 · 배치 예산 미소모 · ${error.message} · ${waitSeconds}초 ${cooldown?'쿨다운 후 자동 재개':'후 자동 재시도'}`);
+        persistAutoRun();renderAutoRun();
+        await autoDelay(waitMs);
+        if(cooldown&&!run.stopRequested&&!run.paused){addAutoLog(run,'RESUME',`${TYPE_META[type].noun} 소재 배치 쿨다운 완료 · 자동 재개`);persistAutoRun();renderAutoRun()}
       }
     }
-    addAutoLog(run,'FAIL',`${TYPE_META[type].noun} 소재 배치 실패 · ${lastError?.message||'UNKNOWN'}`);return null;
+    return null;
   }
 
   async function generateAutoCandidate(run,type,candidate){
@@ -332,11 +350,7 @@
         run.candidates=Array.isArray(candidates)?candidates:[];run.candidateIndex=0;
         if(run.candidates.length)run.batchAttempts[type]++;
         persistAutoRun();
-        if(!run.candidates.length){
-          run.active=false;run.paused=true;run.phase=`${TYPE_META[type].noun} 소재 호출 실패 · 자동 일시 중지`;
-          addAutoLog(run,'FAIL',`${TYPE_META[type].noun} 소재 호출 실패 · 배치 예산 미소모 · 자동 일시 중지`);
-          persistAutoRun();renderAutoRun();return;
-        }
+        if(!run.candidates.length)continue;
         if(run.stopRequested||run.paused)continue;
       }
       const candidate=run.candidates[run.candidateIndex];
