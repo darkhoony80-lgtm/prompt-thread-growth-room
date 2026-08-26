@@ -319,11 +319,61 @@ async function classifyInstagramPromptIntentWithGemini(value){
 function stripFence(s=''){
   return String(s).replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
 }
+function sanitizeControlChars(json){
+  let out='';
+  let inString=false;
+  let escaped=false;
+
+  for(const ch of String(json)){
+    if(inString){
+      if(escaped){
+        escaped=false;
+        out+=ch;
+        continue;
+      }
+      if(ch==='\\'){
+        escaped=true;
+        out+=ch;
+        continue;
+      }
+      if(ch==='"'){
+        inString=false;
+        out+=ch;
+        continue;
+      }
+
+      const code=ch.charCodeAt(0);
+      if(code<0x20){
+        out+=code===10
+          ?'\\n'
+          :code===13
+            ?'\\r'
+            :code===9
+              ?'\\t'
+              :'\\u'+code.toString(16).padStart(4,'0');
+        continue;
+      }
+
+      out+=ch;
+      continue;
+    }
+
+    if(ch==='"')inString=true;
+    out+=ch;
+  }
+
+  return out;
+}
 function parseJson(s=''){
   const raw=stripFence(s);
   try{return JSON.parse(raw)}catch{}
+  try{return JSON.parse(sanitizeControlChars(raw))}catch{}
   const a=raw.indexOf('{'),b=raw.lastIndexOf('}');
-  if(a>=0&&b>a)return JSON.parse(raw.slice(a,b+1));
+  if(a>=0&&b>a){
+    const sliced=raw.slice(a,b+1);
+    try{return JSON.parse(sliced)}catch{}
+    try{return JSON.parse(sanitizeControlChars(sliced))}catch{}
+  }
   throw new Error('INVALID_JSON');
 }
 function clampHook(v=''){
