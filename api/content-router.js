@@ -1723,8 +1723,9 @@ function aiTipDynamicWebtoonPlannerPrompt(sourceMaterial){
 이 단계에서 Story, Character Bible, 모든 PANEL, 대사와 화면 텍스트를 최종 확정한다. 이후 이미지 모델은 판단하거나 다시 쓰지 않고 이 JSON만 렌더링한다.
 
 고정 Visual Direction:
-- 얇고 깔끔한 2D 선화, 부드러운 평면 채색, 밝고 따뜻한 색감, 표현력이 큰 눈과 명확한 표정, 생활감 있는 한국 배경
-- 카드뉴스, 인포그래픽, 포스터, 동일 크기 Grid, 과도한 실사·3D, 교육용 생활만화 금지
+- 흰색 또는 아주 밝은 단색 배경 위에 얇고 자연스러운 검은 손그림 펜선을 사용한다. 선은 살짝 불규칙한 스케치 질감을 살리고, 채색은 매우 옅은 파스텔 포인트와 은은한 핑크 볼 정도로 제한한다
+- 인물과 핵심 행동이 한눈에 들어오는 귀엽고 가볍지만 유치하지 않은 미니멀 웹툰/일러스트로 구성하고, 배경 소품은 본문 이해에 꼭 필요한 것만 최소로 둔다
+- 복잡한 명암, 광택, 입체감, 실사·3D 렌더링, 빽빽한 배경, 카드뉴스, 인포그래픽, 포스터, 동일 크기 Grid, 교육용 생활만화 금지
 - 주인공 HANAREUM은 성인 여성 VOARA AI_TIP Signature Character다. 황금빛 금발 계열 짧은 보브, 큰 청록색 눈, 밝고 친근한 얼굴, 상아색 블라우스, 청록색 카디건, 겨자색 스커트, 작은 금색 별 브로치를 고정한다. 특정 동화·코스프레 표현 금지
 - Character Bible에서 얼굴·눈·코·입·피부·헤어·체형·의상·색상·액세서리를 영어로 구체적으로 한 번 확정하고 모든 패널에서 바꾸지 않는다
 - 얼굴과 양쪽 눈은 sunglasses, goggles, mask, veil, hat, hand, prop, hair, heavy shadow로 가리지 않는다
@@ -1880,7 +1881,7 @@ function aiTipCutImagePrompt(source,plan,cut){
   const safeArea=current.text_safe_area==='none'?'Keep balanced breathing room around the subject.':`Keep the ${current.text_safe_area.replace(/_/g,' ')} area visually quiet for later lettering.`;
   const prompt=`Create one clean portrait-oriented comic cut as a single image, a single moment in time and a single composition. Do not divide it into multiple frames, montage, before-and-after views or inset portraits.
 
-Use clean thin two-dimensional line art, soft flat coloring, a bright warm palette, expressive facial acting and a polished modern webtoon illustration style in a believable Korean everyday environment. Avoid photorealism, three-dimensional rendering, fan art, information graphics, card news and poster design. ${characterDescriptions} Keep these exact physical details, outfit colors and accessories unchanged. Keep every face and both eyes clear and unobstructed.
+Use a white or very pale solid background and thin, natural black hand-drawn pen lines with a subtly irregular sketch texture. Apply color very sparingly as faint pastel accents, with optional soft pink cheeks. Make the scene a minimal, charming modern webtoon illustration that feels light and cute but not childish; the person and essential action must read immediately, with only the few props required to understand the content. Avoid complex shading, glossy volume, dense scenery, photorealism, three-dimensional rendering, fan art, information graphics, card news and poster design. ${characterDescriptions} Keep these exact physical details, face, hair, apparent age, body type, identity, outfit colors and accessories unchanged. Keep every face and both eyes clear and unobstructed.
 
 The setting is ${current.location} at ${current.time}. ${cast} Show ${current.character_action}, with ${current.facial_expression}. Use ${current.camera}. Include ${current.props}. Express the real problem through ${current.surreal_element}. ${safeArea}
 
