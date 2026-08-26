@@ -2857,7 +2857,7 @@ async function repairOxLongformLength(item,lengthMeta){
 
 작업:
 - ${direction==='expand'?'기존 장면의 구체적 행동, 인과, 긴장, 맥락을 자연스럽게 보강한다.':'중복 설명, 군더더기, 반복만 압축한다.'}
-- title_candidates, selected_title, thumbnail_hook, opening_hook, reliability_level, fact_basis, fact_check_items, reconstruction_notes의 사실 의미를 바꾸지 않는다.
+- title_candidates, selected_title, thumbnail_hook, opening_hook, reliability_level, fact_basis, fact_check_items, reconstruction_notes, ending, search_keywords의 사실 의미를 바꾸지 않는다.
 - chapter 수와 scene 수, scene_number, visual_description, source_type, source_queries는 그대로 유지한다.
 - 새로운 사건·인물·날짜·숫자·인용·출처를 만들어내지 않는다.
 - 0~3초 훅과 스토리 엔터테인먼트 톤을 유지한다.
@@ -2900,6 +2900,7 @@ function oxGenerationPrompt(type,candidate,context=null){
   if(!selected.title||!selected.one_line)throw new Error('OX_TOPIC_SELECTION_REQUIRED');
   const common=`선택 소재: ${JSON.stringify(selected)}
 반환 형식은 설명이나 Markdown 코드펜스가 없는 유효한 JSON 객체 하나다. 스키마 필드를 생략하지 말고 긴 본문도 중간에서 자르지 않는다.`;
+  const searchKeywordRules=`콘텐츠 전체 주제를 판단해 일반 사용자가 실제 검색할 가능성이 높은 search_keywords를 정확히 5개 만든다. 본문 단어를 기계적으로 추출하지 말고 짧고 직관적인 대표 검색어, 인물명, 장소명, 사물명, 분야명을 우선한다. 문장형·지나치게 긴 키워드·중복 의미 키워드는 금지하며 각 키워드는 해시태그로 바로 쓸 수 있게 #과 공백 없이 작성한다. search_keywords의 동일한 5개 앞에 #을 붙인 "#키워드1 #키워드2 #키워드3 #키워드4 #키워드5" 한 줄을 제목이나 본문 중간이 아닌 완성된 본문 전체가 끝난 뒤 마지막 한 줄에만 넣는다.`;
   if(type==='novel'){
     const continuity=context&&typeof context==='object'?{
       world_bible:context.world_bible||'',
@@ -2916,6 +2917,8 @@ function oxGenerationPrompt(type,candidate,context=null){
   if(type==='longform')return `${common}
 약 10분 영상용 한국어 실화 기반 스토리 엔터테인먼트를 만든다. 목표는 지식을 차례로 설명하는 다큐멘터리가 아니라 실제 기록을 뼈대로 시청자가 다음 장면을 계속 보고 싶게 만드는 이야기다. 핵심은 "사실을 설명하지 말고, 사실 속에서 이야기를 찾아라."
 
+${searchKeywordRules} longform에서는 해시태그 한 줄을 ending의 마지막 줄에만 넣는다.
+
 opening_hook은 첫 0~3초에 실제로 낭독할 한두 문장이다. 인사, 연도·배경 설명, "오늘 이야기할 것은", "지금부터 알아보자"로 시작하지 않는다. 가장 강한 실제 장면, 결과 선공개, 믿기 힘든 사실, 모순, 결정적 선택, 강한 질문 중 소재에 가장 맞는 방식을 고른다. thumbnail_hook은 이를 그대로 복사하지 않고 별도의 클릭 이유를 만든다. 첫 scene은 opening_hook의 약속을 즉시 이어받는다.
 
 고정된 다큐 구조나 같은 기승전결을 복제하지 않는다. 소재에 따라 한 인물을 끝까지 따라가기, 결말에서 시작해 원인을 추적하기, 단서를 푸는 미스터리, 두 인물·집단의 충돌, 시간 제한 사건, 성공처럼 보이다 무너지는 과정, 여러 실제 사건을 엮는 옴니버스 등 가장 재미있는 구조를 선택한다. chapter는 4~6개 범위에서 이야기 필요에 따라 선택하고 역할과 길이를 균일하게 만들지 않는다.
@@ -2927,10 +2930,32 @@ opening_hook은 첫 0~3초에 실제로 낭독할 한두 문장이다. 인사, �
 
 신뢰도는 GREEN(검증 가능한 사건·공식 기록 중심), YELLOW(실제 기록·전승 기반이나 일부 세부·해석 불확실), RED(근거가 거의 없어 사실형 콘텐츠로 위험) 중 하나로 판정한다. 재미를 높이기 위해 사실의 뼈대를 바꾸지 않는다. fact_check_items는 검증이 필요한 주장 목록이며 검증 완료를 뜻하지 않는다. fact_basis에는 확인 가능한 기관·기록 유형·검색 단서를 적고 reconstruction_notes에는 재구성된 부분만 적는다.
 title_candidates는 같은 문장 변형을 반복하지 말고 서로 다른 후킹 전략으로 작성한다. selected_title은 사실성을 해치지 않으면서 가장 궁금증이 강한 제목을 고른다. 학술 발표·교과서 단원·다큐 프로그램 제목처럼 들리는 제목은 피한다.
-정확한 스키마: {"type":"longform","title_candidates":[],"selected_title":"","thumbnail_hook":"","opening_hook":"","target_duration_sec":600,"summary":"","reliability_level":"GREEN|YELLOW|RED","fact_basis":[],"reconstruction_notes":[],"chapters":[{"chapter_number":1,"title":"","narration":"","scenes":[{"scene_number":1,"narration":"실제 낭독 대본","visual_description":"","source_type":"photo|video|either","source_queries":[],"estimated_duration_sec":0}]}],"fact_check_items":[],"ending":"","next_video_hook":"","tags":[]}`;
+정확한 스키마: {"type":"longform","title_candidates":[],"selected_title":"","thumbnail_hook":"","opening_hook":"","target_duration_sec":600,"summary":"","reliability_level":"GREEN|YELLOW|RED","fact_basis":[],"reconstruction_notes":[],"chapters":[{"chapter_number":1,"title":"","narration":"","scenes":[{"scene_number":1,"narration":"실제 낭독 대본","visual_description":"","source_type":"photo|video|either","source_queries":[],"estimated_duration_sec":0}]}],"fact_check_items":[],"ending":"본문 결말 마지막 줄에 해시태그 5개","next_video_hook":"","search_keywords":["키워드1","키워드2","키워드3","키워드4","키워드5"],"tags":[]}`;
   return `${common}
 사실 기반 한국어 블로그 글을 2,000~3,000자로 완결성 있게 작성한다. 과학·우주·기술·역사·자연현상·검증 가능한 발견만 다룬다. 출처를 지어내지 말고 불확실한 항목은 source_notes와 fact_check_needed에 명시한다.
-정확한 스키마: {"type":"blog","title_candidates":[],"selected_title":"","topic":"","category":"","key_question":"","fact_summary":"","source_notes":[],"fact_check_needed":false,"reliability_level":"GREEN|YELLOW|RED","search_keywords":[],"primary_keyword":"","secondary_keywords":[],"outline":[{"heading":"","body":""}],"faq":[],"meta_description":"","tags":[]}`;
+${searchKeywordRules} blog에서는 해시태그 한 줄을 마지막 outline 항목의 body 마지막 줄에만 넣는다.
+정확한 스키마: {"type":"blog","title_candidates":[],"selected_title":"","topic":"","category":"","key_question":"","fact_summary":"","source_notes":[],"fact_check_needed":false,"reliability_level":"GREEN|YELLOW|RED","search_keywords":["키워드1","키워드2","키워드3","키워드4","키워드5"],"primary_keyword":"","secondary_keywords":[],"outline":[{"heading":"","body":"마지막 outline body의 마지막 줄에만 해시태그 5개"}],"faq":[],"meta_description":"","tags":[]}`;
+}
+
+function normalizeOxSearchKeywords(input){
+  if(!Array.isArray(input)||input.length!==5)throw new Error('OX_SEARCH_KEYWORDS_INVALID');
+  const keywords=input.map(value=>String(value||'').trim().replace(/^#+/,'').replace(/\s+/g,''));
+  if(keywords.some(value=>!value||value.includes('#'))||new Set(keywords.map(value=>value.toLocaleLowerCase())).size!==5){
+    throw new Error('OX_SEARCH_KEYWORDS_INVALID');
+  }
+  return keywords;
+}
+
+function oxWithoutHashtagLines(value){
+  return String(value||'').split(/\r?\n/)
+    .filter(line=>!/^#[^\s#]+(?:\s+#[^\s#]+)*$/.test(line.trim()))
+    .join('\n').trim();
+}
+
+function oxWithFinalHashtagLine(value,keywords){
+  const body=oxWithoutHashtagLines(value);
+  const hashtags=keywords.map(keyword=>`#${keyword}`).join(' ');
+  return body?`${body}\n${hashtags}`:hashtags;
 }
 
 function normalizeOxItem(input,expectedType){
@@ -2959,7 +2984,7 @@ function normalizeOxItem(input,expectedType){
     const scenes=[];
     item.chapters=item.chapters.map((chapter,chapterIndex)=>{
       const chapterScenes=(Array.isArray(chapter?.scenes)?chapter.scenes:[]).map((scene,sceneIndex)=>{
-        const narration=String(scene?.narration||'').trim();
+        const narration=oxWithoutHashtagLines(scene?.narration);
         const sourceQueries=(Array.isArray(scene?.source_queries)?scene.source_queries:[])
           .map(value=>String(value||'').trim()).filter(Boolean);
         if(!narration||!String(scene?.visual_description||'').trim()||!sourceQueries.length){
@@ -3002,12 +3027,19 @@ function normalizeOxItem(input,expectedType){
     item.target_duration_sec=600;
     item.narration_char_count=narrationCharCount;
     item.estimated_narration_sec=estimatedNarrationSec;
+    item.search_keywords=normalizeOxSearchKeywords(item.search_keywords);
+    item.ending=oxWithFinalHashtagLine(item.ending,item.search_keywords);
   }else{
     item.title_candidates=Array.isArray(item.title_candidates)?item.title_candidates:[];
     item.selected_title=String(item.selected_title||item.title_candidates[0]||'').trim();
     item.outline=Array.isArray(item.outline)?item.outline:[];
     item.source_notes=Array.isArray(item.source_notes)?item.source_notes:[];
-    item.search_keywords=Array.isArray(item.search_keywords)?item.search_keywords:[];
+    item.search_keywords=normalizeOxSearchKeywords(item.search_keywords);
+    item.outline=item.outline.map(section=>({...section,body:oxWithoutHashtagLines(section?.body)}));
+    if(item.outline.length){
+      const lastIndex=item.outline.length-1;
+      item.outline[lastIndex]={...item.outline[lastIndex],body:oxWithFinalHashtagLine(item.outline[lastIndex]?.body,item.search_keywords)};
+    }
     item.reliability_level=String(item.reliability_level||'YELLOW').trim().toUpperCase();
     if(!['GREEN','YELLOW','RED'].includes(item.reliability_level))item.reliability_level='YELLOW';
     item.secondary_keywords=Array.isArray(item.secondary_keywords)?item.secondary_keywords:[];
