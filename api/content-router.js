@@ -2652,7 +2652,11 @@ async function actionFacebookPublish(req,res){
   const media=(Array.isArray(req.body?.media)?req.body.media:[]).map(item=>({type:String(item?.type||'').toLowerCase(),url:String(item?.url||'').trim()}));
   if(!message)return send(res,400,{ok:false,error:'FACEBOOK_MESSAGE_REQUIRED'});
   if(media.length>10)return send(res,400,{ok:false,error:'FACEBOOK_MEDIA_TOO_MANY',max_media:10});
-  if(media.some(item=>item.type!=='image'||!/^https:\/\//i.test(item.url)))return send(res,400,{ok:false,error:'FACEBOOK_MEDIA_INVALID'});
+  if(media.some(item=>!['image','video'].includes(item.type)||!/^https:\/\//i.test(item.url)))return send(res,400,{ok:false,error:'FACEBOOK_MEDIA_INVALID'});
+  const videos=media.filter(item=>item.type==='video');
+  const images=media.filter(item=>item.type==='image');
+  if(videos.length>1)return send(res,400,{ok:false,error:'FACEBOOK_VIDEO_TOO_MANY',max_videos:1});
+  if(videos.length&&images.length)return send(res,400,{ok:false,error:'FACEBOOK_MIXED_MEDIA_UNSUPPORTED',detail:'Facebook Graph API 게시에서는 사진과 영상을 한 게시물에 혼합할 수 없습니다. 영상 1개만 남기거나 사진만 남겨 주세요.'});
   let stage='page_identity';
   try{
     const token=await resolveFacebookPageToken(configuredToken,pageId);
@@ -2660,13 +2664,16 @@ async function actionFacebookPublish(req,res){
     stage='feed';
     if(media.length===0){
       published=await facebookGraph(token,`${pageId}/feed`,{message,access_token:token});
-    }else if(media.length===1){
+    }else if(videos.length===1){
+      stage='single_video';
+      published=await facebookGraph(token,`${pageId}/videos`,{file_url:videos[0].url,description:message,published:'true',access_token:token});
+    }else if(images.length===1){
       stage='single_photo';
-      published=await facebookGraph(token,`${pageId}/photos`,{url:media[0].url,caption:message,published:'true',access_token:token});
+      published=await facebookGraph(token,`${pageId}/photos`,{url:images[0].url,caption:message,published:'true',access_token:token});
     }else{
       stage='photo_uploads';
       const uploaded=[];
-      for(const item of media){
+      for(const item of images){
         const photo=await facebookGraph(token,`${pageId}/photos`,{url:item.url,published:'false',access_token:token});
         const id=String(photo?.id||'');
         if(!id)throw new Error('FACEBOOK_PHOTO_ID_MISSING');
@@ -2679,7 +2686,7 @@ async function actionFacebookPublish(req,res){
     }
     const postId=String(published?.post_id||published?.id||'');
     if(!postId)throw new Error('FACEBOOK_POST_ID_MISSING');
-    return send(res,200,{ok:true,published:true,post_id:postId,page_id:pageId});
+    return send(res,200,{ok:true,published:true,post_id:postId,page_id:pageId,...(videos.length?{video_id:String(published?.id||'')}:{})});
   }catch(e){
     console.error('[FACEBOOK_PUBLISH_FAILED]',JSON.stringify({stage,message:e?.message||String(e),status:e?.status||null,meta:e?.meta||null}));
     return send(res,Number(e?.status)>=400&&Number(e?.status)<600?Number(e.status):502,{ok:false,error:'FACEBOOK_PUBLISH_FAILED',detail:{stage,message:e?.message||'FACEBOOK_PUBLISH_FAILED',...(e?.meta?{meta:e.meta}:{})}});
