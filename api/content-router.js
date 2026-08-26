@@ -2430,20 +2430,35 @@ async function actionInstagramWebhook(req,res,rawBody=null){
   return send(res,200,{ok:true,received:events.length,results});
 }
 
-async function waitForInstagramContainer(token,id){
-  for(let attempt=0;attempt<5;attempt++){
+async function waitForInstagramContainer(token,id,{maxWaitMs=60000,mediaType='unknown'}={}){
+  const intervalMs=3000;
+  const startedAt=Date.now();
+  let lastStatus=null;
+  let attempts=0;
+  while(Date.now()-startedAt<=maxWaitMs){
+    attempts+=1;
     const status=await instagramGraph(token,`${id}?fields=status_code,status`);
+    lastStatus=status;
     const code=String(status?.status_code||'').toUpperCase();
     if(code==='FINISHED'||code==='PUBLISHED')return status;
     if(code==='ERROR'||code==='EXPIRED'){
       const error=new Error(`INSTAGRAM_CONTAINER_${code}`);
-      error.meta={status_code:code};
+      error.meta={status_code:code,status:String(status?.status||'').slice(0,240)||null,media_type:mediaType,attempts};
       throw error;
     }
-    if(attempt<4)await new Promise(resolve=>setTimeout(resolve,1800));
+    const elapsed=Date.now()-startedAt;
+    if(elapsed>=maxWaitMs)break;
+    await new Promise(resolve=>setTimeout(resolve,Math.min(intervalMs,maxWaitMs-elapsed)));
   }
   const error=new Error('INSTAGRAM_CONTAINER_NOT_READY');
   error.status=409;
+  error.meta={
+    status_code:String(lastStatus?.status_code||'').toUpperCase()||null,
+    status:String(lastStatus?.status||'').slice(0,240)||null,
+    media_type:mediaType,
+    attempts,
+    waited_ms:Date.now()-startedAt
+  };
   throw error;
 }
 
@@ -2516,7 +2531,7 @@ async function actionInstagramCarouselPublish(req,res){
       parentId=String(single?.id||'');
       if(!parentId)throw new Error('INSTAGRAM_CONTAINER_ID_MISSING');
       stage='single_status';
-      await waitForInstagramContainer(token,parentId);
+      await waitForInstagramContainer(token,parentId,{maxWaitMs:item.type==='video'?180000:60000,mediaType:item.type});
     }else{
       stage='children_create';
       const children=await Promise.all(media.map(item=>instagramGraph(token,`${userId}/media`,{
@@ -2527,7 +2542,7 @@ async function actionInstagramCarouselPublish(req,res){
       const childIds=children.map(item=>String(item?.id||''));
       if(childIds.some(id=>!id))throw new Error('INSTAGRAM_CHILD_ID_MISSING');
       stage='children_status';
-      await Promise.all(childIds.map(id=>waitForInstagramContainer(token,id)));
+      await Promise.all(childIds.map((id,index)=>waitForInstagramContainer(token,id,{maxWaitMs:media[index]?.type==='video'?180000:60000,mediaType:media[index]?.type||'unknown'})));
       stage='parent_create';
       const parent=await instagramGraph(token,`${userId}/media`,{
         method:'POST',params:{media_type:'CAROUSEL',children:childIds.join(','),caption}
@@ -2535,7 +2550,7 @@ async function actionInstagramCarouselPublish(req,res){
       parentId=String(parent?.id||'');
       if(!parentId)throw new Error('INSTAGRAM_PARENT_ID_MISSING');
       stage='parent_status';
-      await waitForInstagramContainer(token,parentId);
+      await waitForInstagramContainer(token,parentId,{maxWaitMs:60000,mediaType:'carousel'});
     }
     stage='media_publish';
     const published=await instagramGraph(token,`${userId}/media_publish`,{
