@@ -2857,7 +2857,7 @@ async function repairOxLongformLength(item,lengthMeta){
 
 작업:
 - ${direction==='expand'?'기존 장면의 구체적 행동, 인과, 긴장, 맥락을 자연스럽게 보강한다.':'중복 설명, 군더더기, 반복만 압축한다.'}
-- title_candidates, selected_title, thumbnail_hook, opening_hook, reliability_level, fact_basis, fact_check_items, reconstruction_notes, ending, search_keywords의 사실 의미를 바꾸지 않는다.
+- title_candidates, selected_title, thumbnail_hook, opening_hook, reliability_level, fact_basis, fact_check_items, reconstruction_notes의 사실 의미를 바꾸지 않는다.
 - chapter 수와 scene 수, scene_number, visual_description, source_type, source_queries는 그대로 유지한다.
 - 새로운 사건·인물·날짜·숫자·인용·출처를 만들어내지 않는다.
 - 0~3초 훅과 스토리 엔터테인먼트 톤을 유지한다.
@@ -2917,7 +2917,7 @@ function oxGenerationPrompt(type,candidate,context=null){
   if(type==='longform')return `${common}
 약 10분 영상용 한국어 실화 기반 스토리 엔터테인먼트를 만든다. 목표는 지식을 차례로 설명하는 다큐멘터리가 아니라 실제 기록을 뼈대로 시청자가 다음 장면을 계속 보고 싶게 만드는 이야기다. 핵심은 "사실을 설명하지 말고, 사실 속에서 이야기를 찾아라."
 
-${searchKeywordRules} longform에서는 해시태그 한 줄을 ending의 마지막 줄에만 넣는다.
+${searchKeywordRules} longform에서는 해시태그를 scene.narration과 chapter.narration에 절대 넣지 않는다. TTS/영상 내레이션과 완전히 분리된 게시용 표시·메타데이터로 취급해 ending의 마지막 줄에만 넣는다.
 
 opening_hook은 첫 0~3초에 실제로 낭독할 한두 문장이다. 인사, 연도·배경 설명, "오늘 이야기할 것은", "지금부터 알아보자"로 시작하지 않는다. 가장 강한 실제 장면, 결과 선공개, 믿기 힘든 사실, 모순, 결정적 선택, 강한 질문 중 소재에 가장 맞는 방식을 고른다. thumbnail_hook은 이를 그대로 복사하지 않고 별도의 클릭 이유를 만든다. 첫 scene은 opening_hook의 약속을 즉시 이어받는다.
 
@@ -2984,7 +2984,7 @@ function normalizeOxItem(input,expectedType){
     const scenes=[];
     item.chapters=item.chapters.map((chapter,chapterIndex)=>{
       const chapterScenes=(Array.isArray(chapter?.scenes)?chapter.scenes:[]).map((scene,sceneIndex)=>{
-        const narration=oxWithoutHashtagLines(scene?.narration);
+        const narration=String(scene?.narration||'').trim();
         const sourceQueries=(Array.isArray(scene?.source_queries)?scene.source_queries:[])
           .map(value=>String(value||'').trim()).filter(Boolean);
         if(!narration||!String(scene?.visual_description||'').trim()||!sourceQueries.length){
