@@ -453,8 +453,11 @@ function instagramAdapter(snapshot){
 function facebookAdapter(snapshot){
  const message=String(snapshot.master_body||'').trim(),media=snapshot.media.map(m=>({type:m.type,url:m.url,mime_type:m.mime_type}));
  if(!message)throw new Error('Facebook 본문을 입력해 주세요.');
- if(media.length>PLATFORM_LIMITS.facebook.maxMedia)throw new Error(`Facebook 사진은 최대 ${PLATFORM_LIMITS.facebook.maxMedia}개입니다.`);
- if(media.some(item=>item.type!=='image'))throw new Error('현재 Facebook 게시 버튼은 사진 게시만 지원합니다. 영상은 제외해 주세요.');
+ if(media.length>PLATFORM_LIMITS.facebook.maxMedia)throw new Error(`Facebook 미디어는 최대 ${PLATFORM_LIMITS.facebook.maxMedia}개입니다.`);
+ if(media.some(item=>!['image','video'].includes(item.type)))throw new Error('Facebook에서 지원하지 않는 미디어 형식이 포함되어 있습니다.');
+ const videos=media.filter(item=>item.type==='video'),images=media.filter(item=>item.type==='image');
+ if(videos.length>1)throw new Error('Facebook 영상 게시에는 영상 1개만 사용할 수 있습니다.');
+ if(videos.length&&images.length)throw new Error('Facebook Graph API에서는 사진과 영상을 한 게시물에 섞어 올릴 수 없습니다. 영상 1개만 남기거나 사진만 남겨 주세요.');
  return {message,media};
 }
 async function upload(i){const x=candidates[i];if(x.image_url&&!x.final_image)return x.image_url;if(!x.final_image)throw new Error('최종 이미지를 먼저 확인해 주세요.');const r=await fetch('/api/content-router?action=store-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate_id:x.id,data_url:x.final_image,convert_jpeg:true})}),j=await r.json();if(!r.ok)throw new Error(apiError(j,'IMAGE_UPLOAD_FAILED'));x.image_url=j.url;return j.url}
@@ -505,7 +508,8 @@ async function publishFacebookMaster(i){
  const x=candidates[i];if(!x)return;
  try{
   const snapshot=snapshotMaster(i),payload=facebookAdapter(snapshot);
-  const mediaText=payload.media.length?`사진 ${payload.media.length}개와 `:'';
+  const videoCount=payload.media.filter(item=>item.type==='video').length,imageCount=payload.media.filter(item=>item.type==='image').length;
+  const mediaText=videoCount?`영상 ${videoCount}개와 `:(imageCount?`사진 ${imageCount}개와 `:'');
   if(!confirm(`Voara.lab Facebook 페이지에 ${mediaText}현재 본문을 게시할까요?\n\n이 작업은 실제 Facebook 게시입니다.`))return;
   const r=await fetch('/api/content-router?action=facebook_publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   const j=await r.json().catch(()=>({}));
