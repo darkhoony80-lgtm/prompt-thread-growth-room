@@ -3072,6 +3072,12 @@ function oxRecordFromInput(input){
 
 function sendOxError(res,error){
   const known=/^(OX_|OPENROUTER_|SUPABASE_)/.test(String(error?.message||''));
+  if(!known)console.error('[OX_ERROR_MASKED]',JSON.stringify({
+    real_error:String(error?.message||'UNKNOWN').slice(0,200),
+    stack_head:String(error?.stack||'').split('\n').slice(0,3).join(' | ').slice(0,400),
+    repair_stage:error?.meta?.repair_stage||null,
+    meta_keys:error?.meta?Object.keys(error.meta):null
+  }));
   return send(res,Number(error?.status)||(known?400:500),{
     ok:false,
     error:known?error.message:'OX_REQUEST_FAILED',
