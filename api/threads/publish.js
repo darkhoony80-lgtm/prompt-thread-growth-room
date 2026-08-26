@@ -1,8 +1,8 @@
 import {getValidSession} from '../../lib-threads-session.js';
 
 const API='https://graph.threads.net/v1.0';
-const WAIT_MS=1000;
-const MAX_STATUS_CHECKS=15;
+const WAIT_MS=1500;
+const MAX_STATUS_CHECKS=40;
 
 function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 
@@ -74,7 +74,7 @@ async function waitUntilReady(containerId,token){
     detail:{
       stage:'MEDIA_PROCESSING',
       status:202,
-      message:'이미지 처리가 아직 끝나지 않았습니다. 잠시 후 다시 게시해 주세요.',
+      message:'미디어 처리가 아직 끝나지 않았습니다. 잠시 후 다시 게시해 주세요.',
       container_status:last?.status||'IN_PROGRESS'
     }
   };
