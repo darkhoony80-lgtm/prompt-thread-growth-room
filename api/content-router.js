@@ -637,7 +637,7 @@ function validateAiTipSelection(output,item,recentAiTips=[]){
   if(/^(?:AI|ChatGPT|Gemini|챗GPT)|(?:활용법|사용법|꿀팁|기능\s*소개)$/i.test(item.hook)||/(?:활용법|꿀팁|기능\s*소개)/i.test(item.hook)){
     throw new Error('AI_TIP_HOOK_TOO_GENERIC');
   }
-  if(item.body.length<150||!/(?:올리|붙여|입력|복사|내보내|첨부|가져오|선택|요청)/.test(item.body)||!/(?:표|목록|순서|항목|비교|분류|결과|찾아|정리|분석)/.test(item.body)){
+  if(item.body.length<150||!/(?:올리|붙여|넣|입력|복사|내보내|첨부|가져오|선택|요청)/.test(item.body)||!/(?:표|목록|순서|항목|비교|분류|결과|찾아|정리|분석)/.test(item.body)){
     throw new Error('AI_TIP_BODY_NOT_ACTIONABLE');
   }
   const reply=String(item.reply_prompt||'');
