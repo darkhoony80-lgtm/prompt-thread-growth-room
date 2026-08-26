@@ -84,10 +84,18 @@
     node.textContent=message; node.className=`ox-status${type?` ${type}`:''}`;
   }
 
+  function recentBlogTopicHints(){
+    return state.library.filter(row=>row?.type==='blog').slice(0,40).map(row=>({
+      title:String(row?.title||'').slice(0,100),
+      topic:String(row?.topic||'').slice(0,120),
+      tags:Array.isArray(row?.tags)?row.tags.slice(0,5):[]
+    }));
+  }
+
   async function generateTopics(){
     const button=document.getElementById('oxTopicsBtn'); button.disabled=true;
     state.candidates=[];state.selected=-1;renderCandidates();setStatus('oxCandidateStatus','OX가 짧은 후보 5개를 만드는 중…');
-    try{const data=await api('ox_topics',{type:state.type});state.candidates=data.items;renderCandidates();setStatus('oxCandidateStatus','후보 하나를 선택하세요.','ok')}
+    try{const data=await api('ox_topics',{type:state.type,...(state.type==='blog'?{recent_items:recentBlogTopicHints()}:{})});state.candidates=data.items;renderCandidates();setStatus('oxCandidateStatus','후보 하나를 선택하세요.','ok')}
     catch(error){setStatus('oxCandidateStatus',`소재 생성 실패: ${error.message}${error.raw?` · ${error.raw.slice(0,180)}`:''}`,'error')}
     finally{button.disabled=false}
   }
@@ -249,17 +257,30 @@
 
   function normalizeFingerprint(value){return String(value||'').normalize('NFKC').toLocaleLowerCase().replace(/[^0-9a-z가-힣]+/g,' ').trim()}
   function fingerprintTokens(value){return new Set(normalizeFingerprint(value).split(/\s+/).filter(token=>token.length>1&&!AUTO_DUPLICATE_STOP_WORDS.has(token)))}
-  function candidateDuplicate(candidate){
+  function fingerprintBigrams(value){
+    const key=normalizeFingerprint(value).replace(/\s+/g,'');
+    const out=[];for(let i=0;i<key.length-1;i++)out.push(key.slice(i,i+2));return out;
+  }
+  function fingerprintSimilarity(a,b){
+    const left=fingerprintBigrams(a),right=fingerprintBigrams(b);if(!left.length||!right.length)return 0;
+    const counts=new Map();left.forEach(value=>counts.set(value,(counts.get(value)||0)+1));let shared=0;
+    right.forEach(value=>{const count=counts.get(value)||0;if(count){shared++;counts.set(value,count-1)}});
+    return (2*shared)/(left.length+right.length);
+  }
+  function candidateDuplicate(candidate,type=''){ 
     const candidateTitle=normalizeFingerprint(candidate?.title);
     const candidateText=[candidate?.title,candidate?.one_line,candidate?.tag].join(' ');
     const a=fingerprintTokens(candidateText);
     return state.library.some(row=>{
+      if(type&&row?.type!==type)return false;
       const rowTitle=normalizeFingerprint(row?.title);
       if(candidateTitle.length>=6&&rowTitle.length>=6&&(candidateTitle.includes(rowTitle)||rowTitle.includes(candidateTitle)))return true;
+      if(type==='blog'&&fingerprintSimilarity(candidate?.title,row?.title)>=.56)return true;
       const b=fingerprintTokens([row?.title,row?.topic,...(Array.isArray(row?.tags)?row.tags:[])].join(' '));
       if(!a.size||!b.size)return false;
       let overlap=0;a.forEach(token=>{if(b.has(token))overlap++});
-      return overlap>=2&&overlap/Math.min(a.size,b.size)>=.65;
+      const ratio=overlap/Math.min(a.size,b.size);
+      return type==='blog'?(overlap>=3&&ratio>=.5):(overlap>=2&&ratio>=.65);
     });
   }
 
@@ -283,7 +304,7 @@
   async function fetchAutoTopics(run,type){
     while(!run.stopRequested&&!run.paused){
       try{
-        const items=(await api('ox_topics',{type})).items;
+        const items=(await api('ox_topics',{type,...(type==='blog'?{recent_items:recentBlogTopicHints()}:{})})).items;
         if(!Array.isArray(items)||!items.length)throw new Error('EMPTY_RESPONSE');
         if(run.topicFailureStreak>0)addAutoLog(run,'PASS',`${TYPE_META[type].noun} 소재 배치 자동 재개 성공 · 연속 실패 ${run.topicFailureStreak}회 → 0회`);
         run.topicFailureStreak=0;
@@ -354,7 +375,7 @@
         if(run.stopRequested||run.paused)continue;
       }
       const candidate=run.candidates[run.candidateIndex];
-      if(candidateDuplicate(candidate)){addAutoLog(run,'SKIP',`${candidate.title} · 저장 소재와 유사`);run.candidateIndex++;persistAutoRun();renderAutoRun();continue}
+      if(candidateDuplicate(candidate,type)){addAutoLog(run,'SKIP',`${candidate.title} · 저장 소재와 유사`);run.candidateIndex++;persistAutoRun();renderAutoRun();continue}
       run.current=`${run.progress[type].completed+1}번째 생성 중 · ${candidate.title}`;run.phase=run.current;persistAutoRun();renderAutoRun();
       await generateAutoCandidate(run,type,candidate);
       run.candidateIndex++;run.current=null;persistAutoRun();renderAutoRun();
@@ -378,7 +399,7 @@
       return filterMatch&&(!query||hay.includes(query));
     });
     if(!rows.length){root.innerHTML='<div class="ox-empty">조건에 맞는 저장 콘텐츠가 없습니다.</div>';return}
-    root.innerHTML=rows.map(row=>`<article class="ox-library-card" data-id="${escapeHtml(row.id)}"><div class="ox-card-head"><span class="badge">${TYPE_META[row.type]?.label||row.type} · ${escapeHtml(row.status)}</span><span class="mut">${escapeHtml(new Date(row.updated_at).toLocaleDateString('ko-KR'))}</span></div><h3>${escapeHtml(row.title)}</h3><div class="ox-summary">${escapeHtml(cardSummary(row))}</div><div class="ox-tags">${escapeHtml((row.tags||[]).join(' / '))}</div><div class="ox-card-actions"><button class="btn" data-act="open">열기</button><button class="btn" data-act="clone">복제</button><button class="btn p" data-act="zip">ZIP 다운로드</button><button class="btn" data-act="ready">READY</button><button class="btn" data-act="used">USED</button></div></article>`).join('');
+    root.innerHTML=rows.map(row=>`<article class="ox-library-card" data-id="${escapeHtml(row.id)}"><div class="ox-card-head"><span class="badge">${TYPE_META[row.type]?.label||row.type} · ${escapeHtml(row.status)}</span><span class="mut">${escapeHtml(new Date(row.updated_at).toLocaleDateString('ko-KR'))}</span></div><h3>${escapeHtml(row.title)}</h3><div class="ox-summary">${escapeHtml(cardSummary(row))}</div><div class="ox-tags">${escapeHtml((row.tags||[]).join(' / '))}</div><div class="ox-card-actions"><button class="btn" data-act="open">열기</button><button class="btn" data-act="clone">복제</button><button class="btn p" data-act="zip">ZIP 다운로드</button><button class="btn" data-act="ready">READY</button><button class="btn" data-act="used">USED</button><button class="btn" data-act="delete">삭제</button></div></article>`).join('');
     root.querySelectorAll('[data-id]').forEach(card=>card.addEventListener('click',event=>{const action=event.target.closest('[data-act]')?.dataset.act;if(action)libraryAction(card.dataset.id,action)}));
   }
 
@@ -394,6 +415,16 @@
     if(action==='open'){state.current=structuredClone(row);state.type=row.type;document.querySelector(`[data-ox-type="${row.type}"]`)?.click();state.current=structuredClone(row);syncEditor();setStatus('oxEditorStatus','저장 콘텐츠를 불러왔습니다.','ok');document.getElementById('oxEditor').scrollIntoView({behavior:'smooth',block:'center'});return}
     if(action==='clone'){state.current={...structuredClone(row),id:null,title:`${row.title} 복제`,status:'DRAFT',created_at:null,updated_at:null};syncEditor();setStatus('oxEditorStatus','복제본을 준비했습니다. 저장 전까지 원본은 변경되지 않습니다.','ok');return}
     if(action==='zip'){state.current=structuredClone(row);downloadCurrent('zip');return}
+    if(action==='delete'){
+      if(!confirm(`정말 삭제할까요?\n\n${row.title}\n\n삭제 후 복구할 수 없습니다.`))return;
+      try{
+        await api('ox_library_delete',{id});
+        state.library=state.library.filter(item=>item.id!==id);
+        if(state.current?.id===id){state.current=null;syncEditor();setStatus('oxEditorStatus','삭제한 콘텐츠의 편집 화면을 비웠습니다.');}
+        setStatus('oxLibraryStatus',`${state.library.length}개 콘텐츠 · 삭제 완료`,'ok');renderLibrary();
+      }catch(error){setStatus('oxLibraryStatus',`삭제 실패: ${error.message}${error.raw?` · ${error.raw}`:''}`,'error')}
+      return;
+    }
     if(action==='ready'||action==='used'){
       try{await api('ox_library_status',{id,status:action.toUpperCase()});await loadLibrary()}
       catch(error){setStatus('oxLibraryStatus',`상태 변경 실패: ${error.message}`,'error')}

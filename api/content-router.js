@@ -2922,11 +2922,11 @@ ${JSON.stringify(item)}`}
   return {parsed:parseJson(completion.text),completion};
 }
 
-function oxTopicPrompt(type){
+function oxTopicPrompt(type,recentItems=[]){
   const directions={
     novel:'연재 가능한 오리지널 장르소설. 서로 다른 장르와 갈등을 제안한다.',
     longform:'약 10분 동안 다음 장면이 궁금해지는 실화 기반 스토리 엔터테인먼트 소재를 제안한다. 역사·과학·사회·기술의 실제 기록은 이야기의 뼈대로 사용하되 다큐멘터리·교과서·보고서식 주제는 피한다.',
-    blog:'일반인이 실제 일상에서 겪고 검색할 만한 문제와 해결법을 다루는 생활 문제 해결형 소재를 80%, 일상에서 자주 경험하지만 이유를 잘 모르는 현상과 작동 원리를 쉽고 실용적으로 다루는 생활 속 흥미로운 원리형 소재를 20% 비중으로 제안한다.'
+    blog:'40대 이상 한국 독자를 위한 실용 생활 매거진 소재를 제안한다. 오늘 바로 써먹을 수 있는 생활 문제 해결과 디지털·AI 활용, 부모님·어르신에게도 유용한 생활정보, 취미·생활의 질, 생활 속 흥미로운 원리를 균형 있게 다룬다.'
   };
   const longformRules=type==='longform'?`
 5개는 국가뿐 아니라 이야기 장르·감정·시대·주인공 유형까지 서로 다르게 구성한다. 가능하면 한국 관련 1~2개, 해외·세계 소재 2~3개, 자유 소재 1개를 포함한다.
@@ -2935,8 +2935,21 @@ function oxTopicPrompt(type){
 각 후보는 0~3초 안에 던질 수 있는 강력한 장면·사실·모순·질문 중 최소 하나가 떠오르는 소재여야 한다. 배경 설명이 먼저 필요한 소재, 정보는 많지만 사건이 없는 소재, 제목을 읽어도 다음 장면이 궁금하지 않은 소재는 제외한다.
 5개 후보는 같은 제목 템플릿을 반복하지 않는다. 결과 선공개형, 인물 선택형, 미스터리형, 황당 사실형, 질문형, 숫자형, 역설형 등 서로 다른 후킹 방식을 자연스럽게 섞는다. 과장된 낚시나 사실과 다른 제목은 금지한다.
 실화형 후보는 정부·공공기관·박물관·대학·연구기관·논문·신뢰할 수 있는 언론·역사 문서 아카이브 등에서 사실의 뼈대를 추적할 수 있어야 하며 무료 또는 공개 자료로 나중에 시각화할 가능성도 고려한다. UFO/UAP와 미스터리는 확인된 사실과 주장·해석을 구분하고 외계인이나 초자연 현상을 사실로 단정하지 않는다.`:'';
+  const recentBlog=type==='blog'?(Array.isArray(recentItems)?recentItems:[]).slice(0,40).map(value=>{
+    if(typeof value==='string')return value.trim().slice(0,180);
+    const title=String(value?.title||'').trim().slice(0,100);
+    const topic=String(value?.topic||'').trim().slice(0,120);
+    const tags=(Array.isArray(value?.tags)?value.tags:[]).map(tag=>String(tag||'').trim()).filter(Boolean).slice(0,5).join(', ');
+    return [title,topic,tags].filter(Boolean).join(' | ');
+  }).filter(Boolean):[];
   const blogRules=type==='blog'?`
-5개 후보 중 대략 4개는 생활 문제 해결형, 1개는 생활 속 흥미로운 원리형으로 구성한다. 생활 문제 해결형은 집안관리, 청소, 빨래, 음식·보관, 주방, 가전, 스마트폰·PC, 자동차 생활관리, 전기·에너지, 냉난방, 계절 문제, 소비·절약, 직장·외출, 여행 등 일반인이 실제 일상에서 겪고 검색할 만한 문제와 해결법을 우선한다. 생활 속 흥미로운 원리형은 일상에서 자주 경험하지만 이유를 잘 모르는 현상과 작동 원리를 쉽고 실용적으로 다룬다. 후보는 서로 다른 생활 분야에서 뽑아 한 분야에 몰리지 않게 한다. 기존 저장 소재와 같은 핵심 문제는 표현만 바꿔 재생성하지 않는다. 실제 검색 수요가 있을 법한 구체적인 질문을 우선하고, 제목만 봐도 문제와 얻을 답이 명확해야 한다. 근거 없는 민간요법, 위험한 DIY, 의료 진단·치료 단정은 피한다. 검증 가능한 정보와 구체적인 검색 키워드를 확보하기 쉬운 소재를 우선한다.`:'';
+핵심 독자는 40대 이상이다. 다만 노후·건강만 반복하는 블로그로 만들지 말고, 40~60대가 본인과 부모님 생활에 실제로 써먹을 수 있는 폭넓은 실용 매거진으로 구성한다.
+후보 5개는 가능한 한 다음 축을 서로 겹치지 않게 섞는다: ① 집·청소·빨래·주방·가전·자동차·계절·절약 같은 생활 문제 해결, ② ChatGPT 등 AI와 스마트폰·PC·사진·번역·문서·지도·메신저를 생활에 쓰는 쉬운 디지털 활용, ③ 부모님·어르신에게 알려주기 좋은 스마트폰 설정·피싱/사기 예방·공공서비스·여행/외출 준비 같은 생활정보, ④ 취미·여행·자동차·음식·사진·골프·낚시·집 꾸미기 등 생활의 질, ⑤ 일상에서 자주 겪지만 이유를 잘 모르는 흥미로운 원리·교양.
+같은 사물만 바꿔 돌려막지 말고 핵심 문제가 서로 달라야 한다. 예를 들어 '스마트폰 배터리 빨리 닳음'을 이미 다뤘다면 충전 습관·절전 설정·배터리 수명처럼 표현만 바꾼 후보는 같은 소재로 보고 제외한다. 반대로 냉장고라도 냄새, 성에, 음식 보관처럼 핵심 문제가 다르면 별도 소재로 허용한다.
+실제 검색 수요가 있을 법한 구체적인 질문과 즉시 적용 가능한 해결을 우선한다. AI 소재는 AI 기능 소개가 아니라 '긴 문서 쉽게 읽기', '사진 정리', '여행 통역', '문자/메일 작성'처럼 현실 문제에서 시작한다. 근거 없는 민간요법, 위험한 DIY, 의료 진단·치료 단정, 과장된 재테크·법률 단정은 피한다. 최신성이 필요한 제도·금융·행정 정보는 검증 필요성을 분명히 한다.
+최근 저장된 블로그 소재와 핵심 문제가 겹치면 제목·표현을 바꿔도 절대 다시 제안하지 않는다.
+최근 저장 소재:
+${recentBlog.length?recentBlog.map(value=>`- ${value}`).join('\n'):'- 없음'}`:'';
   return `OX 콘텐츠 스튜디오의 ${type} 소재 후보를 만든다. ${directions[type]}${longformRules}${blogRules}
 정확히 5개를 서로 겹치지 않게 제안하라. 장문 본문은 쓰지 않는다.
 JSON만 반환한다. 스키마: {"items":[{"title":"짧은 제목","one_line":"한 문장 소재 설명","tag":"분류 또는 태그"}]}`;
@@ -2983,7 +2996,7 @@ opening_hook은 첫 0~3초에 실제로 낭독할 한두 문장이다. 인사, �
 title_candidates는 같은 문장 변형을 반복하지 말고 서로 다른 후킹 전략으로 작성한다. selected_title은 사실성을 해치지 않으면서 가장 궁금증이 강한 제목을 고른다. 학술 발표·교과서 단원·다큐 프로그램 제목처럼 들리는 제목은 피한다.
 정확한 스키마: {"type":"longform","title_candidates":[],"selected_title":"","thumbnail_hook":"","opening_hook":"","target_duration_sec":600,"summary":"","reliability_level":"GREEN|YELLOW|RED","fact_basis":[],"reconstruction_notes":[],"chapters":[{"chapter_number":1,"title":"","narration":"","scenes":[{"scene_number":1,"narration":"실제 낭독 대본","visual_description":"","source_type":"photo|video|either","source_queries":[],"estimated_duration_sec":0}]}],"fact_check_items":[],"ending":"본문 결말 마지막 줄에 해시태그 5개","next_video_hook":"","search_keywords":["키워드1","키워드2","키워드3","키워드4","키워드5"],"tags":[]}`;
   return `${common}
-사실 기반 한국어 블로그 글을 2,000~3,000자로 완결성 있게 작성한다. 과학·우주·기술·역사·자연현상·검증 가능한 발견만 다룬다. 출처를 지어내지 말고 불확실한 항목은 source_notes와 fact_check_needed에 명시한다.
+40대 이상 한국 독자가 실제 생활에서 바로 써먹을 수 있는 실용 블로그 글을 2,000~3,000자로 완결성 있게 작성한다. 생활 문제 해결, 쉬운 AI·디지털 활용, 부모님·어르신에게 유용한 생활정보, 취미·생활의 질, 생활 속 흥미로운 원리 중 선택 소재에 맞는 방향으로 쓴다. 어려운 전문용어보다 쉬운 설명과 실제 행동 순서를 우선하되 과장하거나 근거 없는 팁을 만들지 않는다. 의료 진단·치료, 위험한 DIY, 투자·법률·행정처럼 최신성과 정확성이 중요한 내용은 단정하지 말고 검증이 필요한 항목을 source_notes와 fact_check_needed에 명시한다. 출처를 지어내지 않는다.
 ${searchKeywordRules} blog에서는 해시태그 한 줄을 마지막 outline 항목의 body 마지막 줄에만 넣는다.
 정확한 스키마: {"type":"blog","title_candidates":[],"selected_title":"","topic":"","category":"","key_question":"","fact_summary":"","source_notes":[],"fact_check_needed":false,"reliability_level":"GREEN|YELLOW|RED","search_keywords":["키워드1","키워드2","키워드3","키워드4","키워드5"],"primary_keyword":"","secondary_keywords":[],"outline":[{"heading":"","body":"마지막 outline body의 마지막 줄에만 해시태그 5개"}],"faq":[],"meta_description":"","tags":[]}`;
 }
@@ -3138,9 +3151,10 @@ function sendOxError(res,error){
 async function actionOxTopics(req,res){
   try{
     const type=oxType(req.body?.type);
+    const recentItems=type==='blog'&&Array.isArray(req.body?.recent_items)?req.body.recent_items:[];
     const completion=await oxCompletion([
       {role:'system',content:'You are OX, a disciplined Korean content ideation engine. Return JSON only.'},
-      {role:'user',content:oxTopicPrompt(type)}
+      {role:'user',content:oxTopicPrompt(type,recentItems)}
     ],{maxTokens:1200,temperature:.85});
     let parsed;
     try{parsed=parseJson(completion.text)}catch{
@@ -3286,6 +3300,19 @@ async function actionOxLibraryStatus(req,res){
   }catch(error){return sendOxError(res,error)}
 }
 
+async function actionOxLibraryDelete(req,res){
+  try{
+    const id=String(req.body?.id||'').trim();
+    if(!id)throw new Error('OX_ID_REQUIRED');
+    if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))throw new Error('OX_ID_INVALID');
+    const rows=await oxSupabaseRest(`${OX_CONTENT_TABLE}?id=eq.${encodeURIComponent(id)}`,{
+      method:'DELETE',prefer:'return=representation'
+    });
+    if(!Array.isArray(rows)||!rows[0])return send(res,404,{ok:false,error:'OX_CONTENT_NOT_FOUND'});
+    return send(res,200,{ok:true,deleted:true,id});
+  }catch(error){return sendOxError(res,error)}
+}
+
 async function actionOpenRouterTest(req,res){
   if(req.method!=='GET'){
     res.setHeader('Allow','GET');
@@ -3394,11 +3421,12 @@ async function handler(req,res){
   if(action==='ox_library_get')return actionOxLibraryGet(req,res);
   if(action==='ox_library_save')return actionOxLibrarySave(req,res);
   if(action==='ox_library_status')return actionOxLibraryStatus(req,res);
+  if(action==='ox_library_delete')return actionOxLibraryDelete(req,res);
 
   return send(res,400,{
     ok:false,
     error:'UNKNOWN_CONTENT_ACTION',
-    allowed:['generate','image','store-image','media_upload','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish','facebook_publish','instagram_prompt_store','instagram_prompt_lookup','supabase_status','ox_topics','ox_generate','ox_library_list','ox_library_get','ox_library_save','ox_library_status']
+    allowed:['generate','image','store-image','media_upload','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish','facebook_publish','instagram_prompt_store','instagram_prompt_lookup','supabase_status','ox_topics','ox_generate','ox_library_list','ox_library_get','ox_library_save','ox_library_status','ox_library_delete']
   });
 }
 
