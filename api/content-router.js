@@ -2726,6 +2726,33 @@ async function actionFacebookCommentSync(req,res){
   }
 }
 
+
+async function actionYoutubeTitle(req,res){
+  const body=String(req.body?.body||'').trim().slice(0,5000);
+  if(!body)return send(res,400,{ok:false,error:'YOUTUBE_TITLE_BODY_REQUIRED'});
+  try{
+    const prompt=`다음 SNS 게시물 본문을 바탕으로 YouTube Shorts 제목 하나를 만든다.
+규칙:
+- 한국어 후킹 제목을 짧고 자연스럽게 작성
+- 본문에 없는 사실을 만들지 않는다
+- 제목 뒤에 내용과 직접 관련된 해시태그를 정확히 5개 붙인다
+- 해시태그는 모두 #으로 시작하고 공백으로 구분한다
+- 전체 결과는 YouTube 제목 제한 100자 이내
+- 설명, 따옴표, 번호, JSON 없이 제목 한 줄만 출력
+
+본문:
+${body}`;
+    const r=await fetch(TEXT_URL,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':String(process.env.GEMINI_API_KEY||'').trim()},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:.7,maxOutputTokens:160}})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok){const e=new Error('YOUTUBE_TITLE_GENERATE_FAILED');e.status=r.status;e.meta={message:String(j?.error?.message||'YOUTUBE_TITLE_GENERATE_FAILED').slice(0,300)};throw e}
+    let title=String(j?.candidates?.[0]?.content?.parts?.map?.(p=>p?.text||'')?.join('')||'').replace(/```[^\n]*|```/g,'').replace(/\s+/g,' ').trim();
+    const tags=title.match(/#[^#\s]+/g)||[];
+    if(tags.length!==5){const e=new Error('YOUTUBE_TITLE_HASHTAG_COUNT_INVALID');e.status=502;throw e}
+    if(title.length>100)title=title.slice(0,100).trim();
+    return send(res,200,{ok:true,title});
+  }catch(e){return send(res,Number(e?.status)||502,{ok:false,error:e?.message||'YOUTUBE_TITLE_GENERATE_FAILED',detail:e?.meta?.message||null})}
+}
+
 function youtubeConfig(){
   const clientId=String(process.env.YOUTUBE_CLIENT_ID||'').trim();
   const clientSecret=String(process.env.YOUTUBE_CLIENT_SECRET||'').trim();
@@ -2773,6 +2800,9 @@ async function actionYoutubePublish(req,res){
     const result=await upload.json().catch(()=>({}));
     if(!upload.ok){const e=new Error('YOUTUBE_UPLOAD_FAILED');e.status=upload.status;e.meta={message:String(result?.error?.message||'YOUTUBE_UPLOAD_FAILED').slice(0,300)};throw e}
     const videoId=String(result?.id||'');if(!videoId)throw new Error('YOUTUBE_VIDEO_ID_MISSING');
+    if(paidPromotion){
+      await youtubeApi(token,'videos?part=paidProductPlacementDetails',{method:'PUT',body:{id:videoId,paidProductPlacementDetails:{hasPaidProductPlacement:true}}});
+    }
     let first_comment_id=null,first_comment_error=null;
     if(firstComment){try{const c=await youtubeTopComment(token,videoId,firstComment);first_comment_id=String(c?.id||'')||null}catch(e){first_comment_error=e?.meta?.message||e?.message||'YOUTUBE_FIRST_COMMENT_FAILED'}}
     return send(res,200,{ok:true,published:true,video_id:videoId,first_comment_id,...(first_comment_error?{first_comment_error}:{})});
@@ -3554,6 +3584,7 @@ async function handler(req,res){
   if(action==='instagram_carousel_publish')return actionInstagramCarouselPublish(req,res);
   if(action==='facebook_publish')return actionFacebookPublish(req,res);
   if(action==='facebook_comment_sync')return actionFacebookCommentSync(req,res);
+  if(action==='youtube_title')return actionYoutubeTitle(req,res);
   if(action==='youtube_publish')return actionYoutubePublish(req,res);
   if(action==='youtube_comment_sync')return actionYoutubeCommentSync(req,res);
   if(action==='instagram_prompt_store')return actionInstagramPromptStore(req,res);
@@ -3568,7 +3599,7 @@ async function handler(req,res){
   return send(res,400,{
     ok:false,
     error:'UNKNOWN_CONTENT_ACTION',
-    allowed:['generate','image','store-image','media_upload','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish','facebook_publish','facebook_comment_sync','youtube_publish','youtube_comment_sync','instagram_prompt_store','instagram_prompt_lookup','supabase_status','ox_topics','ox_generate','ox_library_list','ox_library_get','ox_library_save','ox_library_status','ox_library_delete']
+    allowed:['generate','image','store-image','media_upload','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish','facebook_publish','facebook_comment_sync','youtube_title','youtube_publish','youtube_comment_sync','instagram_prompt_store','instagram_prompt_lookup','supabase_status','ox_topics','ox_generate','ox_library_list','ox_library_get','ox_library_save','ox_library_status','ox_library_delete']
   });
 }
 
