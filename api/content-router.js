@@ -36,7 +36,7 @@ const AI_IMAGE_CTA_BOUNDS={x:4.0811,y:9.8438,width:842.4815,height:41.2822};
 
 const LABELS={
   AI_PROMPT:'AI 프롬프트',
-  AI_TIP:'AI 활용 팁',
+  AI_TIP:'쿠팡파트너스',
   FOOD_PICK:'오늘 뭐 먹지?',
   HOT_ISSUE:'🔥 오늘의 핫이슈'
 };
@@ -2693,6 +2693,123 @@ async function actionFacebookPublish(req,res){
   }
 }
 
+
+async function actionFacebookCommentSync(req,res){
+  const configuredToken=String(process.env.FACEBOOK_PAGE_ACCESS_TOKEN||'').trim();
+  const pageId=String(process.env.FACEBOOK_PAGE_ID||'').trim();
+  const postId=String(req.body?.post_id||'').trim();
+  const replyText=String(req.body?.reply_text||'').trim();
+  if(!configuredToken)return send(res,503,{ok:false,error:'FACEBOOK_PAGE_ACCESS_TOKEN_NOT_CONFIGURED'});
+  if(!/^\d{5,80}(?:_\d{5,80})?$/.test(postId))return send(res,400,{ok:false,error:'FACEBOOK_POST_ID_INVALID'});
+  if(!replyText)return send(res,400,{ok:false,error:'FACEBOOK_REPLY_TEXT_REQUIRED'});
+  try{
+    const token=await resolveFacebookPageToken(configuredToken,pageId);
+    let page=await facebookGraphGet(token,`${postId}/comments`,{fields:'id,from,message,comments.limit(100){id,from,message}',limit:'100'});
+    let replied=0,skipped=0,pages=0;
+    while(page&&pages<20){
+      pages++;
+      for(const comment of Array.isArray(page?.data)?page.data:[]){
+        if(String(comment?.from?.id||'')===pageId){skipped++;continue}
+        const ownReply=(Array.isArray(comment?.comments?.data)?comment.comments.data:[]).some(item=>String(item?.from?.id||'')===pageId);
+        if(ownReply){skipped++;continue}
+        await facebookGraph(token,`${String(comment.id)}/comments`,{message:replyText,access_token:token});
+        replied++;
+      }
+      const nextUrl=String(page?.paging?.next||'');if(!nextUrl)break;
+      const u=new URL(nextUrl);u.searchParams.set('access_token',token);
+      const r=await fetch(u,{headers:{Accept:'application/json'}});page=await r.json().catch(()=>({}));if(!r.ok)break;
+    }
+    return send(res,200,{ok:true,replied,skipped,pages,post_id:postId});
+  }catch(e){
+    console.error('[FACEBOOK_COMMENT_SYNC_FAILED]',JSON.stringify({message:e?.message||String(e),status:e?.status||null,meta:e?.meta||null}));
+    return send(res,Number(e?.status)||502,{ok:false,error:'FACEBOOK_COMMENT_SYNC_FAILED',detail:e?.meta?.message||e?.message||'FACEBOOK_COMMENT_SYNC_FAILED'});
+  }
+}
+
+function youtubeConfig(){
+  const clientId=String(process.env.YOUTUBE_CLIENT_ID||'').trim();
+  const clientSecret=String(process.env.YOUTUBE_CLIENT_SECRET||'').trim();
+  const refreshToken=String(process.env.YOUTUBE_REFRESH_TOKEN||'').trim();
+  if(!clientId||!clientSecret||!refreshToken){const e=new Error('YOUTUBE_OAUTH_NOT_CONFIGURED');e.status=503;throw e}
+  return {clientId,clientSecret,refreshToken};
+}
+async function youtubeAccessToken(){
+  const {clientId,clientSecret,refreshToken}=youtubeConfig();
+  const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:clientId,client_secret:clientSecret,refresh_token:refreshToken,grant_type:'refresh_token'})});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok||!j.access_token){const e=new Error('YOUTUBE_TOKEN_REFRESH_FAILED');e.status=r.status||502;e.meta={message:String(j?.error_description||j?.error||'YOUTUBE_TOKEN_REFRESH_FAILED').slice(0,300)};throw e}
+  return String(j.access_token);
+}
+async function youtubeApi(token,path,{method='GET',body=null}={}){
+  const r=await fetch(`https://www.googleapis.com/youtube/v3/${path}`,{method,headers:{Accept:'application/json',Authorization:`Bearer ${token}`,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok){const e=new Error('YOUTUBE_API_REQUEST_FAILED');e.status=r.status;e.meta={message:String(j?.error?.message||'YOUTUBE_API_REQUEST_FAILED').slice(0,300)};throw e}
+  return j;
+}
+async function youtubeTopComment(token,videoId,text){
+  return youtubeApi(token,'commentThreads?part=snippet',{method:'POST',body:{snippet:{videoId,topLevelComment:{snippet:{textOriginal:text}}}}});
+}
+async function actionYoutubePublish(req,res){
+  const videoUrl=String(req.body?.video_url||'').trim();
+  const title=String(req.body?.title||'').trim().slice(0,100);
+  const description=String(req.body?.description||'').trim().slice(0,5000);
+  const firstComment=String(req.body?.reply_text||'').trim();
+  const paidPromotion=req.body?.paid_promotion!==false;
+  const syntheticMedia=req.body?.synthetic_media!==false;
+  if(!/^https:\/\//i.test(videoUrl))return send(res,400,{ok:false,error:'YOUTUBE_VIDEO_URL_REQUIRED'});
+  if(!title)return send(res,400,{ok:false,error:'YOUTUBE_TITLE_REQUIRED'});
+  try{
+    const token=await youtubeAccessToken();
+    const source=await fetch(videoUrl);
+    if(!source.ok)throw Object.assign(new Error('YOUTUBE_VIDEO_FETCH_FAILED'),{status:502});
+    const bytes=Buffer.from(await source.arrayBuffer());
+    if(bytes.length>120*1024*1024)return send(res,413,{ok:false,error:'YOUTUBE_VIDEO_TOO_LARGE',max_mb:120});
+    const mime=String(source.headers.get('content-type')||'video/mp4').split(';')[0]||'video/mp4';
+    const metadata={snippet:{title,description,categoryId:'22'},status:{privacyStatus:'public',containsSyntheticMedia:syntheticMedia},paidProductPlacementDetails:{hasPaidProductPlacement:paidPromotion}};
+    const init=await fetch('https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status,paidProductPlacementDetails',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json; charset=UTF-8','X-Upload-Content-Length':String(bytes.length),'X-Upload-Content-Type':mime},body:JSON.stringify(metadata)});
+    if(!init.ok){const j=await init.json().catch(()=>({}));const e=new Error('YOUTUBE_UPLOAD_INIT_FAILED');e.status=init.status;e.meta={message:String(j?.error?.message||'YOUTUBE_UPLOAD_INIT_FAILED').slice(0,300)};throw e}
+    const location=init.headers.get('location');if(!location)throw new Error('YOUTUBE_UPLOAD_LOCATION_MISSING');
+    const upload=await fetch(location,{method:'PUT',headers:{'Content-Type':mime,'Content-Length':String(bytes.length)},body:bytes});
+    const result=await upload.json().catch(()=>({}));
+    if(!upload.ok){const e=new Error('YOUTUBE_UPLOAD_FAILED');e.status=upload.status;e.meta={message:String(result?.error?.message||'YOUTUBE_UPLOAD_FAILED').slice(0,300)};throw e}
+    const videoId=String(result?.id||'');if(!videoId)throw new Error('YOUTUBE_VIDEO_ID_MISSING');
+    let first_comment_id=null,first_comment_error=null;
+    if(firstComment){try{const c=await youtubeTopComment(token,videoId,firstComment);first_comment_id=String(c?.id||'')||null}catch(e){first_comment_error=e?.meta?.message||e?.message||'YOUTUBE_FIRST_COMMENT_FAILED'}}
+    return send(res,200,{ok:true,published:true,video_id:videoId,first_comment_id,...(first_comment_error?{first_comment_error}:{})});
+  }catch(e){
+    console.error('[YOUTUBE_PUBLISH_FAILED]',JSON.stringify({message:e?.message||String(e),status:e?.status||null,meta:e?.meta||null}));
+    return send(res,Number(e?.status)||502,{ok:false,error:e?.message||'YOUTUBE_PUBLISH_FAILED',detail:e?.meta?.message||null});
+  }
+}
+async function actionYoutubeCommentSync(req,res){
+  const videoId=String(req.body?.video_id||'').trim();
+  const replyText=String(req.body?.reply_text||'').trim();
+  if(!/^[A-Za-z0-9_-]{6,20}$/.test(videoId))return send(res,400,{ok:false,error:'YOUTUBE_VIDEO_ID_INVALID'});
+  if(!replyText)return send(res,400,{ok:false,error:'YOUTUBE_REPLY_TEXT_REQUIRED'});
+  try{
+    const token=await youtubeAccessToken();
+    const channel=await youtubeApi(token,'channels?part=id&mine=true');
+    const myChannelId=String(channel?.items?.[0]?.id||'');
+    let pageToken='',replied=0,skipped=0,pages=0;
+    do{
+      const suffix=pageToken?`&pageToken=${encodeURIComponent(pageToken)}`:'';
+      const threads=await youtubeApi(token,`commentThreads?part=snippet,replies&videoId=${encodeURIComponent(videoId)}&maxResults=100&order=time${suffix}`);pages++;
+      for(const thread of Array.isArray(threads?.items)?threads.items:[]){
+        const top=thread?.snippet?.topLevelComment;const topId=String(top?.id||'');if(!topId)continue;
+        const authorId=String(top?.snippet?.authorChannelId?.value||'');if(myChannelId&&authorId===myChannelId){skipped++;continue}
+        const ownReply=(Array.isArray(thread?.replies?.comments)?thread.replies.comments:[]).some(c=>String(c?.snippet?.authorChannelId?.value||'')===myChannelId);
+        if(ownReply){skipped++;continue}
+        await youtubeApi(token,'comments?part=snippet',{method:'POST',body:{snippet:{parentId:topId,textOriginal:replyText}}});replied++;
+      }
+      pageToken=String(threads?.nextPageToken||'');
+    }while(pageToken&&pages<20);
+    return send(res,200,{ok:true,replied,skipped,pages,video_id:videoId});
+  }catch(e){
+    console.error('[YOUTUBE_COMMENT_SYNC_FAILED]',JSON.stringify({message:e?.message||String(e),status:e?.status||null,meta:e?.meta||null}));
+    return send(res,Number(e?.status)||502,{ok:false,error:e?.message||'YOUTUBE_COMMENT_SYNC_FAILED',detail:e?.meta?.message||null});
+  }
+}
+
 async function actionInstagramPromptStore(req,res){
   try{
     const record=await upsertInstagramPromptPost(req.body||{});
@@ -3436,6 +3553,9 @@ async function handler(req,res){
   if(action==='instagram_carousel_image')return actionInstagramCarouselImage(req,res);
   if(action==='instagram_carousel_publish')return actionInstagramCarouselPublish(req,res);
   if(action==='facebook_publish')return actionFacebookPublish(req,res);
+  if(action==='facebook_comment_sync')return actionFacebookCommentSync(req,res);
+  if(action==='youtube_publish')return actionYoutubePublish(req,res);
+  if(action==='youtube_comment_sync')return actionYoutubeCommentSync(req,res);
   if(action==='instagram_prompt_store')return actionInstagramPromptStore(req,res);
   if(action==='ox_topics')return actionOxTopics(req,res);
   if(action==='ox_generate')return actionOxGenerate(req,res);
@@ -3448,7 +3568,7 @@ async function handler(req,res){
   return send(res,400,{
     ok:false,
     error:'UNKNOWN_CONTENT_ACTION',
-    allowed:['generate','image','store-image','media_upload','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish','facebook_publish','instagram_prompt_store','instagram_prompt_lookup','supabase_status','ox_topics','ox_generate','ox_library_list','ox_library_get','ox_library_save','ox_library_status','ox_library_delete']
+    allowed:['generate','image','store-image','media_upload','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish','facebook_publish','facebook_comment_sync','youtube_publish','youtube_comment_sync','instagram_prompt_store','instagram_prompt_lookup','supabase_status','ox_topics','ox_generate','ox_library_list','ox_library_get','ox_library_save','ox_library_status','ox_library_delete']
   });
 }
 

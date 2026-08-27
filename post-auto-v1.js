@@ -1,13 +1,14 @@
 /* Growth Engine V3. Filename kept for existing index.html include. */
 (function(){
-const CATS={AI_PROMPT:'AI 프롬프트',AI_TIP:'AI 활용 팁',FOOD_PICK:'오늘 뭐 먹지?',HOT_ISSUE:'🔥 오늘의 핫이슈'};
+const CATS={AI_PROMPT:'AI 프롬프트',AI_TIP:'쿠팡파트너스',FOOD_PICK:'오늘 뭐 먹지?',HOT_ISSUE:'🔥 오늘의 핫이슈'};
 const Q='pt_queue_v3',F='pt_feedback_v3',P='pt_published_v3',D='pt_drafts_v6',FH='pt_food_history_v1',IGC='pt_instagram_carousels_v1',CM='pt_content_masters_v1';
 const PILLARS=['AI_TIP','AI_PROMPT','FOOD_PICK','HOT_ISSUE'];
-const PLATFORM_LIMITS={threads:{maxMedia:20},instagram:{maxMedia:10},facebook:{maxMedia:10}};
+const PLATFORM_LIMITS={threads:{maxMedia:20},instagram:{maxMedia:10},facebook:{maxMedia:10},youtube:{maxMedia:1}};
+const SOCIAL_AUTOMATION='pt_social_reply_automation_v1';
 const PROMPT_CATEGORIES=['AI_TIP','AI_PROMPT'];
 const PLATFORM_BODY_CTA={
- threads:'프롬프트는 첫 댓글에 남겨둘게 👇',
- instagram:'프롬프트가 필요하면 댓글에 "저요" 남겨줘. DM으로 보내줄게 💌'
+ threads:'링크/추가 내용은 첫 댓글에 남겨둘게 👇',
+ instagram:'필요하면 댓글 남겨줘. DM으로 보내줄게 💌'
 };
 let candidates=[null,null,null,null];
 let instagramCarousel=null,instagramPublishing=false,instagramModalOpen=false;
@@ -29,7 +30,7 @@ function ensureMaster(i){
  }
  const media=[];
  if(x.image_url)media.push({id:mediaId('legacy'),type:'image',source:'ai',url:x.image_url,previewUrl:x.image_url,order:0,status:'ready',mime_type:/\.jpe?g(?:$|\?)/i.test(x.image_url)?'image/jpeg':'image/png'});
- const master={version:1,content_id:key,content_type:PILLARS[i],title:x.topic||x.category_label||'',master_body:x.body||'',threads_body_override:'',instagram_caption_override:'',reply_prompt:x.reply_prompt||'',topic_tag:x.topic_tag||'',topic_tag_verified:x.topic_tag_verified===true,media,status:{threads:'draft',instagram:'draft'},updated_at:Date.now()};
+ const master={version:1,content_id:key,content_type:PILLARS[i],title:x.topic||x.category_label||'',master_body:x.body||'',threads_body_override:'',instagram_caption_override:'',reply_prompt:x.reply_prompt||'',topic_tag:x.topic_tag||'',topic_tag_verified:x.topic_tag_verified===true,media,status:{threads:'draft',instagram:'draft',facebook:'draft',youtube:'draft'},updated_at:Date.now()};
  records[key]=master;write(CM,records);return master;
 }
 function saveMaster(i,master){if(!master)return;master.media=(master.media||[]).map((m,order)=>({...m,order}));master.updated_at=Date.now();const records=masterRecords();records[master.content_id]=master;write(CM,records)}
@@ -202,7 +203,7 @@ async function generatePillar(i,mood='RANDOM'){
  finally{const nb=document.getElementById(`v3gen-${i}`);if(nb){nb.disabled=false;nb.textContent=pillar==='AI_PROMPT'?'🎲 랜덤':(candidates[i]?'🔄 다시 생성':'✨ 생성')}}
 }
 function emptyCard(pillar,i){
- const desc={AI_TIP:'현실 고민에서 시작해 오늘 바로 써먹는 AI 활용법',AI_PROMPT:'저장하고 싶은 상세 영문 프롬프트',FOOD_PICK:'점심·저녁·술안주를 실제 전국 맛집으로 추천',HOT_ISSUE:'오늘 실제 뉴스에서 가장 강한 이슈 하나'}[pillar];
+ const desc={AI_TIP:'쿠팡파트너스 게시물과 제휴 링크 전달을 관리',AI_PROMPT:'저장하고 싶은 상세 영문 프롬프트',FOOD_PICK:'점심·저녁·술안주를 실제 전국 맛집으로 추천',HOT_ISSUE:'오늘 실제 뉴스에서 가장 강한 이슈 하나'}[pillar];
  return `<article class="card" id="v3card-${i}"><div class="post-meta"><span class="badge">${esc(CATS[pillar])}</span></div><h3 style="margin:10px 0 6px">${esc(CATS[pillar])}</h3><p class="mut">${esc(desc)}</p>${pillar==='AI_PROMPT'?`<div style="display:flex;gap:6px;flex-wrap:wrap">
 <button class="btn p" id="v3gen-${i}" onclick="PostAuto.generate(${i},'RANDOM')">🎲 랜덤</button>
 <button class="btn" onclick="PostAuto.generate(${i},'HAPPY')">😊 행복</button>
@@ -217,7 +218,7 @@ function mediaEditorHtml(i,master){
 }
 function render(){
  const box=document.getElementById('v3list');if(!box)return;
- box.innerHTML=PILLARS.map((pillar,i)=>{const x=candidates[i];if(!x)return emptyCard(pillar,i);const master=ensureMaster(i);return `<article class="card" id="v3card-${i}"><div class="post-meta"><span class="badge">${esc(x.category_label||CATS[pillar])}</span><span class="badge">Content Master</span><span class="mut">총점 ${x.score?.total||0}</span></div><div class="v3grid" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,430px);gap:18px;align-items:start"><div><div style="display:flex;justify-content:flex-end;gap:8px;align-items:center">${pillar==='AI_PROMPT'?`<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="btn" id="v3gen-${i}" onclick="PostAuto.generate(${i},'RANDOM')">🎲 랜덤</button><button class="btn" onclick="PostAuto.generate(${i},'HAPPY')">😊 행복</button><button class="btn" onclick="PostAuto.generate(${i},'LOVE')">❤️ 사랑</button><button class="btn" onclick="PostAuto.generate(${i},'COMIC')">😂 코믹</button><button class="btn" onclick="PostAuto.generate(${i},'HORROR')">👻 공포</button><button class="btn" onclick="PostAuto.generate(${i},'FANTASY')">🧚 판타지</button></div>`:`<button class="btn" id="v3gen-${i}" onclick="PostAuto.generate(${i})">🔄 다시 생성</button>`}</div><label class="mut">공통 본문</label><textarea id="v3body-${i}" maxlength="500" oninput="PostAuto.save(${i})" class="cm-body">${esc(master.master_body)}</textarea>${['AI_PROMPT','AI_TIP'].includes(pillar)?`<label class="mut" style="display:block;margin-top:10px">최종 reply_prompt</label><textarea id="v3reply-${i}" oninput="PostAuto.save(${i})" class="cm-reply">${esc(master.reply_prompt||'')}</textarea><p class="mut">이 최종값만 LocalStorage와 Instagram 게시 후 DM 연결에 사용됩니다.</p>`:''}<p class="mut">소재 · ${esc(x.topic)}</p><p class="mut">추천 이유 · ${esc(x.reason)}</p>${x.source_notes?.length?`<p class="mut">검증 메모 · ${esc(x.source_notes.join(' / '))}</p>`:''}<div style="margin:10px 0"><label class="mut">🏷 Threads 추천 Topic ${x.topic_tag_verified?'· TAG 검색 확인 ✅':(x.topic_tag_search_available===false?'· 검색 확인 불가':'· 추천값')}</label><input id="v3topic-${i}" maxlength="80" oninput="PostAuto.save(${i})" value="${esc(master.topic_tag||'')}" placeholder="예: AI 이미지" class="cm-input"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" onclick="PostAuto.image(${i})">🖼 AI 이미지 추가</button><button class="btn" onclick="PostAuto.reimage(${i})">🔄 AI 이미지 추가 생성</button><button class="btn" onclick="PostAuto.instagram(${i})">AI 이미지 스토리 만들기</button><button class="btn" onclick="PostAuto.variant(${i})">다른 버전</button><button class="btn" onclick="PostAuto.keep(${i})">👍 발행 대기</button><button class="btn p" onclick="PostAuto.now(${i})">Threads 게시</button><button class="btn p" onclick="PostAuto.instagramMasterPublish(${i})">Instagram 게시</button><button class="btn p" onclick="PostAuto.facebookPublish(${i})">Facebook 게시</button><button class="btn" onclick="PostAuto.no(${i})">👎 비우기</button></div></div><div>${mediaEditorHtml(i,master)}</div></div></article>`}).join('');
+ box.innerHTML=PILLARS.map((pillar,i)=>{const x=candidates[i];if(!x)return emptyCard(pillar,i);const master=ensureMaster(i);return `<article class="card" id="v3card-${i}"><div class="post-meta"><span class="badge">${esc(CATS[pillar]||x.category_label)}</span><span class="badge">Content Master</span><span class="mut">총점 ${x.score?.total||0}</span></div><div class="v3grid" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,430px);gap:18px;align-items:start"><div><div style="display:flex;justify-content:flex-end;gap:8px;align-items:center">${pillar==='AI_PROMPT'?`<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="btn" id="v3gen-${i}" onclick="PostAuto.generate(${i},'RANDOM')">🎲 랜덤</button><button class="btn" onclick="PostAuto.generate(${i},'HAPPY')">😊 행복</button><button class="btn" onclick="PostAuto.generate(${i},'LOVE')">❤️ 사랑</button><button class="btn" onclick="PostAuto.generate(${i},'COMIC')">😂 코믹</button><button class="btn" onclick="PostAuto.generate(${i},'HORROR')">👻 공포</button><button class="btn" onclick="PostAuto.generate(${i},'FANTASY')">🧚 판타지</button></div>`:`<button class="btn" id="v3gen-${i}" onclick="PostAuto.generate(${i})">🔄 다시 생성</button>`}</div><label class="mut">공통 본문</label><textarea id="v3body-${i}" maxlength="500" oninput="PostAuto.save(${i})" class="cm-body">${esc(master.master_body)}</textarea>${['AI_PROMPT','AI_TIP'].includes(pillar)?`<label class="mut" style="display:block;margin-top:10px">댓글 및 답장 입력</label><textarea id="v3reply-${i}" oninput="PostAuto.save(${i})" class="cm-reply" placeholder="예: https://link.coupang.com/a/...">${esc(master.reply_prompt||'')}</textarea><p class="mut">Threads 첫 댓글 · Instagram 자동 답장/DM · Facebook 댓글 답장 · YouTube 첫 댓글+답장에 사용됩니다.</p>`:''}<p class="mut">소재 · ${esc(x.topic)}</p><p class="mut">추천 이유 · ${esc(x.reason)}</p>${x.source_notes?.length?`<p class="mut">검증 메모 · ${esc(x.source_notes.join(' / '))}</p>`:''}<div style="margin:10px 0"><label class="mut">🏷 Threads 추천 Topic ${x.topic_tag_verified?'· TAG 검색 확인 ✅':(x.topic_tag_search_available===false?'· 검색 확인 불가':'· 추천값')}</label><input id="v3topic-${i}" maxlength="80" oninput="PostAuto.save(${i})" value="${esc(master.topic_tag||'')}" placeholder="예: AI 이미지" class="cm-input"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" onclick="PostAuto.image(${i})">🖼 AI 이미지 추가</button><button class="btn" onclick="PostAuto.reimage(${i})">🔄 AI 이미지 추가 생성</button><button class="btn" onclick="PostAuto.instagram(${i})">AI 이미지 스토리 만들기</button><button class="btn" onclick="PostAuto.variant(${i})">다른 버전</button><button class="btn" onclick="PostAuto.keep(${i})">👍 발행 대기</button><button class="btn p" onclick="PostAuto.now(${i})">Threads 게시</button><button class="btn p" onclick="PostAuto.instagramMasterPublish(${i})">Instagram 게시</button><button class="btn p" onclick="PostAuto.facebookPublish(${i})">Facebook 게시</button><button class="btn p" onclick="PostAuto.youtubePublish(${i})">YouTube 게시</button><button class="btn" onclick="PostAuto.no(${i})">👎 비우기</button></div></div><div>${mediaEditorHtml(i,master)}</div></div></article>`}).join('');
  if(!document.getElementById('v3css'))document.head.insertAdjacentHTML('beforeend',`<style id="v3css">@media(max-width:900px){.v3grid{grid-template-columns:1fr!important}}.cm-body,.cm-reply,.cm-input{width:100%;margin-top:5px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:12px;line-height:1.55}.cm-body{min-height:190px}.cm-reply{min-height:150px}.cm-editor{border:1px solid var(--l);border-radius:12px;padding:12px}.cm-media{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:10px 0}.cm-item{position:relative;border:1px solid var(--l);border-radius:10px;padding:6px;background:#090b0f}.cm-item img,.cm-item video{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:7px;display:block}.cm-item-actions{display:flex;gap:4px;margin-top:5px}.cm-item-actions .btn{padding:5px 8px}.cm-kind{position:absolute;top:10px;left:10px;background:#090b0fdd;border-radius:10px;padding:3px 6px;font-size:10px}</style>`);
  candidates.forEach((x,i)=>{if(x)renderMedia(i)});
 }
@@ -433,7 +434,7 @@ async function publishFirstReply(parentId,text){
  const r=await fetch('/api/threads/reply',{
   method:'POST',
   headers:{'Content-Type':'application/json'},
-  body:JSON.stringify({reply_to_id:String(parentId),attachment_text:text.trim()})
+  body:JSON.stringify({reply_to_id:String(parentId),text:text.trim()})
  });
  const j=await r.json().catch(()=>({}));
  if(!r.ok)throw new Error(apiError(j,'FIRST_REPLY_FAILED'));
@@ -457,8 +458,9 @@ function facebookAdapter(snapshot){
  if(media.some(item=>!['image','video'].includes(item.type)))throw new Error('Facebook에서 지원하지 않는 미디어 형식이 포함되어 있습니다.');
  const videos=media.filter(item=>item.type==='video'),images=media.filter(item=>item.type==='image');
  if(videos.length>1)throw new Error('Facebook 영상 게시에는 영상 1개만 사용할 수 있습니다.');
- if(videos.length&&images.length)throw new Error('Facebook Graph API에서는 사진과 영상을 한 게시물에 섞어 올릴 수 없습니다. 영상 1개만 남기거나 사진만 남겨 주세요.');
- return {message,media};
+ // Graph API Page 게시에서는 혼합 캐러셀을 만들지 않고 영상이 있으면 영상을 대표 미디어로 게시한다.
+ const selected=videos.length?[videos[0]]:images;
+ return {message,media:selected,reply_text:String(snapshot.reply_prompt||'').trim(),omitted_images:videos.length?images.length:0};
 }
 async function upload(i){const x=candidates[i];if(x.image_url&&!x.final_image)return x.image_url;if(!x.final_image)throw new Error('최종 이미지를 먼저 확인해 주세요.');const r=await fetch('/api/content-router?action=store-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate_id:x.id,data_url:x.final_image,convert_jpeg:true})}),j=await r.json();if(!r.ok)throw new Error(apiError(j,'IMAGE_UPLOAD_FAILED'));x.image_url=j.url;return j.url}
 async function keep(i){const x=candidates[i];if(!x?.final_image&&!x?.image_url)return alert('먼저 이미지를 생성해서 최종 썸네일을 확인해 주세요.');try{syncDraft(i);if(x.thumbnail_dirty)return alert('이미지에 반영되는 내용을 수정했어요. 이미지 다시 생성을 눌러 최종 썸네일을 확인해 주세요.');const url=await upload(i),v={...x,image_url:url,kept_at:Date.now()};delete v.base_image;delete v.final_image;const a=read(Q);a.unshift(v);write(Q,a);fb(x,'LIKE');renderQueue();alert('이미지 포함 발행 대기 저장 완료 ✅')}catch(e){alert('저장 실패: '+e.message)}}
@@ -466,7 +468,7 @@ async function now(i){
  const x=candidates[i];if(!x)return;
  try{
   const snapshot=snapshotMaster(i),payload=threadsAdapter(snapshot);
-  if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i])&&!payload.reply_prompt)return alert('최종 reply_prompt를 입력해 주세요.');
+  if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i])&&!payload.reply_prompt)return alert('댓글 및 답장 내용을 입력해 주세요.');
   if(!confirm(`Content Master snapshot 그대로 Threads에 게시할까요?\n\n${x.topic||x.category_label||''}`))return;
 
   const r=await fetch('/api/threads/publish',{
@@ -481,9 +483,9 @@ async function now(i){
   if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i])){
    try{
     await publishFirstReply(j.id,payload.reply_prompt);
-    replyMessage='\n프롬프트도 첫 댓글 텍스트 첨부로 게시 완료 ✅';
+    replyMessage='\n댓글 및 답장 내용도 첫 일반 댓글로 게시 완료 ✅';
    }catch(e){
-    replyMessage=`\n본문은 게시됐지만 첫 댓글 첨부 실패: ${e.message}`;
+    replyMessage=`\n본문은 게시됐지만 첫 댓글 게시 실패: ${e.message}`;
    }
   }
 
@@ -497,7 +499,7 @@ async function publishInstagramMaster(i){
  const x=candidates[i];if(!x||instagramPublishing)return;
  try{
   const snapshot=snapshotMaster(i),payload=instagramAdapter(snapshot);
-  if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i])&&!payload.reply_prompt)return alert('DM으로 보낼 최종 reply_prompt를 입력해 주세요.');
+  if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i])&&!payload.reply_prompt)return alert('DM으로 보낼 댓글 및 답장 내용을 입력해 주세요.');
   if(!confirm(`현재 Content Master snapshot의 미디어 ${payload.media.length}개를 @voara.lab에 게시할까요?\n\n이 작업은 실제 Instagram 게시입니다.`))return;
   instagramPublishing=true;const j=await instagramApi('instagram_carousel_publish',payload);
   const master=ensureMaster(i);master.status.instagram='published';saveMaster(i,master);
@@ -508,27 +510,76 @@ async function publishFacebookMaster(i){
  const x=candidates[i];if(!x)return;
  try{
   const snapshot=snapshotMaster(i),payload=facebookAdapter(snapshot);
+  if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i])&&!payload.reply_text)return alert('댓글 및 답장 내용을 입력해 주세요.');
   const videoCount=payload.media.filter(item=>item.type==='video').length,imageCount=payload.media.filter(item=>item.type==='image').length;
   const mediaText=videoCount?`영상 ${videoCount}개와 `:(imageCount?`사진 ${imageCount}개와 `:'');
-  if(!confirm(`Voara.lab Facebook 페이지에 ${mediaText}현재 본문을 게시할까요?\n\n이 작업은 실제 Facebook 게시입니다.`))return;
+  const omitted=payload.omitted_images?`\n영상 게시를 위해 사진 ${payload.omitted_images}장은 Facebook에서 제외됩니다.`:'';
+  if(!confirm(`Voara.lab Facebook 페이지에 ${mediaText}현재 본문을 게시할까요?${omitted}\n\n이 작업은 실제 Facebook 게시입니다.`))return;
   const r=await fetch('/api/content-router?action=facebook_publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   const j=await r.json().catch(()=>({}));
   if(!r.ok)throw new Error(apiError(j,'FACEBOOK_PUBLISH_FAILED'));
-  const master=ensureMaster(i);master.status.facebook='published';saveMaster(i,master);
-  alert('Facebook 게시 완료 ✅');
+  const master=ensureMaster(i);master.status.facebook='published';master.facebook_post_id=j.post_id;saveMaster(i,master);
+  if(payload.reply_text)registerSocialAutomation({platform:'facebook',id:j.post_id,reply_text:payload.reply_text,content_id:snapshot.content_id});
+  alert('Facebook 게시 완료 ✅'+(payload.reply_text?'\n댓글 자동답장 대상에 등록했습니다.':''));
  }catch(e){alert('Facebook 게시 실패: '+e.message)}
+}
+function youtubeOptions(){
+ return {
+  paid_promotion:document.getElementById('youtubePaidPromotion')?.checked!==false,
+  synthetic_media:document.getElementById('youtubeSyntheticMedia')?.checked!==false
+ };
+}
+function youtubeAdapter(snapshot){
+ const videos=snapshot.media.filter(m=>m.type==='video');
+ if(videos.length!==1)throw new Error('YouTube 자동 게시에는 영상 1개가 필요합니다.');
+ const title=String(snapshot.title||snapshot.master_body||'VOARA 영상').replace(/\s+/g,' ').trim().slice(0,100);
+ const description=String(snapshot.master_body||'').trim();
+ if(!description)throw new Error('YouTube 설명에 사용할 본문을 입력해 주세요.');
+ return {video_url:videos[0].url,title,description,reply_text:String(snapshot.reply_prompt||'').trim(),...youtubeOptions()};
+}
+async function publishYoutubeMaster(i){
+ const x=candidates[i];if(!x)return;
+ try{
+  const snapshot=snapshotMaster(i),payload=youtubeAdapter(snapshot);
+  if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i])&&!payload.reply_text)return alert('댓글 및 답장 내용을 입력해 주세요.');
+  if(!confirm(`YouTube에 영상을 게시할까요?\n\n유료 프로모션: ${payload.paid_promotion?'예':'아니요'}\nAI 사용/합성 콘텐츠: ${payload.synthetic_media?'예':'아니요'}\n\n게시 후 첫 댓글과 새 댓글 답장에도 입력 내용을 사용합니다.`))return;
+  const r=await fetch('/api/content-router?action=youtube_publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(apiError(j,'YOUTUBE_PUBLISH_FAILED'));
+  const master=ensureMaster(i);master.status.youtube='published';master.youtube_video_id=j.video_id;saveMaster(i,master);
+  if(payload.reply_text)registerSocialAutomation({platform:'youtube',id:j.video_id,reply_text:payload.reply_text,content_id:snapshot.content_id});
+  alert('YouTube 게시 완료 ✅'+(j.first_comment_error?`\n첫 댓글 실패: ${j.first_comment_error}`:'\n첫 댓글 등록 완료 ✅'));
+ }catch(e){alert('YouTube 게시 실패: '+e.message)}
+}
+function socialAutomationRecords(){const x=read(SOCIAL_AUTOMATION,[]);return Array.isArray(x)?x:[]}
+function registerSocialAutomation(entry){
+ const rows=socialAutomationRecords(),key=`${entry.platform}:${entry.id}`;const next={...entry,key,updated_at:Date.now()};
+ const idx=rows.findIndex(x=>x.key===key);if(idx>=0)rows[idx]=next;else rows.unshift(next);write(SOCIAL_AUTOMATION,rows.slice(0,200));
+}
+let socialSyncRunning=false;
+async function socialAutomationTick(){
+ if(socialSyncRunning)return;socialSyncRunning=true;
+ try{
+  const rows=socialAutomationRecords();
+  for(const row of rows){
+   try{
+    const action=row.platform==='facebook'?'facebook_comment_sync':row.platform==='youtube'?'youtube_comment_sync':'';if(!action)continue;
+    await fetch(`/api/content-router?action=${action}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(row.platform==='facebook'?{post_id:row.id,reply_text:row.reply_text}:{video_id:row.id,reply_text:row.reply_text})});
+   }catch{}
+  }
+ }finally{socialSyncRunning=false}
 }
 async function variant(i){const x=candidates[i];try{x.body=body(i);if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))x.reply_prompt=replyPrompt(i);const r=await fetch('/api/content-router?action=variant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate:x})}),j=await r.json();if(!r.ok)throw new Error(j.detail||j.error);candidates[i]=j.item;candidates[i].variation=1;const master=ensureMaster(i);master.master_body=j.item.body||master.master_body;if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))master.reply_prompt=j.item.reply_prompt||master.reply_prompt;saveMaster(i,master);fb(x,'VARIANT');saveDrafts();render()}catch(e){alert('다른 버전 실패: '+e.message)}}
 function no(i){if(candidates[i])fb(candidates[i],'DISLIKE');candidates[i]=null;saveDrafts();render()}
-function renderQueue(){const a=read(Q),n=document.getElementById('v3qcount'),b=document.getElementById('v3queue');if(n)n.textContent=a.length;if(!b)return;b.innerHTML=a.length?a.map((x,i)=>`<article class="card"><div style="display:grid;grid-template-columns:150px 1fr;gap:14px"><img src="${esc(x.image_url)}" style="width:150px;aspect-ratio:4/5;object-fit:cover;border-radius:10px"><div><span class="badge">${esc(x.category_label||CATS[x.category])}</span><h3>${esc(x.topic||x.category_label||'')}</h3><div class="post-text">${esc(x.body)}</div><div style="margin-top:10px;display:flex;gap:8px"><button class="btn p" onclick="PostAuto.publishQueue(${i})">🚀 지금 게시</button><button class="btn" onclick="PostAuto.drop(${i})">제거</button></div></div></div></article>`).join(''):'<div class="card empty"><div><b>발행 대기 없음</b>이미지를 확인하고 👍한 게시물이 여기에 쌓입니다.</div></div>'}
+function renderQueue(){const a=read(Q),n=document.getElementById('v3qcount'),b=document.getElementById('v3queue');if(n)n.textContent=a.length;if(!b)return;b.innerHTML=a.length?a.map((x,i)=>`<article class="card"><div style="display:grid;grid-template-columns:150px 1fr;gap:14px"><img src="${esc(x.image_url)}" style="width:150px;aspect-ratio:4/5;object-fit:cover;border-radius:10px"><div><span class="badge">${esc(CATS[x.category]||x.category_label)}</span><h3>${esc(x.topic||x.category_label||'')}</h3><div class="post-text">${esc(x.body)}</div><div style="margin-top:10px;display:flex;gap:8px"><button class="btn p" onclick="PostAuto.publishQueue(${i})">🚀 지금 게시</button><button class="btn" onclick="PostAuto.drop(${i})">제거</button></div></div></div></article>`).join(''):'<div class="card empty"><div><b>발행 대기 없음</b>이미지를 확인하고 👍한 게시물이 여기에 쌓입니다.</div></div>'}
 async function publishQueue(i){const a=read(Q),x=a[i];if(!x||!confirm(`"${x.topic||x.category_label||''}" 지금 게시할까요?`))return;const text=withPlatformBodyCta(x.body,x.category,'threads'),r=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,image_url:x.image_url,topic_tag:String(x.topic_tag||'').replace(/^#+/,'').trim(),topic_tag_verified:x.topic_tag_verified===true})}),j=await r.json();if(!r.ok)return alert('게시 실패: '+(j.detail||j.error));const follower_at_publish=await followerBaseline();const p=read(P);p.unshift({thread_id:j.id,category:x.category,topic:x.topic,topic_tag:String(x.topic_tag||'').replace(/^#+/,'').trim(),hook:x.hook,published_at:Date.now(),image_url:x.image_url,follower_at_publish});write(P,p.slice(0,100));fb(x,'PUBLISHED');a.splice(i,1);write(Q,a);renderQueue();alert('게시 완료 ✅')}
 function drop(i){const a=read(Q);a.splice(i,1);write(Q,a);renderQueue()}
 function patchReplies(){
- const desc=document.querySelector('#replies .section p.mut');if(desc)desc.textContent='최근 2일 댓글만 표시합니다. 미응답 전체를 API에 무리 없이 천천히 순차 답장합니다.';
- if(typeof updateBatchButton==='function')updateBatchButton=function(){const items=Array.isArray(window._replyItems)?window._replyItems:[],eligible=items.filter(x=>!x.review_required&&!x.already_replied),n=eligible.length,b=document.getElementById('batchReply'),note=document.getElementById('batchNote');b.disabled=!n||window._replyHistoryAvailable===false||window._batchRunning;b.textContent=window._batchRunning?'일괄 답장 처리 중…':(n?`일괄 승인 후 답장 (${n})`:'일괄 승인 후 답장');note.textContent=`최근 2일 미응답 ${eligible.length}개 · 한 개씩 순차 처리합니다.`};
+ const desc=document.querySelector('#replies .section p.mut');if(desc)desc.textContent='게시물 날짜 제한 없이 전체 원본 게시물의 댓글을 확인합니다. 미응답은 API에 무리 없이 순차 답장합니다.';
+ if(typeof updateBatchButton==='function')updateBatchButton=function(){const items=Array.isArray(window._replyItems)?window._replyItems:[],eligible=items.filter(x=>!x.review_required&&!x.already_replied),n=eligible.length,b=document.getElementById('batchReply'),note=document.getElementById('batchNote');b.disabled=!n||window._replyHistoryAvailable===false||window._batchRunning;b.textContent=window._batchRunning?'일괄 답장 처리 중…':(n?`일괄 승인 후 답장 (${n})`:'일괄 승인 후 답장');note.textContent=`전체 이력 미응답 ${eligible.length}개 · 한 개씩 순차 처리합니다.`};
  const b=document.getElementById('batchReply');if(!b)return;b.onclick=async()=>{if(window._batchRunning||window._replyHistoryAvailable===false)return;const all=window._replyItems||[],targets=[];all.forEach((x,i)=>{if(x.review_required||x.already_replied)return;const text=document.getElementById(`replyText-${i}`)?.value.trim();if(text)targets.push({i,id:x.id,text})});if(!targets.length||!confirm(`${targets.length}개 미응답 댓글을 순차 답장할까요?`))return;window._batchRunning=true;updateBatchButton();let ok=0,fail=0;for(let n=0;n<targets.length;n++){const t=targets[n];b.textContent=`일괄 답장 ${n+1}/${targets.length}`;try{await postReply(t.id,t.text);markReplyDone(t.i,t.id,t.text);ok++}catch{fail++}if(n<targets.length-1)await new Promise(r=>setTimeout(r,500))}window._batchRunning=false;updateBatchButton();alert(`완료 · 성공 ${ok} / 실패 ${fail}`);await syncReplies(currentPostIds).catch(()=>{})};
  setTimeout(()=>{try{updateBatchButton()}catch{}},100);
 }
-window.PostAuto={generate:generatePillar,image:i=>makeImage(i,false),reimage:i=>makeImage(i,true),keep,now,variant,no,drop,publishQueue,save:syncDraft,addMedia:addLocalMedia,removeMedia:removeMasterMedia,moveMedia:moveMasterMedia,instagram:openInstagramCarousel,instagramSelect:selectInstagramSlide,instagramCaption:setInstagramCaption,instagramReplyPrompt:setInstagramReplyPrompt,instagramClose:closeInstagramCarousel,instagramRegenerate:regenerateInstagramSlide,instagramRegenerateAll:regenerateInstagramCarousel,instagramPublish:publishInstagramCarousel,instagramMasterPublish:publishInstagramMaster,facebookPublish:publishFacebookMaster,instagramPromptStoreRetry:retryInstagramPromptStore};
+window.PostAuto={generate:generatePillar,image:i=>makeImage(i,false),reimage:i=>makeImage(i,true),keep,now,variant,no,drop,publishQueue,save:syncDraft,addMedia:addLocalMedia,removeMedia:removeMasterMedia,moveMedia:moveMasterMedia,instagram:openInstagramCarousel,instagramSelect:selectInstagramSlide,instagramCaption:setInstagramCaption,instagramReplyPrompt:setInstagramReplyPrompt,instagramClose:closeInstagramCarousel,instagramRegenerate:regenerateInstagramSlide,instagramRegenerateAll:regenerateInstagramCarousel,instagramPublish:publishInstagramCarousel,instagramMasterPublish:publishInstagramMaster,facebookPublish:publishFacebookMaster,youtubePublish:publishYoutubeMaster,instagramPromptStoreRetry:retryInstagramPromptStore};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ensure);else ensure();
+setTimeout(()=>socialAutomationTick(),12000);setInterval(()=>socialAutomationTick(),90000);
 })();
