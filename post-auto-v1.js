@@ -93,6 +93,14 @@ function restoreDrafts(){
  if(!Array.isArray(saved))return;
  candidates=PILLARS.map((p,i)=>saved[i]?.category===p?saved[i]:null);
 }
+function blankCoupangCandidate(){
+ return {id:`AI_TIP-manual-${Date.now()}`,category:'AI_TIP',category_label:CATS.AI_TIP,topic:'',topic_tag:'',topic_tag_candidates:[],topic_tag_verified:false,topic_tag_search_available:true,hook:'',hook_candidates:[],body:'',reply_prompt:'',reason:'',image_brief:'',source_notes:[],score:{stop:0,save:0,share:0,comment:0,follow:0,novelty:0,visual:0,total:0},variation:1};
+}
+function ensureCoupangWorkspace(){
+ if(candidates[0])return;
+ candidates[0]=blankCoupangCandidate();
+ saveDrafts();
+}
 function syncDraft(i){
  const x=candidates[i];if(!x)return;
  const pillar=PILLARS[i],aiThumbnail=['AI_PROMPT','AI_TIP'].includes(pillar),oldBody=x.body||'',oldReply=x.reply_prompt||'',oldTopicTag=String(x.topic_tag||'').replace(/^#+/,'').trim().slice(0,80),nextTopicTag=topicTag(i),nextBody=body(i),nextReply=aiThumbnail?replyPrompt(i):'';
@@ -162,6 +170,7 @@ function recentAiTips(){
 }
 
 restoreDrafts();
+ensureCoupangWorkspace();
 
 function ensure(){
  const old=document.getElementById('autoV1');if(old)old.remove();
@@ -173,6 +182,12 @@ function ensure(){
 }
 async function generatePillar(i,mood='RANDOM'){
  const pillar=PILLARS[i],b=document.getElementById(`v3gen-${i}`),s=document.getElementById('v3status');
+ if(pillar==='AI_TIP'){
+  if(!candidates[i])candidates[i]=blankCoupangCandidate();
+  saveDrafts();render();
+  if(s)s.textContent='쿠팡파트너스 입력칸을 열었습니다. 본문·댓글/답장·미디어를 직접 입력해 주세요.';
+  return;
+ }
  if(!b)return;b.disabled=true;const old=b.textContent;b.textContent='생성 중…';
  s.textContent=pillar==='HOT_ISSUE'?'오늘 뉴스를 검색하고 핫이슈를 고르는 중입니다.':pillar==='FOOD_PICK'?'전국 실제 맛집을 검색하고 오늘의 메뉴를 고르는 중입니다.':'이 섹션만 집중해서 콘텐츠를 만드는 중입니다.';
  try{
