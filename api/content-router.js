@@ -2726,33 +2726,6 @@ async function actionFacebookCommentSync(req,res){
   }
 }
 
-
-async function actionYoutubeTitle(req,res){
-  const body=String(req.body?.body||'').trim().slice(0,5000);
-  if(!body)return send(res,400,{ok:false,error:'YOUTUBE_TITLE_BODY_REQUIRED'});
-  try{
-    const prompt=`다음 SNS 게시물 본문을 바탕으로 YouTube Shorts 제목 하나를 만든다.
-규칙:
-- 한국어 후킹 제목을 짧고 자연스럽게 작성
-- 본문에 없는 사실을 만들지 않는다
-- 제목 뒤에 내용과 직접 관련된 해시태그를 정확히 5개 붙인다
-- 해시태그는 모두 #으로 시작하고 공백으로 구분한다
-- 전체 결과는 YouTube 제목 제한 100자 이내
-- 설명, 따옴표, 번호, JSON 없이 제목 한 줄만 출력
-
-본문:
-${body}`;
-    const r=await fetch(TEXT_URL,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':String(process.env.GEMINI_API_KEY||'').trim()},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:.7,maxOutputTokens:160}})});
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok){const e=new Error('YOUTUBE_TITLE_GENERATE_FAILED');e.status=r.status;e.meta={message:String(j?.error?.message||'YOUTUBE_TITLE_GENERATE_FAILED').slice(0,300)};throw e}
-    let title=String(j?.candidates?.[0]?.content?.parts?.map?.(p=>p?.text||'')?.join('')||'').replace(/```[^\n]*|```/g,'').replace(/\s+/g,' ').trim();
-    const tags=title.match(/#[^#\s]+/g)||[];
-    if(tags.length!==5){const e=new Error('YOUTUBE_TITLE_HASHTAG_COUNT_INVALID');e.status=502;throw e}
-    if(title.length>100)title=title.slice(0,100).trim();
-    return send(res,200,{ok:true,title});
-  }catch(e){return send(res,Number(e?.status)||502,{ok:false,error:e?.message||'YOUTUBE_TITLE_GENERATE_FAILED',detail:e?.meta?.message||null})}
-}
-
 function youtubeConfig(){
   const clientId=String(process.env.YOUTUBE_CLIENT_ID||'').trim();
   const clientSecret=String(process.env.YOUTUBE_CLIENT_SECRET||'').trim();
@@ -2776,6 +2749,33 @@ async function youtubeApi(token,path,{method='GET',body=null}={}){
 async function youtubeTopComment(token,videoId,text){
   return youtubeApi(token,'commentThreads?part=snippet',{method:'POST',body:{snippet:{videoId,topLevelComment:{snippet:{textOriginal:text}}}}});
 }
+async function actionYoutubeTitle(req,res){
+  const body=String(req.body?.body||'').trim().slice(0,5000);
+  if(!body)return send(res,400,{ok:false,error:'YOUTUBE_TITLE_BODY_REQUIRED'});
+  const key=String(process.env.GEMINI_API_KEY||'').trim();
+  if(!key)return send(res,500,{ok:false,error:'GEMINI_API_KEY_MISSING'});
+  try{
+    const out=await generateJson(key,`다음 한국어 게시물 본문을 바탕으로 YouTube Shorts 제목을 만든다.\n\n규칙:\n- 본문 전체 내용을 이해해서 클릭하고 싶게 만드는 자연스러운 한국어 제목 1개\n- 과장·허위·낚시 금지\n- 제목 본문 뒤에 내용과 직접 관련된 해시태그를 정확히 5개 붙인다\n- 해시태그는 서로 중복 의미를 피하고 공백 없는 한 단어 또는 짧은 합성어로 만든다\n- 전체 YouTube 제목은 공백 포함 100자 이하여야 한다\n- JSON만 반환한다\n\n본문:\n${body}\n\n형식: {"title":"해시태그를 제외한 제목","hashtags":["태그1","태그2","태그3","태그4","태그5"]}`,.45);
+    const base=String(out?.title||'').replace(/#/g,'').replace(/\s+/g,' ').trim();
+    const raw=Array.isArray(out?.hashtags)?out.hashtags:[];
+    const seen=new Set(),tags=[];
+    for(const value of raw){
+      const tag=String(value||'').replace(/^#+/,'').replace(/\s+/g,'').replace(/[^0-9A-Za-z가-힣_]/g,'').slice(0,18);
+      const k=tag.toLocaleLowerCase('ko-KR');if(!tag||seen.has(k))continue;seen.add(k);tags.push(tag);if(tags.length===5)break;
+    }
+    if(!base||tags.length!==5)return send(res,502,{ok:false,error:'YOUTUBE_TITLE_INVALID'});
+    const suffix=tags.map(tag=>`#${tag}`).join(' ');
+    let head=base;
+    const maxHead=Math.max(8,100-suffix.length-1);
+    if(head.length>maxHead)head=head.slice(0,maxHead).trim();
+    const title=`${head} ${suffix}`.trim();
+    return send(res,200,{ok:true,title,hashtags:tags});
+  }catch(e){
+    console.error('[YOUTUBE_TITLE_FAILED]',JSON.stringify({message:e?.message||String(e)}));
+    return send(res,502,{ok:false,error:'YOUTUBE_TITLE_FAILED',detail:e?.message||null});
+  }
+}
+
 async function actionYoutubePublish(req,res){
   const videoUrl=String(req.body?.video_url||'').trim();
   const title=String(req.body?.title||'').trim().slice(0,100);
@@ -2800,12 +2800,16 @@ async function actionYoutubePublish(req,res){
     const result=await upload.json().catch(()=>({}));
     if(!upload.ok){const e=new Error('YOUTUBE_UPLOAD_FAILED');e.status=upload.status;e.meta={message:String(result?.error?.message||'YOUTUBE_UPLOAD_FAILED').slice(0,300)};throw e}
     const videoId=String(result?.id||'');if(!videoId)throw new Error('YOUTUBE_VIDEO_ID_MISSING');
-    if(paidPromotion){
-      await youtubeApi(token,'videos?part=paidProductPlacementDetails',{method:'PUT',body:{id:videoId,paidProductPlacementDetails:{hasPaidProductPlacement:true}}});
-    }
+    let paid_promotion_applied=null,synthetic_media_applied=null;
+    try{
+      const verify=await youtubeApi(token,`videos?part=status,paidProductPlacementDetails&id=${encodeURIComponent(videoId)}`);
+      const item=Array.isArray(verify?.items)?verify.items[0]:null;
+      paid_promotion_applied=typeof item?.paidProductPlacementDetails?.hasPaidProductPlacement==='boolean'?item.paidProductPlacementDetails.hasPaidProductPlacement:null;
+      synthetic_media_applied=typeof item?.status?.containsSyntheticMedia==='boolean'?item.status.containsSyntheticMedia:null;
+    }catch(e){console.warn('[YOUTUBE_FLAGS_VERIFY_FAILED]',JSON.stringify({video_id:videoId,message:e?.meta?.message||e?.message||String(e)}))}
     let first_comment_id=null,first_comment_error=null;
     if(firstComment){try{const c=await youtubeTopComment(token,videoId,firstComment);first_comment_id=String(c?.id||'')||null}catch(e){first_comment_error=e?.meta?.message||e?.message||'YOUTUBE_FIRST_COMMENT_FAILED'}}
-    return send(res,200,{ok:true,published:true,video_id:videoId,first_comment_id,...(first_comment_error?{first_comment_error}:{})});
+    return send(res,200,{ok:true,published:true,video_id:videoId,paid_promotion_applied,synthetic_media_applied,first_comment_id,...(first_comment_error?{first_comment_error}:{})});
   }catch(e){
     console.error('[YOUTUBE_PUBLISH_FAILED]',JSON.stringify({message:e?.message||String(e),status:e?.status||null,meta:e?.meta||null}));
     return send(res,Number(e?.status)||502,{ok:false,error:e?.message||'YOUTUBE_PUBLISH_FAILED',detail:e?.meta?.message||null});
