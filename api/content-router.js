@@ -3587,7 +3587,7 @@ async function handler(req,res){
   if(action==='instagram_carousel_image')return actionInstagramCarouselImage(req,res);
   if(action==='instagram_carousel_publish')return actionInstagramCarouselPublish(req,res);
   if(action==='facebook_publish')return actionFacebookPublish(req,res);
-  if(action==='facebook_comment_sync')return actionFacebookCommentSync(req,res);
+  if(action==='facebook_comment_sync')return send(res,410,{ok:false,error:'FACEBOOK_COMMENT_SYNC_DISABLED'});
   if(action==='youtube_title')return actionYoutubeTitle(req,res);
   if(action==='youtube_publish')return actionYoutubePublish(req,res);
   if(action==='youtube_comment_sync')return actionYoutubeCommentSync(req,res);
