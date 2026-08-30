@@ -99,6 +99,24 @@ function requireAdmin(req,res){
   send(res,401,{ok:false,error:'UNAUTHORIZED'});
   return false;
 }
+async function actionSystemStatus(req,res){
+  const {getValidSession}=await import('../lib-threads-session.js');
+  const s=await getValidSession(req,res);
+  res.setHeader('Cache-Control','no-store');
+  res.status(200).json({
+    threads:Boolean(s?.accessToken&&s?.userId),
+    threadsAppConfigured:Boolean(process.env.THREADS_APP_ID&&process.env.THREADS_APP_SECRET),
+    threadsUserId:s?.userId||null,
+    threadsTokenType:s?.tokenType||null,
+    threadsTokenExpiresAt:s?.expiresAt||null,
+    gemini:Boolean(process.env.GEMINI_API_KEY),
+    youtubeConfigured:Boolean(process.env.YOUTUBE_CLIENT_ID&&process.env.YOUTUBE_CLIENT_SECRET&&process.env.YOUTUBE_REFRESH_TOKEN),
+    database:false,
+    mode:'approval-first',
+    backgroundAutomation:false,
+    timezone:'Asia/Seoul'
+  });
+}
 function actionAdminStatus(req,res){
   if(!adminToken())return send(res,503,{ok:false,error:'ADMIN_AUTH_NOT_CONFIGURED'});
   return send(res,200,{ok:true,authenticated:validAdminSession(req)||validAdminHeader(req)});
@@ -3553,6 +3571,7 @@ async function handler(req,res){
   }
   // Meta must reach the webhook without our admin session. Its own verification/signature checks remain inside actionInstagramWebhook.
   if(queryAction==='instagram_webhook')return actionInstagramWebhook(req,res,rawBody);
+  if(queryAction==='system_status')return actionSystemStatus(req,res);
 
   if(req.method!=='POST'){
     return send(res,405,{ok:false,error:'METHOD_NOT_ALLOWED'});
