@@ -293,24 +293,19 @@ function normalizeInstagramComment(value){
 
 function classifyInstagramPromptIntentRule(value){
   const text=normalizeInstagramComment(value);
-  if(!text)return {result:false,source:'rule_no',confidence:1};
-  const explicitNo=[
-    /왜\s*(?:다들|모두).*저요/,
-    /저요.*(?:무슨\s*뜻|왜\s*하는)/,
-    /^(?:예쁘네요|예뻐요|멋있어요|멋지네요|대박|좋아요)[!！.。~…\s]*$/,
-    /^[ㅋㅎᄏᄒ]{2,}[!！.。~…\s]*$/,
-    /^(?:이게\s*뭔데요|어떤\s*ai(?:를)?\s*(?:써요|쓰셨어요|사용했어요)|왜\s*이렇게\s*나와요)[?？!！.。~…\s]*$/i
+  const explicitAbuse=[
+    /씨+\s*발/,
+    /시+\s*발(?!점)/,
+    /[ㅆㅅ]\s*ㅂ/,
+    /병+\s*신/,
+    /좆/,
+    /존나/,
+    /개\s*새끼/,
+    /(?:씹|썅)\s*(?:새끼|년|놈)/,
+    /(?:꺼져|닥쳐|엿\s*먹어|지랄)/
   ];
-  if(explicitNo.some(pattern=>pattern.test(text)))return {result:false,source:'rule_no',confidence:1};
-  const explicitYes=[
-    /^저(?:도)?(?:요)?[!！.。~…🙏🙌🔥\s]*$/,
-    /^저도?\s*(?:보내\s*)?주세요[!！.。~…🙏🙌\s]*$/,
-    /^(?:프롬프트\s*)?(?:주세요|보내\s*주세요|dm\s*주세요)[!！.。~…🙏🙌\s]*$/i,
-    /^(?:받아\s*보고\s*싶어요|받고\s*싶어요)[!！.。~…🙏🙌\s]*$/,
-    /^🙋(?:‍♀️|‍♂️)?[!！.。~…🙏🙌\s]*$/u
-  ];
-  if(explicitYes.some(pattern=>pattern.test(text)))return {result:true,source:'rule_yes',confidence:1};
-  return {result:null,source:'pending',confidence:0};
+  if(explicitAbuse.some(pattern=>pattern.test(text)))return {result:false,source:'rule_abuse',confidence:1};
+  return {result:true,source:'rule_default',confidence:1};
 }
 
 async function classifyInstagramPromptIntentWithGemini(value){
