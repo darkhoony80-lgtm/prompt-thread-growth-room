@@ -636,14 +636,49 @@ ${exclude}
 서로 다른 지역/장르로 최대 12곳.`); 
 }
 
+function aiPromptRecentLines(input){
+  return (Array.isArray(input)?input:[]).slice(0,20).map(v=>{
+    const topic=String(v?.topic||'').replace(/\s+/g,' ').trim().slice(0,140);
+    const hook=String(v?.hook||'').replace(/\s+/g,' ').trim().slice(0,60);
+    return [topic,hook].filter(Boolean).join(' | ');
+  }).filter(Boolean);
+}
+
+async function researchAiPromptTrends(key,recentAiPrompts=[]){
+  const today=new Intl.DateTimeFormat('en-CA',{
+    timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'
+  }).format(new Date());
+  const recent=aiPromptRecentLines(recentAiPrompts);
+  const history=recent.length
+    ? `최근 생성·발행한 AI_PROMPT:\n- ${recent.join('\n- ')}`
+    : '최근 생성·발행 이력 없음.';
+
+  const result=await groundedResearch(key,`한국 시간 ${today} 기준, 한국의 20~40대 여성이 자기 사진 한 장으로 따라 만들고 싶어 할 최신 SNS 사진 콘셉트를 조사해.
+
+탐색 우선순위:
+1. 최근 7일 안에 확인되는 흐름을 먼저 찾는다.
+2. 근거 있는 후보가 부족할 때만 최근 30일까지 확장한다.
+3. Instagram, TikTok, Threads, Pinterest, X와 최신 AI 사진 편집, 셀럽, 패션, 여행, 라이프스타일 사진 포맷을 폭넓게 검색한다. 로그인이나 접근 제한 때문에 원문을 직접 확인할 수 없으면 그 사실을 숨기지 말고, 검색으로 확인 가능한 기사·트렌드 리포트·공개 게시물 근거만 사용한다.
+4. 단순히 예쁜 이미지보다 "내 사진 한 장을 넣어 이 결과를 갖고 싶다"는 욕구가 큰 포맷을 우선한다. 한 인물의 여러 구도, 4컷·6컷·9컷 세트, photo dump, 같은 장소의 다른 포즈, 여행·호텔·엘리베이터·공항·카페 인생샷, 패션·헤어·메이크업 미리보기, 커플·친구 콘셉트, SNS 프로필 세트를 적극 검토한다.
+5. 스마트폰 촬영, 자연스러운 플래시, 거울 반사, 약간 비대칭 구도, 우연히 찍힌 자세, 현실적인 피부와 표정처럼 실제 SNS 사진다운 결과를 우선한다.
+6. 1970년대·1980년대·1990년대, vintage film, retro editorial, old Hollywood, 고전 영화풍, 시대극, generic cinematic portrait, 의미 없는 몽환 판타지는 최근 근거가 명확하지 않으면 후보에서 제외한다. Y2K·필름·레트로가 현재 다시 유행한다는 최근 근거가 있을 때만 허용한다.
+
+${history}
+위 이력과 장소, 상황, 구도, 분위기, 사용 목적, 핵심 아이디어가 지나치게 비슷한 후보는 제외한다. 같은 흐름을 다시 제안하려면 최근에도 강하게 이어진다는 별도 근거가 있어야 한다.
+
+최대 12개 후보를 정리해. 각 후보마다 콘셉트, 확인 플랫폼/출처, 확인 시점 또는 최근 7일·30일 중 어느 범위인지, 한 장의 사진이 어떤 결과 세트로 바뀌는지, 한국 20~40대 여성에게 매력적인 이유를 적어. 실제 검색 근거와 추론을 구분하고, 날짜를 확인할 수 없거나 단순 예측인 후보는 낮은 신뢰도로 표시해. 가짜 링크, 가짜 수치, 직접 보지 않은 게시물의 조회수는 만들지 마.`);
+  if(!result.trim())throw new Error('AI_PROMPT_TREND_RESEARCH_EMPTY');
+  return result;
+}
+
 function aiPromptMoodRule(mood='RANDOM'){
   const rules={
-    RANDOM:`완전 랜덤 모드. 행복/사랑/코믹/공포/판타지 중 하나를 고르는 기능이 아니다. 감정과 장르를 제한하지 않는다. 주제, 시대, 국가, 장소, 시간대, 날씨, 계절, 실내/실외, 인물 유무, 행동, 사건, 현실/초현실, 사진 장르, 카메라, 렌즈, 구도, 조명, 색감, 질감을 가능한 전체 범위에서 자유롭게 조합한다. 직전 결과의 분위기를 이어받지 말고 매번 새 출발한다. 비 오는 밤, 어두운 카페, 침침한 필름 감성을 기본값으로 삼지 않는다. 밝은 낮, 강한 원색, 자연광, 야외, 여행, 스포츠, 미래, 역사, 초현실, 미니멀, 다큐멘터리, 패션, 일상, 기묘함 등 모든 가능성을 열어 둔다.`,
-    HAPPY:`행복 무드. 밝고 활기차고 생기 있는 에너지가 느껴지는 새로운 소재를 고른다. 햇살, 낮, 여행, 축제, 웃음, 움직임, 선명하고 기분 좋은 색감 등을 폭넓게 활용하되 매번 같은 장소나 구도를 반복하지 않는다.`,
-    LOVE:`사랑 무드. 연애에만 한정하지 않고 설렘, 애정, 다정함, 우정, 가족애, 반려동물과의 교감, 소중한 순간 등 사랑을 넓게 해석한다. 부드럽고 매력적이되 하트 장식 같은 뻔한 상징에 의존하지 않는다.`,
-    COMIC:`코믹 무드. 예상 밖의 상황, 유쾌한 행동, 시각적 반전, 재미있는 타이밍과 구도를 활용한다. 억지 밈이나 과장된 표정보다 사진 자체의 상황과 구도가 재치 있게 느껴져야 한다.`,
-    HORROR:`공포 무드. 불길함, 미스터리, 기묘함, 긴장감, 심리적 공포를 세련되게 표현한다. 고어, 유혈, 잔혹 묘사는 금지한다. 밤 장면에만 고정하지 말고 밝은 낮의 기묘함, 평범한 장소의 불안감 등도 적극 활용한다.`,
-    FANTASY:`판타지 무드. 현실에서 불가능한 세계, 마법적 환경, 초현실적 자연, 독창적 생명체와 공간, 시대 혼합 등 상상력을 적극적으로 사용한다. 중세 성, 엘프, 마법사 같은 흔한 클리셰에 고정되지 않는다.`
+    RANDOM:`랜덤 버튼은 검색으로 확인된 최신 후보 사이에서만 폭넓게 고르는 기능이다. 시대·판타지·영화풍을 임의로 발명하지 말고 최신성, 따라 하고 싶은 정도, 여성 타깃 적합성이 가장 강한 콘셉트를 선택한다.`,
+    HAPPY:`검색으로 확인된 최신 후보 중 밝고 활기차며 생기 있는 결과에 가장 잘 맞는 콘셉트를 선택한다. 무드는 트렌드 근거보다 우선할 수 없다.`,
+    LOVE:`검색으로 확인된 최신 후보 중 설렘, 애정, 우정, 가족애처럼 다정한 결과에 가장 잘 맞는 콘셉트를 선택한다. 무드는 트렌드 근거보다 우선할 수 없다.`,
+    COMIC:`검색으로 확인된 최신 후보 중 자연스러운 상황과 구도에서 재치가 생기는 콘셉트를 선택한다. 억지 밈이나 과장된 표정은 피하고 무드는 트렌드 근거보다 우선할 수 없다.`,
+    HORROR:`검색으로 확인된 최신 후보 중 고어 없이 기묘함이나 긴장감을 적용할 수 있는 콘셉트를 선택한다. 근거 없는 generic cinematic portrait로 바꾸지 말고 무드는 트렌드 근거보다 우선할 수 없다.`,
+    FANTASY:`검색으로 확인된 최신 후보 중 현실 사진에 최신 AI 편집 요소를 더하는 방식으로 적용 가능한 콘셉트를 선택한다. 근거 없는 시대극·몽환 화보를 만들지 말고 무드는 트렌드 근거보다 우선할 수 없다.`
   };
   return rules[mood]||rules.RANDOM;
 }
@@ -679,6 +714,46 @@ function aiTipSimilarity(a,b){
     if(count){shared++;counts.set(value,count-1)}
   }
   return (2*shared)/(left.length+right.length);
+}
+
+const AI_PROMPT_SCORE_KEYS=['recency','try_desire','female_fit','shareability','instant_clarity','novelty','duplicate_distance'];
+const AI_PROMPT_STALE_STYLE=/(?:1970s?|1980s?|1990s?|1970년대|1980년대|1990년대|vintage(?:\s+film)?|retro(?:\s+editorial)?|old\s+hollywood|고전\s*(?:영화|화보)|빈티지|레트로|시대극|generic\s+cinematic\s+portrait)/i;
+
+function aiPromptEntryText(entry){
+  return ['concept','location','situation','composition','mood','use_case','output_format']
+    .map(key=>String(entry?.[key]||'').trim()).filter(Boolean).join(' | ');
+}
+
+function validateAiPromptSelection(output,item,recentAiPrompts=[]){
+  const shortlist=Array.isArray(output?.shortlist)?output.shortlist:[];
+  if(shortlist.length!==6)throw new Error('AI_PROMPT_SHORTLIST_INVALID');
+  const totals=shortlist.map((entry,index)=>{
+    const scores=entry?.scores||{};
+    if(AI_PROMPT_SCORE_KEYS.some(key=>!Number.isFinite(Number(scores[key]))||Number(scores[key])<0||Number(scores[key])>10)){
+      throw new Error(`AI_PROMPT_SCORE_INVALID_${index+1}`);
+    }
+    const windowDays=Number(entry?.evidence_window_days);
+    if(!Number.isFinite(windowDays)||windowDays<1||windowDays>30)throw new Error(`AI_PROMPT_TREND_WINDOW_INVALID_${index+1}`);
+    if(String(entry?.trend_evidence||'').trim().length<20)throw new Error(`AI_PROMPT_TREND_EVIDENCE_MISSING_${index+1}`);
+    return Number(scores.recency)*2+Number(scores.try_desire)*2+Number(scores.female_fit)*1.5+
+      Number(scores.shareability)+Number(scores.instant_clarity)+Number(scores.novelty)+Number(scores.duplicate_distance);
+  });
+  const selectedIndex=Number(output?.selected_index);
+  if(!Number.isInteger(selectedIndex)||selectedIndex<0||selectedIndex>=shortlist.length)throw new Error('AI_PROMPT_SELECTED_INDEX_INVALID');
+  if(totals[selectedIndex]<Math.max(...totals))throw new Error('AI_PROMPT_SELECTED_NOT_STRONGEST');
+
+  const selected=shortlist[selectedIndex];
+  const selectedText=`${aiPromptEntryText(selected)} ${item.topic} ${item.hook} ${item.image_brief}`;
+  const recent=aiPromptRecentLines(recentAiPrompts);
+  const fingerprints=[`${item.topic} ${item.hook}`,aiPromptEntryText(selected),selectedText];
+  if(recent.some(value=>fingerprints.some(fingerprint=>aiTipSimilarity(fingerprint,value)>=.62)))throw new Error('AI_PROMPT_RECENT_TOPIC_DUPLICATE');
+  if(AI_PROMPT_STALE_STYLE.test(selectedText)){
+    const evidence=String(selected?.trend_evidence||'');
+    if(Number(selected?.evidence_window_days)>7||!/(?:instagram|tiktok|threads|pinterest|\bX\b|인스타그램|틱톡|스레드|핀터레스트)/i.test(evidence)){
+      throw new Error('AI_PROMPT_STALE_STYLE_WITHOUT_CURRENT_EVIDENCE');
+    }
+  }
+  return {candidate_count:shortlist.length,selected_index:selectedIndex,selected_score:totals[selectedIndex],evidence_window_days:Number(selected.evidence_window_days)};
 }
 
 function validateAiTipSelection(output,item,recentAiTips=[]){
@@ -737,16 +812,32 @@ ${recent.length?recent.map(value=>`- ${value}`).join('\n'):'- 없음'}
 image_brief는 선택된 현실 문제와 반전이 한눈에 이해되는 장면만 설명한다. 첫 이미지 후킹은 본문을 요약 설명하지 말고 현실 문제의 궁금증을 살리는 방향으로 이미지 Story 엔진이 만들 수 있게 한다.`;
 }
 
-function pillarPrompt({pillar,research='',feedback='',performance='',mood='RANDOM',recentAiTips=[]}){
+function pillarPrompt({pillar,research='',feedback='',performance='',mood='RANDOM',recentAiTips=[],recentAiPrompts=[]}){
   const common=`너는 한국 Threads 계정을 팔로워 성장시키는 콘텐츠 편집장이다.\n목표는 광고가 아니라 저장, 공유, 댓글, 팔로우를 부르는 원본 콘텐츠다.\n본문은 스레드에서 실제 사람이 말하듯 자연스러운 반말로 쓴다. 딱딱한 기사체, 보도자료체, 존댓말, 교과서식 설명은 피한다.\n짧은 문장과 줄바꿈을 활용하고, 귀엽고 친근한 리액션을 자연스럽게 섞는다. 이모지는 보통 1~3개만 사용하고 과하게 도배하지 않는다.\n사건사고·재난·피해자가 있는 내용에서는 장난스러운 표현을 피하고 친근하지만 차분한 반말을 사용한다.\n후킹은 6~10자 우선, 최대 14자. 기사 제목이나 흔한 문구를 복사하지 않는다.\n모든 category의 body 본문 맨 마지막 줄에는 게시물 내용과 직접 관련된 검색용 해시태그를 정확히 5개 넣는다. 형식은 "#키워드1 #키워드2 #키워드3 #키워드4 #키워드5"이며 한 줄에만 작성한다. 실제 검색할 법한 짧고 구체적인 핵심어를 사용하고, 문장형·광고문구·억지 신조어·중복 키워드는 금지한다. 이 5개 해시태그는 오직 body에만 포함하며 hook, topic, topic_tag, topic_tag_candidates, reply_prompt, reason, image_brief, source_notes 등 다른 필드에는 절대 넣지 않는다.\nThreads 주제 태그도 함께 추천한다. 내부 소재명 topic과 Threads 주제 태그 topic_tag는 절대 같은 필드로 취급하지 않는다. topic_tag_candidates는 게시물 내용과 직접 관련된 후보 3개를 만든다. 한국 계정이므로 자연스럽고 실제 사람들이 찾을 법한 한글 Topic을 우선하되, AI Art처럼 영어명이 더 보편적인 주제는 영어도 허용한다. # 기호는 넣지 않는다. 너무 길거나 문장형인 태그, 광고 문구, 억지 신조어는 금지한다. topic_tag에는 후보 중 가장 적합한 하나를 넣는다.\nimage_brief는 본문과 직접 연결되는 시각적 핵심만 설명한다. 실제 썸네일 문구와 타이포그래피 구성은 카테고리별 이미지 생성 단계가 별도로 결정한다.\n최근 피드백: ${feedback||'없음'}\n실제 성과: ${performance||'없음'}`;
 
   const rules={
-    AI_PROMPT:`AI_PROMPT 하나만 만든다. ${aiPromptMoodRule(mood)} 반드시 body와 reply_prompt를 완전히 분리한다. body는 Threads에 실제 게시되는 한국어 설명문이다. 결과 이미지의 매력, 빛/질감/분위기/촬영 느낌 중 핵심을 3~5문장으로 충분히 설명한다. 자연스러운 반말과 가벼운 이모지 1~2개를 사용한다. 영문 이미지 프롬프트 문장이나 영어 프롬프트 일부를 body에 절대 넣지 않는다. body에는 프롬프트 제공, 첫 댓글, 댓글 작성, DM 전송을 안내하거나 유도하는 CTA를 넣지 않고 순수 콘텐츠만 쓴다.
+    AI_PROMPT:`AI_PROMPT의 정체성은 "내 사진 한 장으로 지금 사람들이 갖고 싶어 하는 최신 SNS 사진을 만들어주는 프롬프트"다. 아래 실시간 검색 결과에서 근거가 있는 후보만 사용한다. 먼저 서로 다른 콘셉트 후보를 정확히 6개 만들고, 최근 7일 근거를 최우선으로 평가한다. 7일 후보가 부족할 때만 최대 30일까지 허용한다. 고정 카테고리 비율은 만들지 않는다.
 
-reply_prompt는 하나의 완결된 영문 MASTER PROMPT로 쓴다. subject/action, location/environment, wardrobe, composition, lighting, camera/lens, mood와 photographic style을 각각 핵심 정보 한 번만 넣고 같은 의미의 형용사·품질 표현·금지 지시를 반복하지 않는다. 다음 Identity Lock 의미는 축약하거나 희생하지 말고 정확히 한 번만 포함한다: "Use the attached reference image as the PRIMARY IDENTITY REFERENCE. Preserve the exact identity and recognizable facial characteristics. Never reinterpret, replace, beautify, idealize, or age-shift the person. Identity preservation overrides styling. Keep the full face and both eyes visible and unobstructed." 얼굴 가림 요소가 장면과 충돌하면 해당 요소만 제거한다. 자연스러운 신체·원근·반사를 유지하고 복제 인물이나 추가 신체를 금지한다. 영문 프롬프트 본문만 출력하며 설명, 번역, 제목, 따옴표, Markdown은 넣지 않는다.
+각 후보는 recency, try_desire, female_fit, shareability, instant_clarity, novelty, duplicate_distance를 각각 0~10점으로 냉정하게 평가한다. 한국의 20~40대 여성이 게시물을 보자마자 "내 사진으로 이거 해보고 싶다"고 느낄 가능성을 가장 중요하게 본다. recency와 try_desire는 2배, female_fit은 1.5배, 나머지는 1배로 계산한 가중 합계가 가장 높은 후보만 selected_index로 선택하고 완성된 candidate로 작성한다. 검색 근거가 약하거나 날짜를 확인할 수 없는 후보는 recency를 낮게 준다.
+
+사진 한 장에서 같은 인물의 여러 구도, 4컷·6컷·9컷 세트, photo dump, 같은 장소의 다양한 포즈, 여행·호텔·엘리베이터·공항·카페 사진 세트, 패션·헤어·메이크업 미리보기, 커플·친구 콘셉트, SNS 프로필 세트처럼 결과가 즉시 이해되는 포맷을 적극 활용한다. 멀티컷은 동일 인물과 얼굴 특징을 유지하면서 구도, 포즈, 행동, 거리감을 실제 촬영처럼 다양화한다. 같은 사진의 확대·크롭 반복은 금지한다.
+
+완벽한 스튜디오 AI 화보보다 스마트폰 촬영, 자연스러운 플래시, 거울 반사, 약간 비대칭인 구도, 우연히 찍힌 자세, 현실적인 피부 질감과 표정처럼 Instagram·TikTok에서 실제 볼 법한 사진을 우선한다. 1970년대·1980년대·1990년대, vintage film, retro editorial, old Hollywood, 고전 영화풍, 시대극, generic cinematic portrait, 의미 없는 몽환 판타지는 최근 7일 안의 명확한 플랫폼 근거가 있을 때만 허용한다.
+
+${aiPromptMoodRule(mood)} 최근 이력과 장소, 상황, 구도, 분위기, 사용 목적, 핵심 아이디어가 지나치게 비슷하면 표현만 바꾸지 말고 다른 후보를 고른다. 같은 트렌드를 재사용하려면 검색 결과에 지금도 강하게 유행 중이라는 근거가 있어야 한다.
+
+최근 AI_PROMPT:
+${aiPromptRecentLines(recentAiPrompts).length?aiPromptRecentLines(recentAiPrompts).map(value=>`- ${value}`).join('\n'):'- 없음'}
+
+실시간 트렌드 검색 결과:
+${research}
+
+반드시 body와 reply_prompt를 완전히 분리한다. body는 Threads에 실제 게시되는 한국어 설명문이다. "사진 한 장으로 엘리베이터 인생샷 6장 만들기"처럼 입력 한 장과 최종 결과 포맷이 보자마자 이해되게 설명한다. 자연스러운 반말과 가벼운 이모지 1~2개를 사용한다. 영문 이미지 프롬프트 문장이나 영어 프롬프트 일부를 body에 절대 넣지 않는다. body에는 프롬프트 제공, 첫 댓글, 댓글 작성, DM 전송을 안내하거나 유도하는 CTA를 넣지 않고 순수 콘텐츠만 쓴다.
+
+reply_prompt는 하나의 완결된 영문 MASTER PROMPT로 쓴다. 선택한 포맷이 멀티컷이면 컷마다 같은 인물로 인식 가능하도록 정체성, 얼굴 특징, 의상·장소의 필요한 연속성을 유지하고 각 컷의 구도, 포즈, 행동, 거리감은 다르게 지시한다. 단순 확대·크롭 반복은 금지한다. subject/action, location/environment, wardrobe, composition, lighting, camera/lens, mood와 photographic style을 각각 핵심 정보 한 번만 넣고 같은 의미의 형용사·품질 표현·금지 지시를 반복하지 않는다. 다음 Identity Lock 의미는 축약하거나 희생하지 말고 정확히 한 번만 포함한다: "Use the attached reference image as the PRIMARY IDENTITY REFERENCE. Preserve the exact identity and recognizable facial characteristics. Never reinterpret, replace, beautify, idealize, or age-shift the person. Identity preservation overrides styling. Keep the full face and both eyes visible and unobstructed." 얼굴 가림 요소가 장면과 충돌하면 해당 요소만 제거한다. 자연스러운 신체·원근·반사를 유지하고 복제 인물이나 추가 신체를 금지한다. 영문 프롬프트 본문만 출력하며 설명, 번역, 제목, 따옴표, Markdown은 넣지 않는다.
 
 FINAL PROMPT MUST BE ${GENERATED_REPLY_PROMPT_MAX_CHARS} CHARACTERS OR FEWER INCLUDING SPACES. Write a complete, compact prompt. Never sacrifice identity-preservation requirements. Avoid redundant adjectives and repeated instructions.
-image_brief는 reply_prompt 결과 이미지의 구도와 시각적 매력을 보충하되 별도의 텍스트 중심 썸네일로 바꾸지 않는다.`,
+image_brief는 reply_prompt 결과 이미지의 구도와 시각적 매력을 보충하되 별도의 텍스트 중심 썸네일로 바꾸지 않는다. source_notes에는 선택 근거가 된 실제 검색 출처·플랫폼과 확인 시점을 1~3개만 간단히 적고, 확인하지 않은 링크나 수치를 만들지 않는다.`,
 
     AI_TIP:aiTipRule(recentAiTips),
     FOOD_PICK:`FOOD_PICK 하나만 만든다. 현재 한국 시간대를 반영해서 지금 먹기 가장 자연스러운 상황을 먼저 정한다. 점심 시간에는 점심, 저녁에는 저녁, 밤 9시 이후에는 야식/술안주 성격을 우선한다. '오늘 점심은 내가 정해줄게 😋', '오늘 저녁은 이거 먹자', '오늘 술안주는 이걸로 가자'처럼 우리가 먼저 결론을 준다. 아래 검색 결과에서 실제 확인된 전국 식당 하나를 고른다. 최근 생성 이력으로 제외된 업장은 절대 선택하지 않는다. 같은 지역/같은 장르/같은 업장을 연속 반복하지 말고 다양성을 우선한다. 식당명/지역/대표 메뉴/추천 이유를 간결하게 쓴다. 존재, 지역, 메뉴를 지어내지 않는다. 음식은 먹고 싶게 느껴지는 가볍고 맛깔나는 반말로 추천한다. 마지막에 '※ 이미지는 메뉴 이해를 돕는 AI 연출 이미지'를 넣는다.\n검색 결과:\n${research}`,
@@ -754,8 +845,9 @@ image_brief는 reply_prompt 결과 이미지의 구도와 시각적 매력을 �
   };
 
   const candidateSchema=`{"candidate":{"category":"${pillar}","topic":"...","topic_tag":"...","topic_tag_candidates":["...","...","..."],"hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reply_prompt":"AI_PROMPT/AI_TIP만 규칙에 맞게 작성, 나머지는 빈 문자열","reason":"...","image_brief":"...","source_notes":[],"score":{"stop":0,"save":0,"share":0,"comment":0,"follow":0,"novelty":0,"visual":0,"total":0}}}`;
+  const aiPromptSchema=`{"shortlist":[{"concept":"...","location":"...","situation":"...","composition":"...","mood":"...","use_case":"...","output_format":"1장/4컷/6컷/9컷 중 결과 형식","trend_evidence":"플랫폼·출처·확인 시점이 드러나는 최근 근거","evidence_window_days":7,"scores":{"recency":0,"try_desire":0,"female_fit":0,"shareability":0,"instant_clarity":0,"novelty":0,"duplicate_distance":0}}],"selected_index":0,"candidate":{"category":"AI_PROMPT","topic":"...","topic_tag":"...","topic_tag_candidates":["...","...","..."],"hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reply_prompt":"complete English MASTER PROMPT","reason":"...","image_brief":"...","source_notes":["실제 검색 근거 1","실제 검색 근거 2"],"score":{"stop":0,"save":0,"share":0,"comment":0,"follow":0,"novelty":0,"visual":0,"total":0}}}`;
   const aiTipSchema=`{"shortlist":[{"problem":"...","ai_use":"...","hook":"...","scores":{"hook_power":0,"real_life_usefulness":0,"novelty":0,"try_now_value":0,"save_value":0,"share_value":0,"specificity":0}}],"selected_index":0,"candidate":{"category":"AI_TIP","topic":"...","topic_tag":"...","topic_tag_candidates":["...","...","..."],"hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reply_prompt":"역할: ...\\n입력 자료: ...\\n목표: ...\\n분석 절차: ...\\n출력 형식: ...\\n주의사항: ...","reason":"...","image_brief":"...","source_notes":[],"score":{"stop":0,"save":0,"share":0,"comment":0,"follow":0,"novelty":0,"visual":0,"total":0}}}`;
-  return `${common}\n\n${rules[pillar]}\n\nJSON만 반환:\n${pillar==='AI_TIP'?aiTipSchema:candidateSchema}`;
+  return `${common}\n\n${rules[pillar]}\n\nJSON만 반환:\n${pillar==='AI_PROMPT'?aiPromptSchema:(pillar==='AI_TIP'?aiTipSchema:candidateSchema)}`;
 }
 
 async function actionGenerate(req,res){
@@ -771,6 +863,7 @@ async function actionGenerate(req,res){
   const recentFood=Array.isArray(req.body?.recentFood)?req.body.recentFood.slice(0,8):[];
   const recentHotIssues=Array.isArray(req.body?.recentHotIssues)?req.body.recentHotIssues.slice(0,20):[];
   const recentAiTips=Array.isArray(req.body?.recentAiTips)?req.body.recentAiTips.slice(0,12):[];
+  const recentAiPrompts=Array.isArray(req.body?.recentAiPrompts)?req.body.recentAiPrompts.slice(0,20):[];
   const requestedMood=String(req.body?.mood||'RANDOM').trim().toUpperCase();
   const allowedMoods=['RANDOM','HAPPY','LOVE','COMIC','HORROR','FANTASY'];
   const mood=pillar==='AI_PROMPT'&&allowedMoods.includes(requestedMood)?requestedMood:'RANDOM';
@@ -779,13 +872,15 @@ async function actionGenerate(req,res){
     let research='';
     if(pillar==='HOT_ISSUE')research=await researchHotIssues(key,recentHotIssues);
     if(pillar==='FOOD_PICK')research=await researchFood(key,recentFood);
+    if(pillar==='AI_PROMPT')research=await researchAiPromptTrends(key,recentAiPrompts);
 
-    const out=await generateJson(key,pillarPrompt({pillar,research,feedback,performance,mood,recentAiTips}),.88);
+    const out=await generateJson(key,pillarPrompt({pillar,research,feedback,performance,mood,recentAiTips,recentAiPrompts}),.88);
     const raw=out?.candidate||out?.item||out;
     const item=cleanCandidate({...raw,category:pillar},0);
     if(pillar==='AI_PROMPT')item.mood=mood;
     if(!item.body||!item.hook)throw new Error('PILLAR_CONTENT_INVALID');
     const aiTipSelection=pillar==='AI_TIP'?validateAiTipSelection(out,item,recentAiTips):null;
+    const aiPromptSelection=pillar==='AI_PROMPT'?validateAiPromptSelection(out,item,recentAiPrompts):null;
     if(pillar==='AI_PROMPT'&&(
       /[가-힣]/.test(item.reply_prompt)||
       item.reply_prompt.length<450||
@@ -798,7 +893,8 @@ async function actionGenerate(req,res){
       ok:true,
       engine:'growth-v5-independent-pillars',
       pillar,
-      grounded:pillar==='HOT_ISSUE'||pillar==='FOOD_PICK',
+      grounded:pillar==='HOT_ISSUE'||pillar==='FOOD_PICK'||pillar==='AI_PROMPT',
+      ...(aiPromptSelection?{selection:aiPromptSelection}:{}),
       ...(aiTipSelection?{selection:aiTipSelection}:{}),
       item
     });

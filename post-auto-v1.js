@@ -168,6 +168,17 @@ function recentAiTips(){
   seen.add(key);return true;
  }).slice(0,12);
 }
+function recentAiPrompts(){
+ const seen=new Set(),rows=[...read(P),...read(F)];
+ return rows.filter(x=>x?.category==='AI_PROMPT').map(x=>({
+  topic:String(x?.topic||'').trim().slice(0,140),
+  hook:String(x?.hook||'').trim().slice(0,60)
+ })).filter(x=>{
+  const key=`${x.topic}|${x.hook}`.toLocaleLowerCase('ko-KR');
+  if(!x.topic||seen.has(key))return false;
+  seen.add(key);return true;
+ }).slice(0,20);
+}
 
 restoreDrafts();
 ensureCoupangWorkspace();
@@ -196,7 +207,8 @@ async function generatePillar(i,mood='RANDOM'){
   const recentFood=pillar==='FOOD_PICK'?read(FH,[]).slice(0,8):[];
   const recentHot=pillar==='HOT_ISSUE'?recentHotIssues():[];
   const recentAi=pillar==='AI_TIP'?recentAiTips():[];
-   const r=await fetch('/api/content-router?action=generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pillar,feedback,performance,recentFood,recentHotIssues:recentHot,recentAiTips:recentAi,mood:pillar==='AI_PROMPT'?mood:'RANDOM'})});
+  const recentPrompts=pillar==='AI_PROMPT'?recentAiPrompts():[];
+   const r=await fetch('/api/content-router?action=generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pillar,feedback,performance,recentFood,recentHotIssues:recentHot,recentAiTips:recentAi,recentAiPrompts:recentPrompts,mood:pillar==='AI_PROMPT'?mood:'RANDOM'})});
   const text=await r.text();let j;try{j=JSON.parse(text)}catch{throw new Error(text.slice(0,180)||`HTTP ${r.status}`)}
   if(!r.ok)throw new Error(j.detail||j.error||'GENERATE_FAILED');
   candidates[i]=j.item;
