@@ -5,6 +5,7 @@ const DB_NAME='prompt-thread-growth-room';
 const DB_STORE='directory-handles';
 const DB_KEY='threads-coupas-root';
 const SAFETY_KEY='threads_coupas_publish_safety_v1';
+const STATUS_FILE='.threads-coupas-status.json';
 const DISCLOSURE='이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.';
 const PARTIAL_STATUSES=new Set(['post_published_link_pending','post_published_reply_failed']);
 
@@ -58,31 +59,35 @@ async function adminApi(action,payload={}){
   return body;
 }
 
-async function saveRecord(record){
+async function saveRecord(record,folderHandle){
   const local=putLocalRecord(record);
-  const response=await adminApi('coupas_history_upsert',{item:local});
-  const saved=response.item||local;
-  putLocalRecord(saved);
-  return saved;
+  if(!folderHandle)throw new Error('로컬 작업 폴더 상태 저장 실패');
+  const fileHandle=await folderHandle.getFileHandle(STATUS_FILE,{create:true});
+  const writable=await fileHandle.createWritable();
+  try{await writable.write(JSON.stringify(local,null,2))}
+  finally{await writable.close()}
+  return local;
 }
 
 async function loadHistory(){
   historyReady=false;
-  try{
-    const response=await adminApi('coupas_history_list');
-    history=Array.isArray(response.items)?response.items:[];
-    mergeHistory(localRecords());
-    historyReady=true;
-    for(const local of localRecords()){
-      const remote=response.items?.find(row=>row.job_id===local.job_id);
-      if(!remote||String(local.updated_at||'')>String(remote.updated_at||'')){
-        await adminApi('coupas_history_upsert',{item:local}).catch(()=>{});
-      }
+  history=[];
+  mergeHistory(localRecords());
+  if(!directoryHandle||await folderPermission(false)!=='granted')return;
+  const records=[];
+  for await(const [name,handle] of directoryHandle.entries()){
+    if(handle.kind!=='directory')continue;
+    try{
+      const file=await (await handle.getFileHandle(STATUS_FILE)).getFile();
+      const record=JSON.parse(await file.text());
+      if(!record?.job_id||!record?.status)throw new Error('상태 정보 누락');
+      records.push({...record,folder_name:name});
+    }catch(error){
+      if(error?.name!=='NotFoundError')records.push({job_id:name,folder_name:name,status:'history_invalid',error:`로컬 상태 파일 확인 필요: ${error.message}`,updated_at:new Date().toISOString()});
     }
-  }catch(error){
-    mergeHistory(localRecords());
-    setMessage(`게시 이력 저장소 연결 실패: ${error.message}`,'error');
   }
+  mergeHistory(records);
+  historyReady=true;
 }
 
 function openHandleDb(){
@@ -115,7 +120,7 @@ async function restoreHandle(){
 }
 async function folderPermission(request=false){
   if(!directoryHandle)return 'denied';
-  const options={mode:'read'};
+  const options={mode:'readwrite'};
   let state=await directoryHandle.queryPermission(options);
   if(state!=='granted'&&request)state=await directoryHandle.requestPermission(options);
   return state;
@@ -135,10 +140,11 @@ async function connectFolder(){
     setMessage('이 브라우저는 로컬 폴더 연결을 지원하지 않습니다. 최신 Chrome 또는 Edge에서 열어 주세요.','error');return;
   }
   try{
-    const handle=await window.showDirectoryPicker({id:'threads-coupas-source',mode:'read',startIn:'downloads'});
+    const handle=await window.showDirectoryPicker({id:'threads-coupas-source',mode:'readwrite',startIn:'downloads'});
     if(handle.name!==EXPECTED_FOLDER)throw new Error(`${EXPECTED_FOLDER} 폴더를 정확히 선택해 주세요.`);
     directoryHandle=handle;await storeHandle(handle);await renderFolderState();
-    setMessage('폴더가 연결되었습니다. 미게시 자료를 확인할 수 있습니다.');
+    await loadHistory();
+    setMessage('폴더가 연결되었습니다. 게시 이력은 각 작업 폴더에 로컬로 저장됩니다.');
   }catch(error){if(error?.name!=='AbortError')setMessage(`폴더 접근 실패: ${error.message}`,'error')}
 }
 
@@ -168,7 +174,7 @@ async function listCandidateFolders(limit){
   for await(const [name,handle] of directoryHandle.entries()){
     if(handle.kind!=='directory')continue;
     const existing=history.find(row=>row.folder_name===name);
-    if(existing?.status==='published')continue;
+    if(existing?.status==='published'||existing?.status==='history_invalid')continue;
     output.push({name,handle});
   }
   output.sort((a,b)=>a.name.localeCompare(b.name,'ko-KR'));
@@ -272,14 +278,13 @@ async function processFolder(folderInfo){
       const retryCount=(Number(existing.retry_count)||0)+1;
       $('coupasCurrent').textContent=`${folderInfo.name} · ${existing.product_name||'2/2 링크 재시도'}`;
       const partial={...existing,status:existing.status,error:null,retry_count:retryCount};
-      await saveRecord(partial);
+      await saveRecord(partial,folderInfo.handle);
       try{
         const replyId=await publishLinkedPost(existing.threads_post_id,existing.generated_coupang_url);
-        const completed=putLocalRecord({...partial,status:'published',completed_at:new Date().toISOString(),reply_id:replyId,error:null});
-        await adminApi('coupas_history_upsert',{item:completed}).catch(()=>{});
+        const completed=await saveRecord({...partial,status:'published',completed_at:new Date().toISOString(),reply_id:replyId,error:null},folderInfo.handle);
         return completed;
       }catch(error){
-        await saveRecord({...partial,status:'post_published_reply_failed',error:friendlyError(error)}).catch(()=>{});
+        await saveRecord({...partial,status:'post_published_reply_failed',error:friendlyError(error)},folderInfo.handle).catch(()=>{});
         throw error;
       }
     }
@@ -287,7 +292,7 @@ async function processFolder(folderInfo){
     existing=knownRecord(job.jobId,job.folderName);
     const retryCount=(Number(existing?.retry_count)||0)+1;
     if(existing?.status==='published')return {skipped:true};
-    await saveRecord({...(existing||{}),job_id:job.jobId,folder_name:job.folderName,status:'processing',started_at:existing?.started_at||startedAt,completed_at:null,original_coupang_url:job.originalUrl,error:null,retry_count:retryCount});
+    await saveRecord({...(existing||{}),job_id:job.jobId,folder_name:job.folderName,status:'processing',started_at:existing?.started_at||startedAt,completed_at:null,original_coupang_url:job.originalUrl,error:null,retry_count:retryCount},folderInfo.handle);
 
     const product=await resolveProduct(job,existing);
     $('coupasCurrent').textContent=`${job.folderName} · ${product.product_name}`;
@@ -296,24 +301,22 @@ async function processFolder(folderInfo){
     let parentUrl=PARTIAL_STATUSES.has(existing?.status)?String(existing?.threads_post_url||''):'';
     if(!parentId){
       parentId=await publishParent(job);
-      let partial=putLocalRecord({...base,status:'post_published_link_pending',threads_post_id:parentId,threads_post_url:'',error:null});
+      let partial=await saveRecord({...base,status:'post_published_link_pending',threads_post_id:parentId,threads_post_url:'',error:null},folderInfo.handle);
       parentUrl=await permalink(parentId);
-      partial=putLocalRecord({...partial,threads_post_url:parentUrl});
-      await adminApi('coupas_history_upsert',{item:partial}).catch(()=>{});
+      partial=await saveRecord({...partial,threads_post_url:parentUrl},folderInfo.handle);
     }
     try{
       const replyId=await publishLinkedPost(parentId,product.generated_coupang_url);
-      const completed=putLocalRecord({...base,status:'published',completed_at:new Date().toISOString(),threads_post_id:parentId,threads_post_url:parentUrl||await permalink(parentId),reply_id:replyId,error:null});
-      await adminApi('coupas_history_upsert',{item:completed}).catch(()=>{});
+      const completed=await saveRecord({...base,status:'published',completed_at:new Date().toISOString(),threads_post_id:parentId,threads_post_url:parentUrl||await permalink(parentId),reply_id:replyId,error:null},folderInfo.handle);
       return completed;
     }catch(error){
-      await saveRecord({...base,status:'post_published_reply_failed',threads_post_id:parentId,threads_post_url:parentUrl,error:friendlyError(error)}).catch(()=>{});
+      await saveRecord({...base,status:'post_published_reply_failed',threads_post_id:parentId,threads_post_url:parentUrl,error:friendlyError(error)},folderInfo.handle).catch(()=>{});
       throw error;
     }
   }catch(error){
     const current=knownRecord(job.jobId,job.folderName);
     if(!PARTIAL_STATUSES.has(current?.status)&&current?.status!=='published'){
-      await saveRecord({...(current||{}),job_id:job.jobId,folder_name:job.folderName,status:'failed',started_at:current?.started_at||startedAt,completed_at:new Date().toISOString(),original_coupang_url:job.originalUrl||current?.original_coupang_url,product_name:error?.body?.product_name||current?.product_name,error:friendlyError(error),retry_count:Number(current?.retry_count)||1,match_candidates:candidateSummary(error?.body?.candidates||current?.match_candidates)}).catch(()=>{});
+      await saveRecord({...(current||{}),job_id:job.jobId,folder_name:job.folderName,status:'failed',started_at:current?.started_at||startedAt,completed_at:new Date().toISOString(),original_coupang_url:job.originalUrl||current?.original_coupang_url,product_name:error?.body?.product_name||current?.product_name,error:friendlyError(error),retry_count:Number(current?.retry_count)||1,match_candidates:candidateSummary(error?.body?.candidates||current?.match_candidates)},folderInfo.handle).catch(()=>{});
     }
     throw error;
   }
@@ -351,7 +354,7 @@ async function start(){
   if(!directoryHandle||await folderPermission(true)!=='granted'){setMessage('폴더 접근 권한이 필요합니다. 폴더 연결을 다시 눌러 주세요.','error');return}
   if(directoryHandle.name!==EXPECTED_FOLDER){setMessage(`${EXPECTED_FOLDER} 폴더를 정확히 연결해 주세요.`,'error');return}
   await loadHistory();
-  if(!historyReady){setMessage('서버 게시 이력 저장소가 준비되지 않아 중복 방지를 보장할 수 없습니다. 실행을 중단했습니다.','error');return}
+  if(!historyReady){setMessage('로컬 게시 이력을 확인할 수 없습니다. 폴더 쓰기 권한을 다시 연결해 주세요.','error');return}
 
   running=true;stopRequested=false;stats={requested,success:0,failed:0,processed:0};renderStats();
   $('coupasStart').disabled=true;$('coupasStop').disabled=false;setStatus('자료 확인 중');setMessage('미게시 하위 폴더를 확인하고 있습니다.');

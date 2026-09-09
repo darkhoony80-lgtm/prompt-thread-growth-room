@@ -31,7 +31,6 @@ const OX_MODEL='stealth/ox-alpha';
 const OX_CONTENT_TABLE='ox_content_library';
 const OX_TYPES=['novel','longform','blog'];
 const OX_STATUSES=['IDEA','DRAFT','READY','USED'];
-const THREADS_COUPAS_TABLE='threads_coupas_publish_jobs';
 const COUPANG_API_ORIGIN='https://api-gateway.coupang.com';
 const COUPANG_SEARCH_PATH='/v2/providers/affiliate_open_api/apis/openapi/products/search';
 const COUPANG_DEEPLINK_PATH='/v2/providers/affiliate_open_api/apis/openapi/v1/deeplink';
@@ -291,63 +290,8 @@ async function updateInstagramDelivery(commentId,changes){
   });
 }
 
-const THREADS_COUPAS_STATUSES=['pending','processing','published','failed','stopped','post_published_link_pending','post_published_reply_failed'];
-
 function safeCoupasText(value,max=500){
   return String(value||'').replace(/[\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').trim().slice(0,max);
-}
-
-function normalizeCoupasJob(input){
-  const jobId=safeCoupasText(input?.job_id,160);
-  const folderName=safeCoupasText(input?.folder_name,240);
-  const status=safeCoupasText(input?.status,60);
-  if(!jobId||!folderName)throw new Error('COUPAS_JOB_ID_AND_FOLDER_REQUIRED');
-  if(!THREADS_COUPAS_STATUSES.includes(status))throw new Error('COUPAS_JOB_STATUS_INVALID');
-  const now=new Date().toISOString();
-  return {
-    job_id:jobId,
-    folder_name:folderName,
-    status,
-    started_at:input?.started_at||null,
-    completed_at:status==='published'?(input?.completed_at||now):(input?.completed_at||null),
-    product_name:safeCoupasText(input?.product_name,500)||null,
-    original_coupang_url:safeCoupasText(input?.original_coupang_url,1200)||null,
-    generated_coupang_url:safeCoupasText(input?.generated_coupang_url,1200)||null,
-    threads_post_id:safeCoupasText(input?.threads_post_id,100)||null,
-    threads_post_url:safeCoupasText(input?.threads_post_url,1200)||null,
-    reply_id:safeCoupasText(input?.reply_id,100)||null,
-    error:safeCoupasText(input?.error,1000)||null,
-    retry_count:Math.max(0,Math.min(1000,Number(input?.retry_count)||0)),
-    match_score:Number.isFinite(Number(input?.match_score))?Math.max(0,Math.min(1,Number(input.match_score))):null,
-    match_candidates:Array.isArray(input?.match_candidates)?input.match_candidates.slice(0,5):[],
-    updated_at:now
-  };
-}
-
-async function actionCoupasHistoryList(req,res){
-  try{
-    const items=[];
-    for(let offset=0;offset<50_000;offset+=1000){
-      const rows=await supabaseRest(`${THREADS_COUPAS_TABLE}?select=job_id,folder_name,status,started_at,completed_at,product_name,original_coupang_url,generated_coupang_url,threads_post_id,threads_post_url,reply_id,error,retry_count,match_score,match_candidates,updated_at&order=updated_at.desc&limit=1000&offset=${offset}`);
-      const batch=Array.isArray(rows)?rows:[];items.push(...batch);
-      if(batch.length<1000)break;
-    }
-    return send(res,200,{ok:true,items});
-  }catch(error){
-    return send(res,error?.status||502,{ok:false,error:'COUPAS_HISTORY_LIST_FAILED',detail:safeAutomationError(error)});
-  }
-}
-
-async function actionCoupasHistoryUpsert(req,res){
-  try{
-    const record=normalizeCoupasJob(req.body?.item||req.body);
-    const rows=await supabaseRest(`${THREADS_COUPAS_TABLE}?on_conflict=job_id`,{
-      method:'POST',body:[record],prefer:'resolution=merge-duplicates,return=representation'
-    });
-    return send(res,200,{ok:true,item:Array.isArray(rows)?rows[0]||record:record});
-  }catch(error){
-    return send(res,error?.status||400,{ok:false,error:'COUPAS_HISTORY_UPSERT_FAILED',detail:safeAutomationError(error)});
-  }
 }
 
 function requireCoupangUrl(value,{shortOnly=false}={}){
@@ -3975,8 +3919,6 @@ async function handler(req,res){
   if(action==='youtube_publish')return actionYoutubePublish(req,res);
   if(action==='youtube_comment_sync')return actionYoutubeCommentSync(req,res);
   if(action==='instagram_prompt_store')return actionInstagramPromptStore(req,res);
-  if(action==='coupas_history_list')return actionCoupasHistoryList(req,res);
-  if(action==='coupas_history_upsert')return actionCoupasHistoryUpsert(req,res);
   if(action==='coupas_resolve_product')return actionCoupasResolveProduct(req,res);
   if(action==='coupas_threads_permalink')return actionCoupasThreadsPermalink(req,res);
   if(action==='coupas_threads_reply_exists')return actionCoupasThreadsReplyExists(req,res);
@@ -3991,7 +3933,7 @@ async function handler(req,res){
   return send(res,400,{
     ok:false,
     error:'UNKNOWN_CONTENT_ACTION',
-    allowed:['generate','image','store-image','media_upload','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish','facebook_publish','facebook_comment_sync','youtube_title','youtube_publish','youtube_comment_sync','instagram_prompt_store','instagram_prompt_lookup','supabase_status','coupas_history_list','coupas_history_upsert','coupas_resolve_product','coupas_threads_permalink','coupas_threads_reply_exists','ox_topics','ox_generate','ox_library_list','ox_library_get','ox_library_save','ox_library_status','ox_library_delete']
+    allowed:['generate','image','store-image','media_upload','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish','facebook_publish','facebook_comment_sync','youtube_title','youtube_publish','youtube_comment_sync','instagram_prompt_store','instagram_prompt_lookup','supabase_status','coupas_resolve_product','coupas_threads_permalink','coupas_threads_reply_exists','ox_topics','ox_generate','ox_library_list','ox_library_get','ox_library_save','ox_library_status','ox_library_delete']
   });
 }
 
