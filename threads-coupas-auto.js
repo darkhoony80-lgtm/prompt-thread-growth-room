@@ -227,15 +227,16 @@ async function publishParent(job){
   return String(body.id);
 }
 async function permalink(id){
-  const response=await fetch(`/api/threads/permalink?id=${encodeURIComponent(id)}`,{cache:'no-store'});
-  const body=await response.json().catch(()=>({}));
-  return response.ok?String(body.permalink||''):'';
+  try{
+    const body=await adminApi('coupas_threads_permalink',{post_id:String(id)});
+    return String(body.permalink||'');
+  }catch{return ''}
 }
 async function publishLinkedPost(parentId,url){
-  const lookup=await fetch(`/api/threads/reply-exists?parent_id=${encodeURIComponent(parentId)}&text=${encodeURIComponent(String(url).trim())}`,{cache:'no-store'});
-  const existing=await lookup.json().catch(()=>({}));
-  if(!lookup.ok)throw new Error(`Threads 2/2 중복 확인 실패: ${existing.error||lookup.status}`);
-  if(lookup.ok&&existing.exists&&existing.id)return String(existing.id);
+  let existing;
+  try{existing=await adminApi('coupas_threads_reply_exists',{parent_id:String(parentId),text:String(url).trim()})}
+  catch(error){throw new Error(`Threads 2/2 중복 확인 실패: ${error.code||error.message}`)}
+  if(existing.exists&&existing.id)return String(existing.id);
   const response=await fetch('/api/threads/reply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reply_to_id:String(parentId),text:String(url).trim()})});
   const body=await response.json().catch(()=>({}));
   if(!response.ok||!body.id)throw new Error(`Threads 2/2 링크 게시 실패: ${body.detail?.message||body.error||response.status}`);

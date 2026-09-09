@@ -503,6 +503,63 @@ async function actionCoupasResolveProduct(req,res){
   }
 }
 
+async function threadsCoupasSession(req,res){
+  const {getValidSession}=await import('../lib-threads-session.js');
+  const session=await getValidSession(req,res);
+  if(!session?.accessToken)throw Object.assign(new Error('THREADS_NOT_CONNECTED'),{status:401});
+  return session;
+}
+
+async function threadsCoupasGraph(path,accessToken){
+  const separator=path.includes('?')?'&':'?';
+  const response=await fetch(`https://graph.threads.net/v1.0${path}${separator}access_token=${encodeURIComponent(accessToken)}`,{headers:{Accept:'application/json'}});
+  const body=await response.json().catch(()=>({}));
+  return {ok:response.ok,body};
+}
+
+async function actionCoupasThreadsPermalink(req,res){
+  try{
+    const postId=String(req.body?.post_id||'').trim();
+    if(!/^\d{5,40}$/.test(postId))return send(res,400,{ok:false,error:'THREADS_POST_ID_INVALID'});
+    const session=await threadsCoupasSession(req,res);
+    const result=await threadsCoupasGraph(`/${encodeURIComponent(postId)}?fields=${encodeURIComponent('id,permalink')}`,session.accessToken);
+    if(!result.ok)return send(res,502,{ok:false,error:'THREADS_PERMALINK_LOOKUP_FAILED',detail:safeCoupasText(result.body?.error?.message,300)});
+    const permalink=String(result.body?.permalink||'').trim();
+    if(!/^https:\/\/(?:www\.)?threads\.(?:net|com)\//i.test(permalink))return send(res,502,{ok:false,error:'THREADS_PERMALINK_MISSING'});
+    return send(res,200,{ok:true,id:String(result.body?.id||postId),permalink});
+  }catch(error){
+    return send(res,error?.status||502,{ok:false,error:safeAutomationError(error)});
+  }
+}
+
+async function actionCoupasThreadsReplyExists(req,res){
+  try{
+    const parentId=String(req.body?.parent_id||'').trim();
+    const text=String(req.body?.text||'').trim();
+    if(!/^\d{5,40}$/.test(parentId)||!text)return send(res,400,{ok:false,error:'THREADS_REPLY_LOOKUP_INPUT_INVALID'});
+    const session=await threadsCoupasSession(req,res);
+    const me=await threadsCoupasGraph('/me?fields=id,username',session.accessToken);
+    if(!me.ok)return send(res,502,{ok:false,error:'THREADS_ME_FAILED'});
+    const username=String(me.body?.username||'').toLowerCase();
+    let page=await threadsCoupasGraph(`/${encodeURIComponent(parentId)}/replies?fields=${encodeURIComponent('id,text,username,permalink')}&limit=100`,session.accessToken);
+    for(let count=0;page.ok&&count<5;count++){
+      const found=(Array.isArray(page.body?.data)?page.body.data:[]).find(item=>String(item?.username||'').toLowerCase()===username&&String(item?.text||'').trim()===text);
+      if(found)return send(res,200,{ok:true,exists:true,id:String(found.id),permalink:String(found.permalink||'')});
+      const next=page.body?.paging?.next;
+      if(!next)break;
+      let nextUrl;
+      try{nextUrl=new URL(next)}catch{break}
+      if(nextUrl.origin!=='https://graph.threads.net')break;
+      const response=await fetch(nextUrl,{headers:{Accept:'application/json'}});
+      page={ok:response.ok,body:await response.json().catch(()=>({}))};
+    }
+    if(!page.ok)return send(res,502,{ok:false,error:'THREADS_REPLY_LOOKUP_FAILED'});
+    return send(res,200,{ok:true,exists:false});
+  }catch(error){
+    return send(res,error?.status||502,{ok:false,error:safeAutomationError(error)});
+  }
+}
+
 function normalizeInstagramComment(value){
   return String(value||'').normalize('NFKC').toLocaleLowerCase('ko-KR').replace(/\s+/g,' ').trim();
 }
@@ -3921,6 +3978,8 @@ async function handler(req,res){
   if(action==='coupas_history_list')return actionCoupasHistoryList(req,res);
   if(action==='coupas_history_upsert')return actionCoupasHistoryUpsert(req,res);
   if(action==='coupas_resolve_product')return actionCoupasResolveProduct(req,res);
+  if(action==='coupas_threads_permalink')return actionCoupasThreadsPermalink(req,res);
+  if(action==='coupas_threads_reply_exists')return actionCoupasThreadsReplyExists(req,res);
   if(action==='ox_topics')return actionOxTopics(req,res);
   if(action==='ox_generate')return actionOxGenerate(req,res);
   if(action==='ox_library_list')return actionOxLibraryList(req,res);
@@ -3932,7 +3991,7 @@ async function handler(req,res){
   return send(res,400,{
     ok:false,
     error:'UNKNOWN_CONTENT_ACTION',
-    allowed:['generate','image','store-image','media_upload','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish','facebook_publish','facebook_comment_sync','youtube_title','youtube_publish','youtube_comment_sync','instagram_prompt_store','instagram_prompt_lookup','supabase_status','coupas_history_list','coupas_history_upsert','coupas_resolve_product','ox_topics','ox_generate','ox_library_list','ox_library_get','ox_library_save','ox_library_status','ox_library_delete']
+    allowed:['generate','image','store-image','media_upload','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish','facebook_publish','facebook_comment_sync','youtube_title','youtube_publish','youtube_comment_sync','instagram_prompt_store','instagram_prompt_lookup','supabase_status','coupas_history_list','coupas_history_upsert','coupas_resolve_product','coupas_threads_permalink','coupas_threads_reply_exists','ox_topics','ox_generate','ox_library_list','ox_library_get','ox_library_save','ox_library_status','ox_library_delete']
   });
 }
 
