@@ -434,7 +434,19 @@ async function createCoupangDeeplink(productUrl){
 async function actionCoupasResolveProduct(req,res){
   try{
     const originalUrl=String(req.body?.original_coupang_url||'').trim();
+    const productHint=safeCoupasText(req.body?.product_hint,160);
     const resolved=await resolveCoupangProductName(originalUrl);
+    if(resolved.productId){
+      const generatedUrl=await createCoupangDeeplink(resolved.productUrl);
+      const productName=resolved.productName||productHint||`쿠팡 상품 ${resolved.productId}`;
+      return send(res,200,{
+        ok:true,
+        product_name:productName,
+        matched_product:{productId:resolved.productId,productName,productUrl:resolved.productUrl,matchScore:1,matchSource:'direct_product_url'},
+        generated_coupang_url:generatedUrl,
+        candidates:[]
+      });
+    }
     const candidates=(await searchCoupangProducts(resolved.productId||resolved.productName))
       .map(row=>({...row,matchScore:resolved.productId&&row.productId===resolved.productId?1:coupangNameScore(resolved.productName,row.productName)}))
       .sort((a,b)=>b.matchScore-a.matchScore);

@@ -190,6 +190,7 @@ async function readJob(folderInfo){
   try{data=JSON.parse(await jsonFile.text())}catch{throw new Error('JSON 파싱 실패')}
   const rewritten=String(data?.content?.rewritten_text||'').trim();
   const originalUrl=String(data?.content?.coupang_url||'').trim();
+  const productHint=String(data?.content?.product_name||data?.content?.narration||data?.content?.original_text||'').trim().slice(0,160);
   const videoName=String(data?.media?.video||'').trim();
   const imageNames=data?.media?.images;
   if(!rewritten)throw new Error('content.rewritten_text 없음');
@@ -206,7 +207,7 @@ async function readJob(folderInfo){
     if(!/\.(?:jpe?g)$/i.test(file.name))throw new Error(`${safeName} 형식 오류`);
     images.push(file);
   }
-  return {jobId:String(data?.job_id||folderInfo.name).trim().slice(0,160),folderName:folderInfo.name,rewritten,originalUrl,video,images};
+  return {jobId:String(data?.job_id||folderInfo.name).trim().slice(0,160),folderName:folderInfo.name,rewritten,originalUrl,productHint,video,images};
 }
 
 function threadsText(value){
@@ -267,7 +268,7 @@ async function resolveProduct(job,existing){
   if(existing?.generated_coupang_url&&existing?.product_name){
     return {product_name:existing.product_name,generated_coupang_url:existing.generated_coupang_url,matched_product:{matchScore:Number(existing.match_score)||null},candidates:existing.match_candidates||[]};
   }
-  return adminApi('coupas_resolve_product',{original_coupang_url:job.originalUrl});
+  return adminApi('coupas_resolve_product',{original_coupang_url:job.originalUrl,product_hint:job.productHint});
 }
 async function processFolder(folderInfo){
   let job={jobId:folderInfo.name,folderName:folderInfo.name,originalUrl:''};
