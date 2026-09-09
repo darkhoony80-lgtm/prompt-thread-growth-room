@@ -389,7 +389,7 @@ function coupangProductRows(body){
     productUrl:safeCoupasText(row?.productUrl,1200),
     imageUrl:safeCoupasText(row?.productImage||row?.imageUrl,1200),
     price:Number(row?.productPrice??row?.price)||null
-  })).filter(row=>row.productId&&row.productName&&row.productUrl).slice(0,20);
+  })).filter(row=>row.productId&&row.productName&&row.productUrl).slice(0,10);
 }
 
 function coupangNameTokens(value){
@@ -412,7 +412,7 @@ function coupangNameScore(source,candidate){
 
 async function searchCoupangProducts(productName){
   try{
-    const params=new URLSearchParams({keyword:String(productName).slice(0,120),limit:'20'});
+    const params=new URLSearchParams({keyword:String(productName).slice(0,120),limit:'10'});
     return coupangProductRows(await coupangApiRequest('GET',COUPANG_SEARCH_PATH,{query:params.toString()}));
   }catch(error){throw new Error(`COUPANG_PRODUCT_SEARCH_FAILED: ${safeAutomationError(error)}`)}
 }
