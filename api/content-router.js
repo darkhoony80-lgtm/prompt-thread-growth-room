@@ -333,14 +333,18 @@ function productTitleFromHtml(html){
 }
 
 async function resolveCoupangProductName(value){
-  const source=requireCoupangUrl(value,{shortOnly:true});
+  const source=requireCoupangUrl(value);
   const headers={'User-Agent':'Mozilla/5.0 (compatible; PromptThreadGrowthRoom/1.0)','Accept':'text/html,application/xhtml+xml'};
-  const redirect=await fetch(source,{redirect:'manual',headers,signal:AbortSignal.timeout(15000)});
-  const location=String(redirect.headers.get('location')||'').trim();
-  const finalUrl=location?requireCoupangUrl(new URL(location,source).toString()):requireCoupangUrl(redirect.url||source.toString());
+  let redirect=null;
+  let finalUrl=source;
+  if(source.hostname.toLowerCase()==='link.coupang.com'){
+    redirect=await fetch(source,{redirect:'manual',headers,signal:AbortSignal.timeout(15000)});
+    const location=String(redirect.headers.get('location')||'').trim();
+    finalUrl=location?requireCoupangUrl(new URL(location,source).toString()):requireCoupangUrl(redirect.url||source.toString());
+  }
   const productId=finalUrl.pathname.match(/\/vp\/products\/(\d+)/i)?.[1]||'';
   if(productId)return {productId,productName:'',productUrl:finalUrl.toString()};
-  const response=redirect.ok?redirect:await fetch(finalUrl,{redirect:'follow',headers,signal:AbortSignal.timeout(15000)});
+  const response=redirect?.ok?redirect:await fetch(finalUrl,{redirect:'follow',headers,signal:AbortSignal.timeout(15000)});
   if(!response.ok)throw new Error(`COUPANG_PRODUCT_PAGE_HTTP_${response.status}`);
   const html=(await response.text()).slice(0,2_000_000);
   const productName=productTitleFromHtml(html);
