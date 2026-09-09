@@ -31,6 +31,10 @@ const OX_MODEL='stealth/ox-alpha';
 const OX_CONTENT_TABLE='ox_content_library';
 const OX_TYPES=['novel','longform','blog'];
 const OX_STATUSES=['IDEA','DRAFT','READY','USED'];
+const THREADS_COUPAS_TABLE='threads_coupas_publish_jobs';
+const COUPANG_API_ORIGIN='https://api-gateway.coupang.com';
+const COUPANG_SEARCH_PATH='/v2/providers/affiliate_open_api/apis/openapi/products/search';
+const COUPANG_DEEPLINK_PATH='/v2/providers/affiliate_open_api/apis/openapi/v1/deeplink';
 const AI_IMAGE_CTA_PATH="M31.87 35.09 L31.87 24.24 L28.77 24.24 L28.77 32.24 L23.73 32.24 L23.73 10.64 L28.77 10.64 L28.77 19.93 L31.87 19.93 L31.87 9.84 L36.96 9.84 L36.96 35.09 Z M21.08 29.84 C18.25 30.08 12.58 30.21 4.08 30.21 L4.08 12.24 L20.00 12.24 L20.00 16.57 L9.15 16.57 L9.15 25.92 C14.08 25.92 17.99 25.79 20.88 25.51 Z M35.58 49.44 C33.09 49.05 30.52 48.01 27.85 46.34 C25.18 44.66 23.29 42.97 22.17 41.26 C21.18 42.90 19.38 44.54 16.77 46.16 C14.15 47.79 11.58 48.88 9.06 49.44 L5.97 45.38 C9.92 44.88 13.18 43.58 15.75 41.50 C18.32 39.41 19.61 37.30 19.61 35.17 L19.61 33.41 L24.73 33.41 L24.73 35.13 C24.73 37.25 26.02 39.35 28.60 41.45 C31.18 43.54 34.45 44.86 38.43 45.42 Z M44.65 27.52 L44.65 23.19 L70.30 23.19 C70.56 19.43 70.69 16.62 70.69 14.77 L49.98 14.77 L49.98 10.48 L75.86 10.48 C75.86 13.72 75.67 17.96 75.30 23.19 L81.35 23.19 L81.35 27.52 Z M50.10 48.73 L50.10 37.61 L70.85 37.61 L70.85 34.84 L50.10 34.84 L50.10 30.56 L75.98 30.56 L75.98 41.63 L55.23 41.63 L55.23 44.46 L76.99 44.46 L76.99 48.73 Z M133.28 21.70 L133.28 28.49 L128.17 28.49 L128.17 9.84 L133.28 9.84 L133.28 17.37 L139.29 17.37 L139.29 21.70 Z M124.30 26.15 C119.49 26.48 112.44 26.64 103.17 26.64 L103.17 11.09 L122.49 11.09 L122.49 15.46 L108.30 15.46 L108.30 22.31 C115.10 22.31 120.32 22.15 123.97 21.82 Z M108.47 48.52 L108.47 37.22 L128.17 37.22 L128.17 34.49 L108.47 34.49 L108.47 30.17 L133.28 30.17 L133.28 41.30 L113.59 41.30 L113.59 44.19 L134.31 44.19 L134.31 48.52 Z M145.69 31.48 L145.69 12.78 L164.62 12.78 L164.62 15.98 L172.14 15.98 L172.14 9.84 L177.23 9.84 L177.23 38.45 L172.14 38.45 L172.14 28.28 L164.62 28.28 L164.62 31.48 Z M159.59 17.10 L150.71 17.10 L150.71 27.15 L159.59 27.15 Z M164.62 24.20 L172.14 24.20 L172.14 20.10 L164.62 20.10 Z M151.74 48.03 L151.74 34.54 L156.88 34.54 L156.88 43.70 L178.03 43.70 L178.03 48.03 Z M205.86 26.95 L205.86 11.28 L231.12 11.28 L231.12 26.95 Z M226.02 15.61 L211.00 15.61 L211.00 22.66 L226.02 22.66 Z M221.09 35.85 L221.09 49.40 L215.93 49.40 L215.93 35.85 L200.18 35.85 L200.18 31.48 L236.89 31.48 L236.89 35.85 Z M242.18 44.11 L242.18 39.87 L252.16 39.87 L252.16 33.61 L247.30 33.61 L247.30 21.35 L268.47 21.35 L268.47 17.53 L247.39 17.53 L247.39 13.29 L273.64 13.29 L273.64 25.35 L252.47 25.35 L252.47 29.37 L274.44 29.37 L274.44 33.61 L269.31 33.61 L269.31 39.87 L278.89 39.87 L278.89 44.11 Z M257.33 39.87 L264.14 39.87 L264.14 33.61 L257.33 33.61 Z M324.21 15.52 L313.61 45.71 L307.02 45.71 L296.54 15.52 L302.88 15.52 L309.77 37.39 C310.06 38.30 310.26 39.28 310.39 40.32 L310.51 40.32 C310.56 39.55 310.78 38.55 311.17 37.32 L318.08 15.52 Z M326.16 31.01 C326.16 26.26 327.52 22.42 330.25 19.46 C332.98 16.51 336.60 15.03 341.13 15.03 C345.42 15.03 348.88 16.46 351.49 19.33 C354.11 22.19 355.42 25.87 355.42 30.35 C355.42 35.08 354.07 38.91 351.37 41.85 C348.67 44.78 345.10 46.25 340.66 46.25 C336.33 46.25 332.84 44.82 330.17 41.96 C327.49 39.10 326.16 35.45 326.16 31.01 Z M332.31 30.68 C332.31 33.74 333.06 36.25 334.57 38.22 C336.09 40.18 338.14 41.16 340.74 41.16 C343.43 41.16 345.53 40.23 347.02 38.36 C348.52 36.49 349.27 33.96 349.27 30.76 C349.27 27.47 348.54 24.87 347.09 22.97 C345.65 21.07 343.59 20.12 340.94 20.12 C338.26 20.12 336.15 21.11 334.62 23.10 C333.08 25.09 332.31 27.62 332.31 30.68 Z M386.26 45.71 L379.89 45.71 L377.45 38.49 L366.11 38.49 L363.73 45.71 L357.35 45.71 L368.53 15.52 L375.27 15.52 Z M375.99 33.86 L372.30 22.93 C372.15 22.49 371.99 21.66 371.83 20.43 L371.68 20.43 C371.57 21.34 371.40 22.16 371.17 22.89 L367.46 33.86 Z M407.70 17.53 L407.70 13.29 L437.10 13.29 L437.10 17.53 Z M407.41 33.20 L407.41 28.96 L413.03 28.96 L412.58 19.30 L417.70 19.30 L418.03 28.96 L426.73 28.96 L427.10 19.30 L432.22 19.30 L431.65 28.96 L437.39 28.96 L437.39 33.20 Z M404.04 44.03 L404.04 39.74 L440.75 39.74 L440.75 44.03 Z M446.04 33.65 L446.04 29.37 L461.79 29.37 L461.79 26.80 L451.85 26.80 L451.85 16.53 L471.82 16.53 L471.82 14.50 L451.85 14.50 L451.85 10.32 L476.95 10.32 L476.95 20.34 L456.98 20.34 L456.98 22.62 L477.83 22.62 L477.83 26.80 L466.96 26.80 L466.96 29.37 L482.75 29.37 L482.75 33.65 Z M451.46 48.64 L451.46 35.81 L477.38 35.81 L477.38 48.64 Z M472.25 40.09 L456.59 40.09 L456.59 44.36 L472.25 44.36 Z M491.70 17.53 L491.70 13.29 L521.10 13.29 L521.10 17.53 Z M491.41 33.20 L491.41 28.96 L497.03 28.96 L496.58 19.30 L501.70 19.30 L502.03 28.96 L510.73 28.96 L511.10 19.30 L516.22 19.30 L515.65 28.96 L521.39 28.96 L521.39 33.20 Z M488.04 44.03 L488.04 39.74 L524.75 39.74 L524.75 44.03 Z M535.46 33.41 L535.46 13.33 L561.50 13.33 L561.50 17.58 L540.63 17.58 L540.63 21.18 L560.38 21.18 L560.38 25.43 L540.63 25.43 L540.63 29.16 L562.14 29.16 L562.14 33.41 Z M530.04 44.11 L530.04 39.83 L566.75 39.83 L566.75 44.11 Z M586.81 43.95 L586.81 39.66 L602.56 39.66 L602.56 32.48 L592.35 32.48 L592.35 12.82 L597.52 12.82 L597.52 18.79 L612.81 18.79 L612.81 12.82 L617.94 12.82 L617.94 32.48 L607.73 32.48 L607.73 39.66 L623.52 39.66 L623.52 43.95 Z M612.81 23.11 L597.52 23.11 L597.52 28.20 L612.81 28.20 Z M657.71 49.40 L657.71 29.63 L654.10 29.63 L654.10 48.23 L649.01 48.23 L649.01 10.64 L654.10 10.64 L654.10 25.31 L657.71 25.31 L657.71 9.84 L662.83 9.84 L662.83 49.40 Z M647.49 36.98 C645.57 37.32 643.67 37.54 641.80 37.63 C639.94 37.73 636.36 37.78 631.09 37.78 L631.09 12.96 L636.15 12.96 L636.15 33.45 C640.29 33.45 643.90 33.22 646.96 32.77 Z M676.66 31.44 L676.66 13.33 L701.67 13.33 L701.67 17.62 L681.82 17.62 L681.82 27.15 L702.27 27.15 L702.27 31.44 Z M670.81 43.58 L670.81 39.29 L707.52 39.29 L707.52 43.58 Z M735.02 32.57 L735.02 28.24 L741.83 28.24 L741.83 22.31 L735.25 22.31 L735.25 17.99 L741.83 17.99 L741.83 9.84 L746.87 9.84 L746.87 49.40 L741.83 49.40 L741.83 32.57 Z M736.37 39.62 C733.11 40.26 725.88 40.58 714.70 40.58 L714.70 23.87 L728.09 23.87 L728.09 17.23 L714.78 17.23 L714.78 12.90 L733.17 12.90 L733.17 28.16 L719.78 28.16 L719.78 36.30 C727.22 36.41 732.53 36.13 735.70 35.46 Z M754.81 43.95 L754.81 39.70 L764.02 39.70 L764.02 30.60 C761.01 28.72 759.51 26.09 759.51 22.70 C759.51 19.56 760.80 17.08 763.37 15.26 C765.95 13.44 769.21 12.53 773.17 12.53 C777.08 12.53 780.32 13.44 782.91 15.26 C785.49 17.08 786.78 19.56 786.78 22.70 C786.78 26.04 785.29 28.67 782.31 30.60 L782.31 39.70 L791.52 39.70 L791.52 43.95 Z M773.17 16.78 C770.58 16.78 768.53 17.31 767.02 18.38 C765.51 19.44 764.76 20.88 764.76 22.70 C764.76 24.55 765.51 26.00 767.02 27.06 C768.53 28.12 770.58 28.65 773.17 28.65 C775.74 28.65 777.77 28.12 779.28 27.05 C780.78 25.98 781.53 24.53 781.53 22.70 C781.53 20.88 780.78 19.44 779.29 18.38 C777.79 17.31 775.75 16.78 773.17 16.78 Z M769.08 39.70 L777.25 39.70 L777.25 32.53 C775.89 32.77 774.53 32.89 773.17 32.89 C771.80 32.89 770.44 32.77 769.08 32.53 Z M846.56 24.51 C846.56 30.59 841.05 39.46 830.01 51.13 C819.12 40.37 813.67 31.49 813.67 24.51 C813.67 22.02 814.48 19.84 816.11 17.96 C817.78 16.02 819.79 15.05 822.16 15.05 C826.04 15.05 828.67 17.23 830.05 21.59 C830.89 19.39 831.77 17.83 832.70 16.92 C833.96 15.67 835.69 15.05 837.91 15.05 C840.53 15.05 842.65 15.98 844.27 17.84 C845.80 19.61 846.56 21.83 846.56 24.51 Z";
 const AI_IMAGE_CTA_BOUNDS={x:4.0811,y:9.8438,width:842.4815,height:41.2822};
 
@@ -285,6 +289,218 @@ async function updateInstagramDelivery(commentId,changes){
     body:{...changes,updated_at:new Date().toISOString()},
     prefer:'return=minimal'
   });
+}
+
+const THREADS_COUPAS_STATUSES=['pending','processing','published','failed','stopped','post_published_link_pending','post_published_reply_failed'];
+
+function safeCoupasText(value,max=500){
+  return String(value||'').replace(/[\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').trim().slice(0,max);
+}
+
+function normalizeCoupasJob(input){
+  const jobId=safeCoupasText(input?.job_id,160);
+  const folderName=safeCoupasText(input?.folder_name,240);
+  const status=safeCoupasText(input?.status,60);
+  if(!jobId||!folderName)throw new Error('COUPAS_JOB_ID_AND_FOLDER_REQUIRED');
+  if(!THREADS_COUPAS_STATUSES.includes(status))throw new Error('COUPAS_JOB_STATUS_INVALID');
+  const now=new Date().toISOString();
+  return {
+    job_id:jobId,
+    folder_name:folderName,
+    status,
+    started_at:input?.started_at||null,
+    completed_at:status==='published'?(input?.completed_at||now):(input?.completed_at||null),
+    product_name:safeCoupasText(input?.product_name,500)||null,
+    original_coupang_url:safeCoupasText(input?.original_coupang_url,1200)||null,
+    generated_coupang_url:safeCoupasText(input?.generated_coupang_url,1200)||null,
+    threads_post_id:safeCoupasText(input?.threads_post_id,100)||null,
+    threads_post_url:safeCoupasText(input?.threads_post_url,1200)||null,
+    reply_id:safeCoupasText(input?.reply_id,100)||null,
+    error:safeCoupasText(input?.error,1000)||null,
+    retry_count:Math.max(0,Math.min(1000,Number(input?.retry_count)||0)),
+    match_score:Number.isFinite(Number(input?.match_score))?Math.max(0,Math.min(1,Number(input.match_score))):null,
+    match_candidates:Array.isArray(input?.match_candidates)?input.match_candidates.slice(0,5):[],
+    updated_at:now
+  };
+}
+
+async function actionCoupasHistoryList(req,res){
+  try{
+    const items=[];
+    for(let offset=0;offset<50_000;offset+=1000){
+      const rows=await supabaseRest(`${THREADS_COUPAS_TABLE}?select=job_id,folder_name,status,started_at,completed_at,product_name,original_coupang_url,generated_coupang_url,threads_post_id,threads_post_url,reply_id,error,retry_count,match_score,match_candidates,updated_at&order=updated_at.desc&limit=1000&offset=${offset}`);
+      const batch=Array.isArray(rows)?rows:[];items.push(...batch);
+      if(batch.length<1000)break;
+    }
+    return send(res,200,{ok:true,items});
+  }catch(error){
+    return send(res,error?.status||502,{ok:false,error:'COUPAS_HISTORY_LIST_FAILED',detail:safeAutomationError(error)});
+  }
+}
+
+async function actionCoupasHistoryUpsert(req,res){
+  try{
+    const record=normalizeCoupasJob(req.body?.item||req.body);
+    const rows=await supabaseRest(`${THREADS_COUPAS_TABLE}?on_conflict=job_id`,{
+      method:'POST',body:[record],prefer:'resolution=merge-duplicates,return=representation'
+    });
+    return send(res,200,{ok:true,item:Array.isArray(rows)?rows[0]||record:record});
+  }catch(error){
+    return send(res,error?.status||400,{ok:false,error:'COUPAS_HISTORY_UPSERT_FAILED',detail:safeAutomationError(error)});
+  }
+}
+
+function requireCoupangUrl(value,{shortOnly=false}={}){
+  let raw=String(value||'').trim();
+  if(/^https:\/\/link\.coupang\.com\/a\/[^?&]+&/i.test(raw))raw=raw.replace('&','?');
+  let url;
+  try{url=new URL(raw)}catch{throw new Error('COUPANG_URL_INVALID')}
+  const host=url.hostname.toLowerCase();
+  const allowed=shortOnly?host==='link.coupang.com':host==='link.coupang.com'||host==='coupang.com'||host.endsWith('.coupang.com');
+  if(url.protocol!=='https:'||!allowed)throw new Error('COUPANG_URL_INVALID');
+  url.username='';url.password='';url.hash='';
+  return url;
+}
+
+function decodeHtmlText(value){
+  const named={amp:'&',quot:'"',apos:"'",lt:'<',gt:'>',nbsp:' '};
+  return String(value||'').replace(/&#(x?[0-9a-f]+);|&([a-z]+);/gi,(all,numeric,name)=>{
+    if(numeric){
+      const code=numeric[0].toLowerCase()==='x'?parseInt(numeric.slice(1),16):parseInt(numeric,10);
+      return Number.isFinite(code)?String.fromCodePoint(code):all;
+    }
+    return named[String(name||'').toLowerCase()]??all;
+  }).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+}
+
+function productTitleFromHtml(html){
+  const source=String(html||'');
+  const patterns=[
+    /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i,
+    /<title[^>]*>([\s\S]*?)<\/title>/i
+  ];
+  for(const pattern of patterns){
+    const value=decodeHtmlText(source.match(pattern)?.[1]||'')
+      .replace(/\s*[-|:]\s*쿠팡!?\s*$/i,'').trim();
+    if(value&&value.length>=3)return value.slice(0,500);
+  }
+  return '';
+}
+
+async function resolveCoupangProductName(value){
+  const source=requireCoupangUrl(value,{shortOnly:true});
+  const headers={'User-Agent':'Mozilla/5.0 (compatible; PromptThreadGrowthRoom/1.0)','Accept':'text/html,application/xhtml+xml'};
+  const redirect=await fetch(source,{redirect:'manual',headers,signal:AbortSignal.timeout(15000)});
+  const location=String(redirect.headers.get('location')||'').trim();
+  const finalUrl=location?requireCoupangUrl(new URL(location,source).toString()):requireCoupangUrl(redirect.url||source.toString());
+  const productId=finalUrl.pathname.match(/\/vp\/products\/(\d+)/i)?.[1]||'';
+  if(productId)return {productId,productName:'',productUrl:finalUrl.toString()};
+  const response=redirect.ok?redirect:await fetch(finalUrl,{redirect:'follow',headers,signal:AbortSignal.timeout(15000)});
+  if(!response.ok)throw new Error(`COUPANG_PRODUCT_PAGE_HTTP_${response.status}`);
+  const html=(await response.text()).slice(0,2_000_000);
+  const productName=productTitleFromHtml(html);
+  if(!productName)throw new Error('COUPANG_PRODUCT_NAME_NOT_FOUND');
+  return {productId:'',productName,productUrl:finalUrl.toString()};
+}
+
+function coupangCredentials(){
+  const accessKey=String(process.env.COUPANG_PARTNERS_ACCESS_KEY||'').trim();
+  const secretKey=String(process.env.COUPANG_PARTNERS_SECRET_KEY||'').trim();
+  if(!accessKey||!secretKey)throw new Error('COUPANG_PARTNERS_NOT_CONFIGURED');
+  return {accessKey,secretKey};
+}
+
+function coupangSignedDate(date=new Date()){
+  return date.toISOString().replace(/[-:]/g,'').replace(/^\d{2}(\d{6}T\d{6})\.\d{3}Z$/,'$1Z');
+}
+
+async function coupangApiRequest(method,path,{query='',body=null}={}){
+  const {accessKey,secretKey}=coupangCredentials();
+  const signedDate=coupangSignedDate();
+  const signature=createHmac('sha256',secretKey).update(`${signedDate}${method}${path}${query}`).digest('hex');
+  const response=await fetch(`${COUPANG_API_ORIGIN}${path}${query?`?${query}`:''}`,{
+    method,
+    headers:{
+      Accept:'application/json',
+      Authorization:`CEA algorithm=HmacSHA256, access-key=${accessKey}, signed-date=${signedDate}, signature=${signature}`,
+      ...(body!=null?{'Content-Type':'application/json;charset=UTF-8'}:{})
+    },
+    ...(body!=null?{body:JSON.stringify(body)}:{}),
+    signal:AbortSignal.timeout(15000)
+  });
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok||String(data?.rCode||'0')!=='0'){
+    const message=safeCoupasText(data?.rMessage||data?.message||`COUPANG_API_HTTP_${response.status}`,300);
+    throw new Error(message||'COUPANG_PARTNERS_API_FAILED');
+  }
+  return data;
+}
+
+function coupangProductRows(body){
+  const rows=body?.data?.productData||body?.data||body?.productData||[];
+  return (Array.isArray(rows)?rows:[]).map(row=>({
+    productId:String(row?.productId||''),
+    productName:safeCoupasText(row?.productName,500),
+    productUrl:safeCoupasText(row?.productUrl,1200),
+    imageUrl:safeCoupasText(row?.productImage||row?.imageUrl,1200),
+    price:Number(row?.productPrice??row?.price)||null
+  })).filter(row=>row.productId&&row.productName&&row.productUrl).slice(0,20);
+}
+
+function coupangNameTokens(value){
+  const stop=new Set(['무료배송','로켓배송','쿠팡','정품','공식','국내','당일','할인','특가','단품']);
+  return String(value||'').normalize('NFKC').toLocaleLowerCase('ko-KR')
+    .replace(/[^0-9a-z가-힣]+/g,' ').split(/\s+/).filter(token=>token.length>1&&!stop.has(token));
+}
+
+function coupangNameScore(source,candidate){
+  const left=coupangNameTokens(source),right=coupangNameTokens(candidate);
+  if(!left.length||!right.length)return 0;
+  const rightSet=new Set(right),shared=left.filter(token=>rightSet.has(token)).length;
+  const tokenScore=(2*shared)/(left.length+right.length);
+  const sourceKey=left.join(''),candidateKey=right.join('');
+  const contains=(sourceKey.includes(candidateKey)||candidateKey.includes(sourceKey))?0.15:0;
+  const important=left.filter(token=>/\d/.test(token)&&/[a-z]/i.test(token));
+  const modelPenalty=(important.length&&!important.some(token=>candidateKey.includes(token)))?0.25:0;
+  return Math.max(0,Math.min(1,tokenScore+contains-modelPenalty));
+}
+
+async function searchCoupangProducts(productName){
+  try{
+    const params=new URLSearchParams({keyword:String(productName).slice(0,120),limit:'20'});
+    return coupangProductRows(await coupangApiRequest('GET',COUPANG_SEARCH_PATH,{query:params.toString()}));
+  }catch(error){throw new Error(`COUPANG_PRODUCT_SEARCH_FAILED: ${safeAutomationError(error)}`)}
+}
+
+async function createCoupangDeeplink(productUrl){
+  try{
+    const body=await coupangApiRequest('POST',COUPANG_DEEPLINK_PATH,{body:{coupangUrls:[requireCoupangUrl(productUrl).toString()]}});
+    const row=Array.isArray(body?.data)?body.data[0]:body?.data;
+    const url=safeCoupasText(row?.shortenUrl||row?.shortUrl||row?.landingUrl,1200);
+    if(!url||!/^https:\/\/link\.coupang\.com\//i.test(url))throw new Error('COUPANG_DEEPLINK_NOT_RETURNED');
+    return url;
+  }catch(error){throw new Error(`COUPANG_DEEPLINK_CREATE_FAILED: ${safeAutomationError(error)}`)}
+}
+
+async function actionCoupasResolveProduct(req,res){
+  try{
+    const originalUrl=String(req.body?.original_coupang_url||'').trim();
+    const resolved=await resolveCoupangProductName(originalUrl);
+    const candidates=(await searchCoupangProducts(resolved.productId||resolved.productName))
+      .map(row=>({...row,matchScore:resolved.productId&&row.productId===resolved.productId?1:coupangNameScore(resolved.productName,row.productName)}))
+      .sort((a,b)=>b.matchScore-a.matchScore);
+    const best=candidates[0];
+    const second=candidates[1];
+    if(!best||best.matchScore<.58||(second&&best.matchScore-second.matchScore<.06&&best.productId!==second.productId)){
+      return send(res,409,{ok:false,error:'COUPANG_PRODUCT_MATCH_FAILED',product_name:resolved.productName||null,product_id:resolved.productId||null,candidates:candidates.slice(0,5)});
+    }
+    const generatedUrl=await createCoupangDeeplink(best.productUrl);
+    return send(res,200,{ok:true,product_name:resolved.productName||best.productName,matched_product:best,generated_coupang_url:generatedUrl,candidates:candidates.slice(0,5)});
+  }catch(error){
+    console.error('[COUPAS_PRODUCT_RESOLVE_FAILED]',JSON.stringify({message:safeAutomationError(error)}));
+    return send(res,502,{ok:false,error:'COUPAS_PRODUCT_RESOLVE_FAILED',detail:safeAutomationError(error)});
+  }
 }
 
 function normalizeInstagramComment(value){
@@ -3702,6 +3918,9 @@ async function handler(req,res){
   if(action==='youtube_publish')return actionYoutubePublish(req,res);
   if(action==='youtube_comment_sync')return actionYoutubeCommentSync(req,res);
   if(action==='instagram_prompt_store')return actionInstagramPromptStore(req,res);
+  if(action==='coupas_history_list')return actionCoupasHistoryList(req,res);
+  if(action==='coupas_history_upsert')return actionCoupasHistoryUpsert(req,res);
+  if(action==='coupas_resolve_product')return actionCoupasResolveProduct(req,res);
   if(action==='ox_topics')return actionOxTopics(req,res);
   if(action==='ox_generate')return actionOxGenerate(req,res);
   if(action==='ox_library_list')return actionOxLibraryList(req,res);
@@ -3713,7 +3932,7 @@ async function handler(req,res){
   return send(res,400,{
     ok:false,
     error:'UNKNOWN_CONTENT_ACTION',
-    allowed:['generate','image','store-image','media_upload','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish','facebook_publish','facebook_comment_sync','youtube_title','youtube_publish','youtube_comment_sync','instagram_prompt_store','instagram_prompt_lookup','supabase_status','ox_topics','ox_generate','ox_library_list','ox_library_get','ox_library_save','ox_library_status','ox_library_delete']
+    allowed:['generate','image','store-image','media_upload','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish','facebook_publish','facebook_comment_sync','youtube_title','youtube_publish','youtube_comment_sync','instagram_prompt_store','instagram_prompt_lookup','supabase_status','coupas_history_list','coupas_history_upsert','coupas_resolve_product','ox_topics','ox_generate','ox_library_list','ox_library_get','ox_library_save','ox_library_status','ox_library_delete']
   });
 }
 
