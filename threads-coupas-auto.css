@@ -13,5 +13,7 @@
 .coupas-result{grid-template-columns:1fr}
 .coupas-result-error{color:#ff8f8f;white-space:pre-wrap;word-break:break-word}
 .coupas-result a{color:var(--a);text-decoration:none}
+.coupas-result .post-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.coupas-delete{color:#ff8f8f;border-color:#633737}
 @media(max-width:900px){.coupas-layout{grid-template-columns:1fr}}
 @media(max-width:520px){.coupas-progress{grid-template-columns:1fr 1fr}}
