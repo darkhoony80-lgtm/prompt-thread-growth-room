@@ -9,13 +9,16 @@ const PLATFORM_BODY_CTA={
  threads:'링크/추가 내용은 첫 댓글에 남겨둘게 👇',
  instagram:'필요하면 댓글 남겨줘. DM으로 보내줄게 💌'
 };
-const INSTAGRAM_AI_PROMPT_HEADER=`✨이쁜사진  프롬프트 필요해?👇댓글에 프롬프트 남겨줘
+const INSTAGRAM_AI_PROMPT_HEADER=`✨이쁜 힉스필드 영상  프롬프트 필요해?
+👇댓글에 프롬프트 남겨줘
 팔로우 안하면 DM이 스팸인식돼서 내가 못보내ㅠ
 팔로우하고 댓글 달아줘!
 
-Want this prompt?👇Comment PROMPT
-I can't DM you if you don't follow -
-it goes to spamㅠFollow + comment!`;
+✨ Need the prompt for this Higgsfield video?👇
+Comment PROMPT below
+
+I can't DM you if you don't follow - it goes to spamㅠ
+Follow first, then comment PROMPT!`;
 let candidates=[null,null,null,null];
 let instagramCarousel=null,instagramPublishing=false,instagramModalOpen=false;
 function read(k,d=[]){try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}}
@@ -146,8 +149,8 @@ function withPlatformBodyCta(value,contentType,platform){
  const body=withoutLegacyPromptCta(value);
   if(platform==='instagram'&&contentType==='AI_PROMPT'){
    const trimmed=String(body||'').trim();
-   const alreadyHasPrefix=trimmed.startsWith(INSTAGRAM_AI_PROMPT_HEADER);
-   return alreadyHasPrefix ? trimmed : `${INSTAGRAM_AI_PROMPT_HEADER}${trimmed?`\n\n${trimmed}`:''}`;
+   const hookLines=trimmed.split(/\r?\n/).map(line=>line.trim()).filter(Boolean).slice(0,2).join('\n');
+   return `${INSTAGRAM_AI_PROMPT_HEADER}${hookLines?`\n\n${hookLines}`:''}`;
   }
  return [body,PLATFORM_BODY_CTA[platform]].filter(Boolean).join('\n\n');
 }
