@@ -427,6 +427,8 @@ function renderVideoMergeDraft(i){
  if(bgmInput)bgmInput.accept='audio/*,.mp3,.m4a,.wav,.aac,.ogg,audio/mpeg,audio/mp3,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,audio/aac,audio/ogg,application/ogg';
  const encodeButton=box.querySelector('button[onclick^="PostAuto.encodeMergeVideos"]');
  if(encodeButton)encodeButton.disabled=draft.encoding||(!draft.bgmFile&&draft.files.length<2);
+ box.querySelectorAll('.cm-merge-preview').forEach(video=>{video.volume=audioVolumeGain(draft.originalVolume,30)});
+ const bgmPreview=box.querySelector('.cm-bgm-preview');if(bgmPreview)bgmPreview.volume=audioVolumeGain(draft.bgmVolume,70);
 }
 function setVideoMergeStatus(i,text){
  const draft=videoMergeDraft(i);if(draft)draft.status=String(text||'');
@@ -457,6 +459,7 @@ function cancelVideoMerge(i){const draft=videoMergeDraft(i);if(!draft||draft.enc
 function audioFileExtension(file){return String(file?.name||'').split('.').pop().toLowerCase()}
 function validateBgmFile(file){const mime=String(file?.type||'').toLowerCase(),extension=audioFileExtension(file);if(!['mp3','m4a','wav','aac','ogg'].includes(extension)||(mime&&!mime.startsWith('audio/')&&mime!=='application/ogg'))throw new Error('BGM은 MP3, M4A, WAV, AAC, OGG 파일만 사용할 수 있습니다.');if(Number(file?.size||0)>100*1024*1024)throw new Error('BGM 파일은 100MB 이하여야 합니다.');return file}
 function clampAudioVolume(value,fallback){const number=Number(value);return Math.min(100,Math.max(0,Number.isFinite(number)?Math.round(number):fallback))}
+function audioVolumeGain(value,fallback){const ratio=clampAudioVolume(value,fallback)/100;return Number((ratio*ratio).toFixed(4))}
 async function videoMergeDraftFromMaster(i){
  const master=ensureMaster(i),videos=(master?.media||[]).filter(item=>item.type==='video'&&item.url);
  if(!videos.length)throw new Error('BGM을 합칠 영상을 먼저 추가해 주세요.');
@@ -469,7 +472,7 @@ async function videoMergeDraftFromMaster(i){
 }
 async function addVideoMergeBgm(i,fileList){const file=Array.from(fileList||[])[0];if(!file)return;try{validateBgmFile(file);let draft=videoMergeDraft(i);if(!draft)draft=await videoMergeDraftFromMaster(i);if(draft.encoding)return;if(draft.bgmPreviewUrl)URL.revokeObjectURL(draft.bgmPreviewUrl);draft.bgmFile=file;draft.bgmPreviewUrl=URL.createObjectURL(file);draft.originalVolume=clampAudioVolume(draft.originalVolume,30);draft.bgmVolume=clampAudioVolume(draft.bgmVolume,70);draft.status='BGM이 추가됐습니다. 음량을 조절한 뒤 인코딩하세요.';renderVideoMergeDraft(i)}catch(e){alert('BGM 추가 실패: '+String(e?.message||e))}}
 function removeVideoMergeBgm(i){const draft=videoMergeDraft(i);if(!draft||draft.encoding)return;if(draft.bgmPreviewUrl)URL.revokeObjectURL(draft.bgmPreviewUrl);draft.bgmFile=null;draft.bgmPreviewUrl='';draft.status='BGM을 삭제했습니다. 원본 영상 소리로 인코딩됩니다.';renderVideoMergeDraft(i)}
-function setVideoMergeVolume(i,type,value){const draft=videoMergeDraft(i);if(!draft||draft.encoding)return;const amount=clampAudioVolume(value,type==='original'?30:70);if(type==='original')draft.originalVolume=amount;else draft.bgmVolume=amount;const label=document.getElementById(type==='original'?`v3original-volume-${i}`:`v3bgm-volume-${i}`);if(label)label.textContent=`${amount}%`}
+function setVideoMergeVolume(i,type,value){const draft=videoMergeDraft(i);if(!draft||draft.encoding)return;const amount=clampAudioVolume(value,type==='original'?30:70),gain=audioVolumeGain(amount,0);if(type==='original'){draft.originalVolume=amount;document.querySelectorAll(`#v3merge-${i} .cm-merge-preview`).forEach(video=>{video.volume=gain})}else{draft.bgmVolume=amount;const preview=document.querySelector(`#v3merge-${i} .cm-bgm-preview`);if(preview)preview.volume=gain}const label=document.getElementById(type==='original'?`v3original-volume-${i}`:`v3bgm-volume-${i}`);if(label)label.textContent=`${amount}%`}
 async function videoDuration(file){
  const info=await videoMetadata(file);
  return info.duration;
@@ -536,8 +539,8 @@ async function mergeVideoFiles(files,status,{bgmFile=null,originalVolume=30,bgmV
   const concatCode=await ffmpeg.exec(['-y','-f','concat','-safe','0','-i','merge-list.txt','-c','copy','-movflags','+faststart',concatOutput]);
   if(concatCode!==0)throw new Error('변환한 영상 연결에 실패했습니다.');
   if(bgmFile){
-   const duration=infos.reduce((sum,info)=>sum+info.duration,0),fadeDuration=Math.min(1,duration),fadeStart=Math.max(0,duration-fadeDuration),originalGain=clampAudioVolume(originalVolume,30)/100,bgmGain=clampAudioVolume(bgmVolume,70)/100;
-   const audioFilter=`[0:a]volume=${originalGain}[original];[1:a]volume=${bgmGain},afade=t=out:st=${fadeStart.toFixed(3)}:d=${fadeDuration.toFixed(3)}[music];[original][music]amix=inputs=2:duration=first:dropout_transition=0:normalize=0,alimiter=limit=0.95[aout]`;
+   const duration=infos.reduce((sum,info)=>sum+info.duration,0),fadeDuration=Math.min(1,duration),fadeStart=Math.max(0,duration-fadeDuration),originalGain=audioVolumeGain(originalVolume,30),bgmGain=audioVolumeGain(bgmVolume,70);
+   const audioFilter=`[0:a]volume=${originalGain}[original];[1:a]volume=${bgmGain},afade=t=out:st=${fadeStart.toFixed(3)}:d=${fadeDuration.toFixed(3)}[music];[original][music]amix=inputs=2:duration=first:dropout_transition=0:normalize=0,alimiter=limit=0.95:level=false[aout]`;
    const mixCode=await ffmpeg.exec(['-y','-i',concatOutput,'-stream_loop','-1','-i',bgmInput,'-filter_complex',audioFilter,'-map','0:v:0','-map','[aout]','-c:v','copy','-c:a','aac','-b:a','192k','-ar','48000','-ac','2','-t',duration.toFixed(3),'-movflags','+faststart','merge-output.mp4']);
    if(mixCode!==0)throw new Error('BGM과 영상 소리를 합치는 데 실패했습니다.');
   }
