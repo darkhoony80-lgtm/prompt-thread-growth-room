@@ -964,6 +964,9 @@ function validateAiPromptVideoPrompt(value,replyPrompt){
   if(!/0\s*[-–]\s*5\s*s/i.test(videoPrompt)||!/5\s*[-–]\s*10\s*s/i.test(videoPrompt)||!/10\s*[-–]\s*15\s*s/i.test(videoPrompt)||!/15\s*[-–]\s*20\s*s/i.test(videoPrompt)){
     throw new Error('AI_PROMPT_VIDEO_PROMPT_20_SECOND_TIMELINE_REQUIRED');
   }
+  if(!/single\s+continuous\s+20[\s-]*second\s+video/i.test(videoPrompt)||!/Part\s*1\s*\(\s*0\s*[-–]\s*10\s*s\s*\)/i.test(videoPrompt)||!/Part\s*2\s*\(\s*10\s*[-–]\s*20\s*s\s*\)/i.test(videoPrompt)||!/(?:exact\s+Part\s*1\s+end\s+frame|exact\s+end\s+frame\s+of\s+Part\s*1)/i.test(videoPrompt)){
+    throw new Error('AI_PROMPT_VIDEO_PROMPT_TWO_PART_CONTINUITY_REQUIRED');
+  }
   const hasAction=/(walk|walks|smile|turn|look|pick|grab|open|close|enter|exit|drop|hold|reach|lean|nod|adjust|touch|step|speak|pause|start|finish|move|동작)/i.test(videoPrompt);
   const hasCamera=/(camera|shot|dolly|track|tracking|pan|tilt|push|pull|zoom|static|handheld|over.?the.?shoulder|low.?angle|bird.?eye|wide|macro|telephoto|focus|lens|pan.?shot|orbit|follow.?in)/i.test(videoPrompt);
   const hasIdentity=/(same|identity|VOA|person|protagonist|character|figure|main|retain|preserve|keep the same|same person|same character)/i.test(videoPrompt);
@@ -1067,7 +1070,7 @@ body는 Threads에 실제 게시되는 자연스러운 한국어 반말 SNS 본�
 
 reply_prompt는 사진용으로 독립 실행 가능한 자연스러운 완성형 영문 프롬프트다. 아래 Identity Lock 문장으로 반드시 시작한 뒤 장면, 장소, 행동·포즈, 의상, 헤어·메이크업, 주변 사물, 조명, 카메라·렌즈·촬영 스타일, 질감과 필요한 Negative Constraints를 중복 없이 포함한다: "Use the attached reference image as the PRIMARY IDENTITY REFERENCE. Preserve the exact identity and recognizable facial characteristics. Never reinterpret, replace, beautify, idealize, or age-shift the person. Identity preservation overrides styling. Keep the full face and both eyes visible and unobstructed." 이후 인물은 오직 "the same person"으로만 지칭한다. woman, man, girl, boy, model, young, Korean, Asian, ethnicity, 나이 숫자처럼 참조 인물의 성별·인종·나이를 재정의하는 단어를 절대 쓰지 않는다. 영문 프롬프트 본문만 쓰고 450~550자로 매우 간결하게 완결하며 최대 ${GENERATED_REPLY_PROMPT_MAX_CHARS}자를 절대 넘지 않는다.
 
-video_prompt는 reply_prompt와 같은 인물·장소·의상·조명·세계관을 공유하는 20초 Higgsfield 복붙용 영문 프롬프트다. 반드시 정확히 4줄만 사용하고 각 줄을 "Prompt: 내용", "Action: 내용", "Settings: 내용", "Negative: 내용" 형식과 순서로 작성한다. 라벨 다음 내용은 같은 줄에서 바로 시작하며 항목 내부 줄바꿈은 금지한다. Prompt에는 uploaded reference photo의 얼굴과 identity 유지, full face visible, 같은 장소·의상·스타일을 명시한다. Action은 정확히 "0-5s ... / 5-10s ... / 10-15s ... / 15-20s ..." 네 구간으로 나누고, 시작 장면부터 실제 행동·표정 변화·카메라 움직임을 거쳐 20초 마지막 장면까지 자연스럽게 이어지게 한다. Settings에는 "Soul Cinematic, Motion 0.6, Style 0.85, Consistency 98 (face lock)"을 반드시 포함하고 장면에 맞는 조명을 덧붙인다. Negative에는 different face, blurry face, extra fingers, body distortion, abrupt cuts, teleportation, cartoon, nude 등 현실성과 얼굴 연속성을 깨는 요소를 간결하게 넣는다. 사진 프롬프트 뒤에 make a video를 붙이는 방식, 무의미한 슬로모션, 계속 카메라만 보기, 순간이동, 얼굴·옷·신체 변화, 물체 생성·소멸, 방향 급변, 과도한 모션블러를 금지한다. 전체는 최대 ${GENERATED_REPLY_PROMPT_MAX_CHARS}자 안에서 완결한다.
+video_prompt는 reply_prompt와 같은 인물·장소·의상·조명·세계관을 공유하는 Higgsfield용 영문 프롬프트다. 최종 결과는 서로 다른 두 영상이 아니라 10초씩 나눠 생성한 두 파트를 연결하는 하나의 연속된 20초 영상이어야 한다. 반드시 정확히 4줄만 사용하고 각 줄을 "Prompt: 내용", "Action: 내용", "Settings: 내용", "Negative: 내용" 형식과 순서로 작성한다. Prompt에는 반드시 "a single continuous 20-second video"를 쓰고 uploaded reference photo의 얼굴과 identity 유지, full face visible, 같은 장소·의상·스타일을 명시한다. Action은 정확히 "Part 1 (0-10s): 0-5s ... / 5-10s ...; End frame: ... || Part 2 (10-20s): Continue from the exact Part 1 end frame with identical pose, position, wardrobe, lighting, and camera direction; 10-15s ... / 15-20s ..." 구조로 쓴다. Part 1의 마지막 프레임과 Part 2의 시작 프레임이 동일해야 하며, 행동과 카메라 움직임이 끊김 없이 20초 마지막 장면까지 이어져야 한다. Settings에는 "Soul Cinematic, Motion 0.6, Style 0.85, Consistency 98 (face lock)"을 반드시 포함하고 장면에 맞는 조명을 덧붙인다. Negative에는 different face, blurry face, extra fingers, body distortion, abrupt cuts, teleportation, discontinuity, camera jump, cartoon, nude를 간결하게 넣는다. 사진 프롬프트 뒤에 make a video를 붙이는 방식, 무의미한 슬로모션, 계속 카메라만 보기, 얼굴·옷·신체 변화, 물체 생성·소멸, 방향 급변, 과도한 모션블러를 금지한다. 전체는 최대 ${GENERATED_REPLY_PROMPT_MAX_CHARS}자 안에서 완결한다.
 
 image_brief는 결과가 한눈에 강하게 보이도록 인물, 행동, 장소, 스타일링, 빛과 시각적 긴장감을 구체적으로 설명한다. source_notes는 필수가 아니며 필요 없으면 빈 배열로 둔다. 실제 참고한 공개 콘셉트가 있을 때만 간단히 기록하고, source_notes 때문에 생성이 실패해서는 안 된다.`,
     AI_TIP:aiTipRule(recentAiTips),
@@ -1566,7 +1569,7 @@ HOT_ISSUE이면 source_notes의 사실 범위를 넘지 말 것.
 hook 6~10자 우선 최대 14자.
 본문 500자 이내. body 맨 마지막 줄에는 새 본문과 직접 관련된 검색용 해시태그를 정확히 5개 넣고, 이 해시태그는 body 외 다른 필드에는 넣지 않는다.
 이미지 브리프도 새 각도에 맞게 변경.
-AI_PROMPT는 reply_prompt(사진용) 외에 video_prompt(영상용)도 반드시 함께 작성한다. 둘은 동일 콘셉트의 연장이어야 하며 동일 인물·장소·의상 continuity를 유지한다. video_prompt는 20초 Higgsfield용 영문 형식으로 정확히 4줄만 사용하여 Prompt: 내용, Action: 내용, Settings: 내용, Negative: 내용을 이 순서로 작성하고 라벨과 내용을 같은 줄에 둔다. Action에는 0-5s / 5-10s / 10-15s / 15-20s 네 구간의 실제 행동·카메라 동작을 넣고, Settings에는 Soul Cinematic, Motion 0.6, Style 0.85, Consistency 98 (face lock)을 반드시 포함한다. 전체는 950자를 넘지 않는다.
+AI_PROMPT는 reply_prompt(사진용) 외에 video_prompt(영상용)도 반드시 함께 작성한다. 둘은 동일 콘셉트의 연장이어야 하며 동일 인물·장소·의상 continuity를 유지한다. video_prompt는 10초짜리 Part 1과 Part 2를 이어 하나의 연속된 20초 영상으로 만드는 Higgsfield용 영문 형식이다. 정확히 4줄만 사용하여 Prompt: 내용, Action: 내용, Settings: 내용, Negative: 내용을 이 순서로 작성하고 라벨과 내용을 같은 줄에 둔다. Prompt에는 "a single continuous 20-second video"를 반드시 넣는다. Action은 "Part 1 (0-10s): 0-5s ... / 5-10s ...; End frame: ... || Part 2 (10-20s): Continue from the exact Part 1 end frame with identical pose, position, wardrobe, lighting, and camera direction; 10-15s ... / 15-20s ..." 구조를 정확히 사용한다. Settings에는 Soul Cinematic, Motion 0.6, Style 0.85, Consistency 98 (face lock)을 반드시 포함한다. 전체는 950자를 넘지 않는다.
 기존:${JSON.stringify(x).slice(0,6000)}
 
 JSON만:
