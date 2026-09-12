@@ -3157,35 +3157,6 @@ async function actionYoutubePublish(req,res){
     return send(res,Number(e?.status)||502,{ok:false,error:e?.message||'YOUTUBE_PUBLISH_FAILED',detail:e?.meta?.message||null});
   }
 }
-async function actionYoutubeCommentSync(req,res){
-  const videoId=String(req.body?.video_id||'').trim();
-  const replyText=String(req.body?.reply_text||'').trim();
-  if(!/^[A-Za-z0-9_-]{6,20}$/.test(videoId))return send(res,400,{ok:false,error:'YOUTUBE_VIDEO_ID_INVALID'});
-  if(!replyText)return send(res,400,{ok:false,error:'YOUTUBE_REPLY_TEXT_REQUIRED'});
-  try{
-    const token=await youtubeAccessToken();
-    const channel=await youtubeApi(token,'channels?part=id&mine=true');
-    const myChannelId=String(channel?.items?.[0]?.id||'');
-    let pageToken='',replied=0,skipped=0,pages=0;
-    do{
-      const suffix=pageToken?`&pageToken=${encodeURIComponent(pageToken)}`:'';
-      const threads=await youtubeApi(token,`commentThreads?part=snippet,replies&videoId=${encodeURIComponent(videoId)}&maxResults=100&order=time${suffix}`);pages++;
-      for(const thread of Array.isArray(threads?.items)?threads.items:[]){
-        const top=thread?.snippet?.topLevelComment;const topId=String(top?.id||'');if(!topId)continue;
-        const authorId=String(top?.snippet?.authorChannelId?.value||'');if(myChannelId&&authorId===myChannelId){skipped++;continue}
-        const ownReply=(Array.isArray(thread?.replies?.comments)?thread.replies.comments:[]).some(c=>String(c?.snippet?.authorChannelId?.value||'')===myChannelId);
-        if(ownReply){skipped++;continue}
-        await youtubeApi(token,'comments?part=snippet',{method:'POST',body:{snippet:{parentId:topId,textOriginal:replyText}}});replied++;
-      }
-      pageToken=String(threads?.nextPageToken||'');
-    }while(pageToken&&pages<20);
-    return send(res,200,{ok:true,replied,skipped,pages,video_id:videoId});
-  }catch(e){
-    console.error('[YOUTUBE_COMMENT_SYNC_FAILED]',JSON.stringify({message:e?.message||String(e),status:e?.status||null,meta:e?.meta||null}));
-    return send(res,Number(e?.status)||502,{ok:false,error:e?.message||'YOUTUBE_COMMENT_SYNC_FAILED',detail:e?.meta?.message||null});
-  }
-}
-
 async function actionInstagramPromptStore(req,res){
   try{
     const record=await upsertInstagramPromptPost(req.body||{});
@@ -3933,7 +3904,6 @@ async function handler(req,res){
   if(action==='facebook_comment_sync')return send(res,410,{ok:false,error:'FACEBOOK_COMMENT_SYNC_DISABLED'});
   if(action==='youtube_title')return actionYoutubeTitle(req,res);
   if(action==='youtube_publish')return actionYoutubePublish(req,res);
-  if(action==='youtube_comment_sync')return actionYoutubeCommentSync(req,res);
   if(action==='instagram_prompt_store')return actionInstagramPromptStore(req,res);
   if(action==='coupas_resolve_product')return actionCoupasResolveProduct(req,res);
   if(action==='coupas_threads_permalink')return actionCoupasThreadsPermalink(req,res);
@@ -3949,7 +3919,7 @@ async function handler(req,res){
   return send(res,400,{
     ok:false,
     error:'UNKNOWN_CONTENT_ACTION',
-    allowed:['generate','image','store-image','media_upload','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish','facebook_publish','facebook_comment_sync','youtube_title','youtube_publish','youtube_comment_sync','instagram_prompt_store','instagram_prompt_lookup','supabase_status','coupas_resolve_product','coupas_threads_permalink','coupas_threads_reply_exists','ox_topics','ox_generate','ox_library_list','ox_library_get','ox_library_save','ox_library_status','ox_library_delete']
+    allowed:['generate','image','store-image','media_upload','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish','facebook_publish','facebook_comment_sync','youtube_title','youtube_publish','instagram_prompt_store','instagram_prompt_lookup','supabase_status','coupas_resolve_product','coupas_threads_permalink','coupas_threads_reply_exists','ox_topics','ox_generate','ox_library_list','ox_library_get','ox_library_save','ox_library_status','ox_library_delete']
   });
 }
 

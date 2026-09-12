@@ -4,7 +4,6 @@ const CATS={AI_PROMPT:'AI 프롬프트',AI_TIP:'쿠팡파트너스',FOOD_PICK:'�
 const Q='pt_queue_v3',F='pt_feedback_v3',P='pt_published_v3',D='pt_drafts_v6',FH='pt_food_history_v1',IGC='pt_instagram_carousels_v1',CM='pt_content_masters_v1';
 const PILLARS=['AI_TIP','AI_PROMPT','FOOD_PICK','HOT_ISSUE'];
 const PLATFORM_LIMITS={threads:{maxMedia:20},instagram:{maxMedia:10},facebook:{maxMedia:10},youtube:{maxMedia:1}};
-const SOCIAL_AUTOMATION='pt_social_reply_automation_v1';
 const PROMPT_CATEGORIES=['AI_TIP','AI_PROMPT'];
 const PLATFORM_BODY_CTA={
  threads:'링크/추가 내용은 첫 댓글에 남겨둘게 👇',
@@ -582,27 +581,8 @@ async function publishYoutubeMaster(i){
   const r=await fetch('/api/content-router?action=youtube_publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(apiError(j,'YOUTUBE_PUBLISH_FAILED'));
   const master=ensureMaster(i);master.status.youtube='published';master.youtube_video_id=j.video_id;saveMaster(i,master);
-  if(payload.reply_text)registerSocialAutomation({platform:'youtube',id:j.video_id,reply_text:payload.reply_text,content_id:snapshot.content_id});
   alert('YouTube 게시 완료 ✅'+(j.paid_promotion_applied===true?'\n유료 프로모션 적용 확인 ✅':j.paid_promotion_applied===false?'\n⚠️ 유료 프로모션 적용 확인 실패':'')+(j.synthetic_media_applied===true?'\nAI 사용 표시 적용 확인 ✅':'')+(j.first_comment_error?`\n첫 댓글 실패: ${j.first_comment_error}`:'\n첫 댓글 등록 완료 ✅'));
  }catch(e){alert('YouTube 게시 실패: '+e.message)}
-}
-function socialAutomationRecords(){const x=read(SOCIAL_AUTOMATION,[]);return Array.isArray(x)?x:[]}
-function registerSocialAutomation(entry){
- const rows=socialAutomationRecords(),key=`${entry.platform}:${entry.id}`;const next={...entry,key,updated_at:Date.now()};
- const idx=rows.findIndex(x=>x.key===key);if(idx>=0)rows[idx]=next;else rows.unshift(next);write(SOCIAL_AUTOMATION,rows.slice(0,200));
-}
-let socialSyncRunning=false;
-async function socialAutomationTick(){
- if(socialSyncRunning)return;socialSyncRunning=true;
- try{
-  const rows=socialAutomationRecords();
-  for(const row of rows){
-   try{
-    const action=row.platform==='youtube'?'youtube_comment_sync':'';if(!action)continue;
-    await fetch(`/api/content-router?action=${action}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({video_id:row.id,reply_text:row.reply_text})});
-   }catch{}
-  }
- }finally{socialSyncRunning=false}
 }
 async function variant(i){const x=candidates[i];try{x.body=body(i);if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))x.reply_prompt=replyPrompt(i);const r=await fetch('/api/content-router?action=variant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate:x})}),j=await r.json();if(!r.ok)throw new Error(j.detail||j.error);candidates[i]=j.item;candidates[i].variation=1;const master=ensureMaster(i);master.master_body=j.item.body||master.master_body;if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))master.reply_prompt=j.item.reply_prompt||master.reply_prompt;saveMaster(i,master);fb(x,'VARIANT');saveDrafts();render()}catch(e){alert('다른 버전 실패: '+e.message)}}
 function resetCard(i){
@@ -628,5 +608,4 @@ function patchReplies(){
 }
 window.PostAuto={generate:generatePillar,image:i=>makeImage(i,false),reimage:i=>makeImage(i,true),keep,now,variant,no,reset:resetCard,drop,publishQueue,save:syncDraft,addMedia:addLocalMedia,removeMedia:removeMasterMedia,moveMedia:moveMasterMedia,instagram:openInstagramCarousel,instagramSelect:selectInstagramSlide,instagramCaption:setInstagramCaption,instagramReplyPrompt:setInstagramReplyPrompt,instagramClose:closeInstagramCarousel,instagramRegenerate:regenerateInstagramSlide,instagramRegenerateAll:regenerateInstagramCarousel,instagramPublish:publishInstagramCarousel,instagramMasterPublish:publishInstagramMaster,facebookPublish:publishFacebookMaster,youtubePublish:publishYoutubeMaster,instagramPromptStoreRetry:retryInstagramPromptStore};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ensure);else ensure();
-setTimeout(()=>socialAutomationTick(),12000);setInterval(()=>socialAutomationTick(),90000);
 })();
