@@ -291,7 +291,7 @@ function promptTextareas(pillar,i,master){
  const videoPromptValue=esc(master.video_prompt||'');
  if(pillar==='AI_PROMPT'){
   const deliveryType=master.prompt_delivery_type==='video'?'video':'photo';
-  return `<label class="mut" style="display:block;margin-top:10px">자동 전달 프롬프트</label><select id="v3delivery-${i}" class="cm-input" onchange="PostAuto.deliveryType(${i},this.value)"><option value="photo" ${deliveryType==='photo'?'selected':''}>사진 프롬프트</option><option value="video" ${deliveryType==='video'?'selected':''}>영상 프롬프트</option></select><p class="mut">선택한 프롬프트가 Threads 댓글과 Instagram 자동 DM으로 전달됩니다.</p><label class="mut" style="display:block;margin-top:10px">[사진 프롬프트]</label><textarea id="v3reply-${i}" oninput="PostAuto.save(${i})" class="cm-reply" placeholder="사진용 영문 프롬프트">${replyPromptValue}</textarea><div class="cm-reply-toolbar"><button class="btn" type="button" onclick="PostAuto.copyText(${i},'reply')">복사</button></div><label class="mut" style="display:block;margin-top:10px">[영상 프롬프트]</label><textarea id="v3video-${i}" oninput="PostAuto.save(${i})" class="cm-reply" placeholder="영상용 영문 프롬프트">${videoPromptValue}</textarea><div class="cm-reply-toolbar"><button class="btn" type="button" onclick="PostAuto.copyText(${i},'video')">복사</button></div>`;
+  return `<label class="mut" style="display:block;margin-top:10px">자동 전달 프롬프트</label><select id="v3delivery-${i}" class="cm-input" onchange="PostAuto.deliveryType(${i},this.value)"><option value="photo" ${deliveryType==='photo'?'selected':''}>사진 프롬프트</option><option value="video" ${deliveryType==='video'?'selected':''}>영상 프롬프트</option></select><p class="mut">Threads 댓글에는 선택한 프롬프트가 전달됩니다. Instagram 자동 DM에는 영상 프롬프트가 항상 전달됩니다.</p><label class="mut" style="display:block;margin-top:10px">[사진 프롬프트]</label><textarea id="v3reply-${i}" oninput="PostAuto.save(${i})" class="cm-reply" placeholder="사진용 영문 프롬프트">${replyPromptValue}</textarea><div class="cm-reply-toolbar"><button class="btn" type="button" onclick="PostAuto.copyText(${i},'reply')">복사</button></div><label class="mut" style="display:block;margin-top:10px">[영상 프롬프트]</label><textarea id="v3video-${i}" oninput="PostAuto.save(${i})" class="cm-reply" placeholder="영상용 영문 프롬프트">${videoPromptValue}</textarea><div class="cm-reply-toolbar"><button class="btn" type="button" onclick="PostAuto.copyText(${i},'video')">복사</button></div>`;
  }
  if(pillar==='AI_TIP'){
   return `<label class="mut" style="display:block;margin-top:10px">댓글 및 답장 입력</label><textarea id="v3reply-${i}" oninput="PostAuto.save(${i})" class="cm-reply" placeholder="예: https://link.coupang.com/a/...">${replyPromptValue}</textarea><div class="cm-reply-toolbar"><button class="btn" type="button" onclick="PostAuto.copyText(${i},'reply')">복사</button></div><p class="mut">Threads 첫 일반 댓글 · Instagram 자동 답장/DM · YouTube 첫 댓글+답장</p>`;
@@ -589,7 +589,7 @@ function setPromptDeliveryType(i,value){
  const master=ensureMaster(i);if(!master||PILLARS[i]!=='AI_PROMPT')return;
  master.prompt_delivery_type=value==='video'?'video':'photo';saveMaster(i,master);
  if(instagramCarousel?.candidateIndex===i&&!instagramCarousel.published){
-  instagramCarousel.replyPrompt=selectedDeliveryPrompt(master);persistInstagramCarousel(instagramCarousel);
+  instagramCarousel.replyPrompt=String(master.video_prompt||'').trim();persistInstagramCarousel(instagramCarousel);
  }
 }
 function instagramCandidate(i){
@@ -598,7 +598,7 @@ function instagramCandidate(i){
  const master=ensureMaster(i);
  const source={
   category:PILLARS[i],topic:x.topic||'',body:body(i),reply_prompt:['AI_PROMPT','AI_TIP'].includes(PILLARS[i])?replyPrompt(i):'',
-  delivery_prompt:PILLARS[i]==='AI_PROMPT'?selectedDeliveryPrompt(master):replyPrompt(i),
+  delivery_prompt:PILLARS[i]==='AI_PROMPT'?String(master.video_prompt||'').trim():replyPrompt(i),
   image_brief:x.image_brief||'',source_notes:Array.isArray(x.source_notes)?x.source_notes:[]
  };
  return source.body?source:null;
@@ -756,10 +756,12 @@ function threadsAdapter(snapshot){
  return {text,media,topic_tag:snapshot.topic_tag,topic_tag_verified:snapshot.topic_tag_verified===true,reply_prompt:snapshot.content_type==='AI_PROMPT'?selectedDeliveryPrompt(snapshot):snapshot.reply_prompt||''};
 }
 function instagramAdapter(snapshot){
- const caption=withPlatformBodyCta(snapshot.master_body,snapshot.content_type,'instagram'),media=snapshot.media.map(m=>({type:m.type,url:m.url,mime_type:m.mime_type,duration:m.duration||0}));
+ const caption=withPlatformBodyCta(snapshot.master_body,snapshot.content_type,'instagram'),allMedia=snapshot.media.map(m=>({type:m.type,url:m.url,mime_type:m.mime_type,duration:m.duration||0})),videos=allMedia.filter(item=>item.type==='video');
+ if(snapshot.content_type==='AI_PROMPT'&&videos.length>1)throw new Error('AI 프롬프트 Instagram 릴스 게시에는 영상 1개가 필요합니다. 여러 영상은 먼저 하나로 인코딩해 주세요.');
+ const media=snapshot.content_type==='AI_PROMPT'&&videos.length?videos:allMedia;
  if(!caption)throw new Error('Instagram 캡션을 입력해 주세요.');if(caption.length>2200)throw new Error(`Instagram 캡션은 2200자 이하입니다. 현재 ${caption.length}자입니다.`);if(!media.length)throw new Error('Instagram 게시에는 미디어가 필요합니다.');if(media.length>PLATFORM_LIMITS.instagram.maxMedia)throw new Error(`Instagram 미디어는 최대 ${PLATFORM_LIMITS.instagram.maxMedia}개입니다.`);
  for(const item of media){if(item.type==='image'&&item.mime_type&&item.mime_type!=='image/jpeg')throw new Error('Instagram 이미지 게시에는 JPEG 미디어만 사용할 수 있습니다.');if(item.type==='video'&&item.duration&&(item.duration<3||item.duration>900))throw new Error('Instagram 영상은 3초 이상 15분 이하여야 합니다.')}
- return {media,caption,request_id:instagramRequestId(),content_id:snapshot.content_id,content_type:snapshot.content_type,reply_prompt:snapshot.content_type==='AI_PROMPT'?selectedDeliveryPrompt(snapshot):snapshot.reply_prompt||''};
+ return {media,caption,request_id:instagramRequestId(),content_id:snapshot.content_id,content_type:snapshot.content_type,reply_prompt:snapshot.content_type==='AI_PROMPT'?String(snapshot.video_prompt||'').trim():snapshot.reply_prompt||'',omitted_images:snapshot.content_type==='AI_PROMPT'&&videos.length?allMedia.filter(item=>item.type==='image').length:0};
 }
 function facebookAdapter(snapshot){
  const message=String(snapshot.master_body||'').trim(),media=snapshot.media.map(m=>({type:m.type,url:m.url,mime_type:m.mime_type}));
@@ -812,8 +814,10 @@ async function publishInstagramMaster(i){
  const x=candidates[i];if(!x||instagramPublishing)return;
  try{
   const snapshot=snapshotMaster(i),payload=instagramAdapter(snapshot);
-  if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i])&&!payload.reply_prompt)return alert('DM으로 보낼 댓글 및 답장 내용을 입력해 주세요.');
-  if(!confirm(`현재 Content Master snapshot의 미디어 ${payload.media.length}개를 @voara.lab에 게시할까요?\n\n이 작업은 실제 Instagram 게시입니다.`))return;
+  if(PILLARS[i]==='AI_PROMPT'&&!payload.reply_prompt)return alert('Instagram 자동 DM으로 보낼 영상 프롬프트를 입력해 주세요.');
+  if(PILLARS[i]==='AI_TIP'&&!payload.reply_prompt)return alert('DM으로 보낼 댓글 및 답장 내용을 입력해 주세요.');
+  const isReel=PILLARS[i]==='AI_PROMPT'&&payload.media.length===1&&payload.media[0].type==='video',omitted=payload.omitted_images?`\n사진 ${payload.omitted_images}장은 제외하고 영상만 게시합니다.`:'';
+  if(!confirm(`현재 Content Master의 ${isReel?'영상 1개를 릴스로':`미디어 ${payload.media.length}개를`} @voara.lab에 게시할까요?${omitted}\n\n이 작업은 실제 Instagram 게시입니다.`))return;
   instagramPublishing=true;const j=await instagramApi('instagram_carousel_publish',payload);
   const master=ensureMaster(i);master.status.instagram='published';saveMaster(i,master);
   alert(j.prompt_stored===false?'Instagram 게시 완료 / 프롬프트 저장 실패':'Instagram 게시 완료 ✅');
