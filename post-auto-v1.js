@@ -294,7 +294,7 @@ function emptyCard(pillar,i){
 </div>`:`<button class="btn p" id="v3gen-${i}" onclick="PostAuto.generate(${i})">✨ 생성</button>`}</article>`;
 }
 function mediaEditorHtml(i,master){
- return `<section class="cm-editor"><div class="section"><div><b>공통 미디어</b><p class="mut">영상 여러 개를 한 번에 선택하면 순서를 정한 뒤 하나의 MP4로 인코딩할 수 있습니다.</p></div><label class="btn">사진/영상 추가<input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" multiple hidden onchange="PostAuto.addMedia(${i},this.files);this.value=''" /></label></div><div id="v3merge-${i}"></div><div id="v3media-${i}" class="cm-media"></div></section>`;
+ return `<section class="cm-editor"><div class="section"><div><b>공통 미디어</b><p class="mut">영상 여러 개를 한 번에 선택하면 순서를 정한 뒤 하나의 MP4로 인코딩할 수 있습니다.</p></div><div class="cm-merge-actions"><label class="btn">사진/영상 추가<input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" multiple hidden onchange="PostAuto.addMedia(${i},this.files);this.value=''" /></label><label class="btn">🎵 BGM 추가<input type="file" accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg" hidden onchange="PostAuto.addMergeBgm(${i},this.files);this.value=''" /></label></div></div><p class="mut">BGM 지원: MP3, M4A, WAV, AAC, OGG · 100MB 이하</p><div id="v3merge-${i}"></div><div id="v3media-${i}" class="cm-media"></div></section>`;
 }
 function localArchiveHtml(pillar,i){
  if(!['AI_PROMPT','AI_TIP'].includes(pillar))return '';
@@ -425,6 +425,8 @@ function renderVideoMergeDraft(i){
  box.innerHTML=`<div class="cm-merge"><b>🎬 영상 병합 순서 · ${draft.files.length}개</b><p class="mut" id="v3merge-status-${i}">${esc(draft.status||'영상을 재생해 확인하고 순서를 정한 뒤 인코딩을 시작하세요.')}</p>${draft.files.map((file,index)=>`<div class="cm-merge-row"><video class="cm-merge-preview" src="${esc(draft.previewUrls?.[index]||'')}" controls preload="metadata" playsinline></video><div class="cm-merge-info"><b>${index+1}번 영상</b><span class="cm-merge-name" title="${esc(file.name)}">${esc(file.name)}</span><span class="mut">${(file.size/1024/1024).toFixed(1)}MB</span><div class="cm-merge-buttons"><button class="btn" onclick="PostAuto.moveMergeVideo(${i},${index},-1)" ${disabled||index===0?'disabled':''}>↑ 위로</button><button class="btn" onclick="PostAuto.moveMergeVideo(${i},${index},1)" ${disabled||index===draft.files.length-1?'disabled':''}>↓ 아래로</button><button class="btn" onclick="PostAuto.removeMergeVideo(${i},${index})" ${disabled}>삭제</button></div></div></div>`).join('')}<div class="cm-bgm"><div class="cm-merge-actions"><label class="btn">🎵 BGM 첨부<input type="file" accept=".mp3,.m4a,.wav,.aac,.ogg,audio/mpeg,audio/mp4,audio/wav,audio/aac,audio/ogg" hidden onchange="PostAuto.addMergeBgm(${i},this.files);this.value=''" ${disabled}/></label>${draft.bgmFile?`<button class="btn" onclick="PostAuto.removeMergeBgm(${i})" ${disabled}>BGM 삭제</button>`:''}</div><p class="mut">지원: MP3, M4A, WAV, AAC, OGG · 100MB 이하</p>${draft.bgmFile?`<audio class="cm-bgm-preview" src="${esc(draft.bgmPreviewUrl||'')}" controls preload="metadata"></audio><span class="cm-merge-name">${esc(draft.bgmFile.name)}</span><label class="cm-volume">원본 영상 소리 <b id="v3original-volume-${i}">${clampAudioVolume(draft.originalVolume,30)}%</b><input type="range" min="0" max="100" value="${clampAudioVolume(draft.originalVolume,30)}" oninput="PostAuto.mergeVolume(${i},'original',this.value)" ${disabled}></label><label class="cm-volume">BGM 소리 <b id="v3bgm-volume-${i}">${clampAudioVolume(draft.bgmVolume,70)}%</b><input type="range" min="0" max="100" value="${clampAudioVolume(draft.bgmVolume,70)}" oninput="PostAuto.mergeVolume(${i},'bgm',this.value)" ${disabled}></label><p class="mut">BGM은 영상 길이에 맞춰 자동 반복·자르기되고 마지막 1초에 페이드아웃됩니다.</p>`:''}</div><div class="cm-merge-actions"><label class="btn">영상 더 추가<input type="file" accept="video/mp4,video/quicktime" multiple hidden onchange="PostAuto.addMergeVideos(${i},this.files);this.value=''" ${disabled}/></label><button class="btn p" onclick="PostAuto.encodeMergeVideos(${i})" ${disabled||draft.files.length<2?'disabled':''}>${draft.encoding?'인코딩 중…':'이 순서로 인코딩 및 업로드'}</button><button class="btn" onclick="PostAuto.cancelMergeVideos(${i})" ${disabled}>취소</button></div></div>`;
  const bgmInput=box.querySelector('input[onchange^="PostAuto.addMergeBgm"]');
  if(bgmInput)bgmInput.accept='audio/*,.mp3,.m4a,.wav,.aac,.ogg,audio/mpeg,audio/mp3,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,audio/aac,audio/ogg,application/ogg';
+ const encodeButton=box.querySelector('button[onclick^="PostAuto.encodeMergeVideos"]');
+ if(encodeButton)encodeButton.disabled=draft.encoding||(!draft.bgmFile&&draft.files.length<2);
 }
 function setVideoMergeStatus(i,text){
  const draft=videoMergeDraft(i);if(draft)draft.status=String(text||'');
@@ -455,7 +457,17 @@ function cancelVideoMerge(i){const draft=videoMergeDraft(i);if(!draft||draft.enc
 function audioFileExtension(file){return String(file?.name||'').split('.').pop().toLowerCase()}
 function validateBgmFile(file){const mime=String(file?.type||'').toLowerCase(),extension=audioFileExtension(file);if(!['mp3','m4a','wav','aac','ogg'].includes(extension)||(mime&&!mime.startsWith('audio/')&&mime!=='application/ogg'))throw new Error('BGM은 MP3, M4A, WAV, AAC, OGG 파일만 사용할 수 있습니다.');if(Number(file?.size||0)>100*1024*1024)throw new Error('BGM 파일은 100MB 이하여야 합니다.');return file}
 function clampAudioVolume(value,fallback){const number=Number(value);return Math.min(100,Math.max(0,Number.isFinite(number)?Math.round(number):fallback))}
-function addVideoMergeBgm(i,fileList){const draft=videoMergeDraft(i),file=Array.from(fileList||[])[0];if(!draft||draft.encoding||!file)return;try{validateBgmFile(file);if(draft.bgmPreviewUrl)URL.revokeObjectURL(draft.bgmPreviewUrl);draft.bgmFile=file;draft.bgmPreviewUrl=URL.createObjectURL(file);draft.originalVolume=clampAudioVolume(draft.originalVolume,30);draft.bgmVolume=clampAudioVolume(draft.bgmVolume,70);draft.status='BGM이 추가됐습니다. 음량을 조절한 뒤 인코딩하세요.';renderVideoMergeDraft(i)}catch(e){alert('BGM 추가 실패: '+String(e?.message||e))}}
+async function videoMergeDraftFromMaster(i){
+ const master=ensureMaster(i),videos=(master?.media||[]).filter(item=>item.type==='video'&&item.url);
+ if(!videos.length)throw new Error('BGM을 합칠 영상을 먼저 추가해 주세요.');
+ const files=[],previewUrls=[];setVideoMergeStatus(i,'업로드된 영상을 BGM 인코딩용으로 불러오는 중…');
+ for(let index=0;index<videos.length;index++){
+  const response=await fetch(videos[index].url);if(!response.ok)throw new Error(`${index+1}번 영상을 불러오지 못했습니다. HTTP ${response.status}`);
+  const blob=await response.blob(),mime=blob.type||videos[index].mime_type||'video/mp4',extension=/quicktime/i.test(mime)?'mov':'mp4',file=new File([blob],`uploaded-video-${index+1}.${extension}`,{type:mime,lastModified:Date.now()});validateLocalMedia(file);files.push(file);previewUrls.push(URL.createObjectURL(file));
+ }
+ const draft={files,previewUrls,sourceMediaIds:videos.map(item=>item.id),originalVolume:30,bgmVolume:70,encoding:false,status:'업로드된 영상을 불러왔습니다.'};videoMergeDrafts.set(masterKey(i),draft);return draft;
+}
+async function addVideoMergeBgm(i,fileList){const file=Array.from(fileList||[])[0];if(!file)return;try{validateBgmFile(file);let draft=videoMergeDraft(i);if(!draft)draft=await videoMergeDraftFromMaster(i);if(draft.encoding)return;if(draft.bgmPreviewUrl)URL.revokeObjectURL(draft.bgmPreviewUrl);draft.bgmFile=file;draft.bgmPreviewUrl=URL.createObjectURL(file);draft.originalVolume=clampAudioVolume(draft.originalVolume,30);draft.bgmVolume=clampAudioVolume(draft.bgmVolume,70);draft.status='BGM이 추가됐습니다. 음량을 조절한 뒤 인코딩하세요.';renderVideoMergeDraft(i)}catch(e){alert('BGM 추가 실패: '+String(e?.message||e))}}
 function removeVideoMergeBgm(i){const draft=videoMergeDraft(i);if(!draft||draft.encoding)return;if(draft.bgmPreviewUrl)URL.revokeObjectURL(draft.bgmPreviewUrl);draft.bgmFile=null;draft.bgmPreviewUrl='';draft.status='BGM을 삭제했습니다. 원본 영상 소리로 인코딩됩니다.';renderVideoMergeDraft(i)}
 function setVideoMergeVolume(i,type,value){const draft=videoMergeDraft(i);if(!draft||draft.encoding)return;const amount=clampAudioVolume(value,type==='original'?30:70);if(type==='original')draft.originalVolume=amount;else draft.bgmVolume=amount;const label=document.getElementById(type==='original'?`v3original-volume-${i}`:`v3bgm-volume-${i}`);if(label)label.textContent=`${amount}%`}
 async function videoDuration(file){
@@ -496,7 +508,7 @@ function mergedVideoSize(firstInfo){
  return {width:Math.max(2,Math.floor(width*scale/2)*2),height:Math.max(2,Math.floor(height*scale/2)*2)};
 }
 async function mergeVideoFiles(files,status,{bgmFile=null,originalVolume=30,bgmVolume=70}={}){
- if(files.length<2)throw new Error('병합할 영상을 2개 이상 선택해 주세요.');
+ if(!files.length||(!bgmFile&&files.length<2))throw new Error('영상 2개 이상 또는 영상 1개와 BGM을 선택해 주세요.');
  if(files.some(file=>validateLocalMedia(file)!=='video'))throw new Error('MP4 또는 MOV 영상만 병합할 수 있습니다.');
  const totalBytes=files.reduce((sum,file)=>sum+Number(file.size||0),0);
  if(totalBytes>500*1024*1024)throw new Error('브라우저 영상 병합은 원본 합계 500MB 이하만 지원합니다.');
@@ -585,13 +597,14 @@ async function addLocalMedia(i,fileList){
  if(status)status.textContent='공통 미디어 저장 완료';
 }
 async function encodeVideoMerge(i){
- const draft=videoMergeDraft(i);if(!draft||draft.encoding||draft.files.length<2)return;
+ const draft=videoMergeDraft(i);if(!draft||draft.encoding||!draft.files.length||(!draft.bgmFile&&draft.files.length<2))return;
  draft.encoding=true;draft.status='인코딩 준비 중…';renderVideoMergeDraft(i);setVideoMergeStatus(i,'인코딩 준비 중…');
  try{
   const progress={set textContent(value){setVideoMergeStatus(i,value)}};
   const file=await mergeVideoFiles(draft.files,progress,{bgmFile:draft.bgmFile,originalVolume:draft.originalVolume,bgmVolume:draft.bgmVolume}),duration=await videoDuration(file);
   setVideoMergeStatus(i,`인코딩 완료 (${duration.toFixed(1)}초) · 업로드 중…`);
   const blob=await uploadLocalMedia(file,i,'video');
+  if(draft.sourceMediaIds?.length){const master=ensureMaster(i);master.media=(master.media||[]).filter(item=>!draft.sourceMediaIds.includes(item.id));saveMaster(i,master)}
   appendMasterMedia(i,{id:mediaId('upload'),type:'video',source:'upload',url:blob.url,previewUrl:blob.url,mime_type:file.type,size:file.size,duration});
   const count=draft.files.length;releaseVideoMergePreviews(draft);videoMergeDrafts.delete(masterKey(i));renderVideoMergeDraft(i);setVideoMergeStatus(i,`영상 ${count}개 인코딩 및 업로드 완료`);
  }catch(e){draft.encoding=false;draft.status='실패: '+String(e?.message||e||'알 수 없는 오류');renderVideoMergeDraft(i);setVideoMergeStatus(i,draft.status);alert('영상 인코딩 또는 업로드 실패: '+String(e?.message||e))}
