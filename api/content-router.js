@@ -774,12 +774,13 @@ async function generateJson(key,prompt,temp=.9){
 
 async function compactAiPromptVideoPrompt(key,videoPrompt,replyPrompt){
   const beforeLength=String(videoPrompt||'').trim().length;
-  const out=await generateJson(key,`Rewrite only the Meta AI continuation video prompt below so it is complete and no more than ${AI_PROMPT_VIDEO_MAX_CHARS} characters including spaces. Aim for 700-900 characters.
+  const out=await generateJson(key,`Rewrite only the Higgsfield video prompt below so it is complete and no more than ${AI_PROMPT_VIDEO_MAX_CHARS} characters including spaces. Aim for 850-950 characters.
 Preserve the exact person, concept, location, wardrobe, lighting, actions, and camera direction from the original and photo prompt. Remove repetition and shorten wording; do not truncate sentences or change the scene.
-Use exactly eight non-empty lines in this order: Part 1 (0-10s):, Location:, Action:, End Frame MUST BE:, Part 2 (10-20s):, START from this image:, Same exact:, Action:.
-Do not add a Reference line or instructions about the uploaded photo's face, hairstyle, skin tone, or initial clothes.
-The first Action line must contain 0-5s and 5-10s. End Frame MUST BE must precisely lock body pose, both hand positions, gaze direction in degrees, facial expression, camera framing, camera height or angle, distance, and lighting direction.
-START from this image must be exactly "START from this image: [Part 1 final-frame capture]". Same exact must lock the End Frame pose, face, wardrobe, lighting, camera height, distance, and angle. The second Action line must contain 10-15s and 15-20s.
+Use exactly four non-empty lines in this order: Prompt:, Action:, Settings:, Negative:.
+Prompt must include the exact phrase "a single continuous 20-second video", uploaded reference photo identity preservation, full face visible, and the same location and wardrobe.
+Action must retain Part 1 (0-10s), 0-5s, 5-10s, an End frame, Part 2 (10-20s), the exact Part 1 end frame continuity instruction, 10-15s, and 15-20s.
+Settings must include Soul Cinematic, Motion 0.6, Style 0.85, Consistency 98 (face lock).
+Negative must concisely include different face, blurry face, extra fingers, body distortion, abrupt cuts, teleportation, discontinuity, camera jump, cartoon, nude.
 Return JSON only: {"video_prompt":"..."}
 
 PHOTO PROMPT:
@@ -989,19 +990,18 @@ function validateAiPromptVideoPrompt(value,replyPrompt){
   if(!videoPrompt)throw new Error('AI_PROMPT_VIDEO_PROMPT_REQUIRED');
   if(videoPrompt.length>AI_PROMPT_VIDEO_MAX_CHARS)throw new Error('AI_PROMPT_VIDEO_PROMPT_TOO_LONG');
   if(/[가-힣]/.test(videoPrompt))throw new Error('AI_PROMPT_VIDEO_PROMPT_NOT_ENGLISH');
-  const continuationLines=videoPrompt.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
-  const labels=['Part 1 (0-10s):','Location:','Action:','End Frame MUST BE:','Part 2 (10-20s):','START from this image:','Same exact:','Action:'];
-  if(continuationLines.length!==labels.length||labels.some((label,index)=>!continuationLines[index]?.startsWith(label))){
-    throw new Error('AI_PROMPT_VIDEO_PROMPT_CONTINUATION_FORMAT_REQUIRED');
+  const higgsfieldLines=videoPrompt.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+  if(higgsfieldLines.length!==4||['Prompt:','Action:','Settings:','Negative:'].some((label,index)=>!higgsfieldLines[index]?.startsWith(`${label} `))){
+    throw new Error('AI_PROMPT_VIDEO_PROMPT_HIGGSFIELD_FORMAT_REQUIRED');
   }
+  if(!/Consistency\s*98/i.test(videoPrompt))throw new Error('AI_PROMPT_VIDEO_PROMPT_FACE_LOCK_REQUIRED');
   if(!/0\s*[-–]\s*5\s*s/i.test(videoPrompt)||!/5\s*[-–]\s*10\s*s/i.test(videoPrompt)||!/10\s*[-–]\s*15\s*s/i.test(videoPrompt)||!/15\s*[-–]\s*20\s*s/i.test(videoPrompt)){
     throw new Error('AI_PROMPT_VIDEO_PROMPT_20_SECOND_TIMELINE_REQUIRED');
   }
-  if(!/^START from this image:\s*\[Part\s*1\s+final-frame capture\]\s*$/im.test(videoPrompt)||!/^Same exact:.*(?:pose|position).*face.*wardrobe.*lighting.*camera/im.test(videoPrompt)){
+  if(!/single\s+continuous\s+20[\s-]*second\s+video/i.test(videoPrompt)||!/Part\s*1\s*\(\s*0\s*[-–]\s*10\s*s\s*\)/i.test(videoPrompt)||!/Part\s*2\s*\(\s*10\s*[-–]\s*20\s*s\s*\)/i.test(videoPrompt)||!/(?:exact\s+Part\s*1\s+end\s+frame|exact\s+end\s+frame\s+of\s+Part\s*1)/i.test(videoPrompt)){
     throw new Error('AI_PROMPT_VIDEO_PROMPT_TWO_PART_CONTINUITY_REQUIRED');
   }
-  if(!/End Frame MUST BE:.*\d+\s*(?:degrees?|deg).*camera.*(?:light|lighting)/i.test(continuationLines[3]))throw new Error('AI_PROMPT_VIDEO_PROMPT_END_FRAME_REQUIRED');
-  const hasAction=/(walk|walks|sit|lift|sip|blow|tuck|smile|turn|look|pick|grab|open|close|enter|exit|drop|hold|reach|lean|nod|adjust|touch|step|speak|pause|start|finish|move|동작)/i.test(videoPrompt);
+  const hasAction=/(walk|walks|smile|turn|look|pick|grab|open|close|enter|exit|drop|hold|reach|lean|nod|adjust|touch|step|speak|pause|start|finish|move|동작)/i.test(videoPrompt);
   const hasCamera=/(camera|shot|dolly|track|tracking|pan|tilt|push|pull|zoom|static|handheld|over.?the.?shoulder|low.?angle|bird.?eye|wide|macro|telephoto|focus|lens|pan.?shot|orbit|follow.?in)/i.test(videoPrompt);
   const hasIdentity=/(same|identity|VOA|person|protagonist|character|figure|main|retain|preserve|keep the same|same person|same character)/i.test(videoPrompt);
   const hasSceneContinuity=hasPromptConceptOverlap(replyPrompt,videoPrompt);
@@ -1105,7 +1105,7 @@ body는 Threads에 실제 게시되는 자연스러운 한국어 반말 SNS 본�
 
 reply_prompt는 사진용으로 독립 실행 가능한 자연스러운 완성형 영문 프롬프트다. 아래 Identity Lock 문장으로 반드시 시작한 뒤 장면, 장소, 행동·포즈, 의상, 헤어·메이크업, 주변 사물, 조명, 카메라·렌즈·촬영 스타일, 질감과 필요한 Negative Constraints를 중복 없이 포함한다: "Use the attached reference image as the PRIMARY IDENTITY REFERENCE. Preserve the exact identity and recognizable facial characteristics. Never reinterpret, replace, beautify, idealize, or age-shift the person. Identity preservation overrides styling. Keep the full face and both eyes visible and unobstructed." 이후 인물은 오직 "the same person"으로만 지칭한다. woman, man, girl, boy, model, young, Korean, Asian, ethnicity, 나이 숫자처럼 참조 인물의 성별·인종·나이를 재정의하는 단어를 절대 쓰지 않는다. 영문 프롬프트 본문만 쓰고 450~550자로 매우 간결하게 완결하며 최대 ${GENERATED_REPLY_PROMPT_MAX_CHARS}자를 절대 넘지 않는다.
 
-video_prompt는 reply_prompt와 같은 장소·의상·조명·세계관을 공유하며 Meta AI가 Part 1의 마지막 프레임을 내부적으로 추출해 Part 2 시작 이미지로 사용할 수 있는 영문 연결 프롬프트다. 정확히 8개의 비어 있지 않은 줄을 Part 1 (0-10s):, Location:, Action:, End Frame MUST BE:, Part 2 (10-20s):, START from this image:, Same exact:, Action: 순서로 쓴다. Reference 줄이나 업로드 사진의 얼굴·헤어스타일·피부톤·초기 의상을 설명하는 문장은 넣지 않는다. 첫 Action은 0-5s와 5-10s, 두 번째 Action은 10-15s와 15-20s로 하나의 자연스러운 행동을 이어간다. End Frame MUST BE에는 신체 자세, 양손 위치, 숫자로 된 시선 각도, 표정, 카메라 프레이밍, 카메라 높이 또는 각도, 거리, 조명 방향을 구체적으로 고정한다. START 줄은 정확히 "START from this image: [Part 1 final-frame capture]"로 쓴다. Same exact에는 End Frame의 pose, face, wardrobe, lighting, camera height, distance, angle을 모두 유지한다고 쓴다. 무의미한 슬로모션, 계속 카메라만 보기, 얼굴·옷·신체 변화, 물체 생성·소멸, 방향 급변, 과도한 모션블러를 금지한다. 전체는 최대 ${AI_PROMPT_VIDEO_MAX_CHARS}자 안에서 완결한다.
+video_prompt는 reply_prompt와 같은 인물·장소·의상·조명·세계관을 공유하는 Higgsfield용 영문 프롬프트다. 최종 결과는 서로 다른 두 영상이 아니라 10초씩 나눠 생성한 두 파트를 연결하는 하나의 연속된 20초 영상이어야 한다. 반드시 정확히 4줄만 사용하고 각 줄을 "Prompt: 내용", "Action: 내용", "Settings: 내용", "Negative: 내용" 형식과 순서로 작성한다. Prompt에는 반드시 "a single continuous 20-second video"를 쓰고 uploaded reference photo의 얼굴과 identity 유지, full face visible, 같은 장소·의상·스타일을 명시한다. Action은 정확히 "Part 1 (0-10s): 0-5s ... / 5-10s ...; End frame: ... || Part 2 (10-20s): Continue from the exact Part 1 end frame with identical pose, position, wardrobe, lighting, and camera direction; 10-15s ... / 15-20s ..." 구조로 쓴다. Part 1의 마지막 프레임과 Part 2의 시작 프레임이 동일해야 하며, 행동과 카메라 움직임이 끊김 없이 20초 마지막 장면까지 이어져야 한다. Settings에는 "Soul Cinematic, Motion 0.6, Style 0.85, Consistency 98 (face lock)"을 반드시 포함하고 장면에 맞는 조명을 덧붙인다. Negative에는 different face, blurry face, extra fingers, body distortion, abrupt cuts, teleportation, discontinuity, camera jump, cartoon, nude를 간결하게 넣는다. 사진 프롬프트 뒤에 make a video를 붙이는 방식, 무의미한 슬로모션, 계속 카메라만 보기, 얼굴·옷·신체 변화, 물체 생성·소멸, 방향 급변, 과도한 모션블러를 금지한다. 전체는 최대 ${AI_PROMPT_VIDEO_MAX_CHARS}자 안에서 완결한다.
 
 image_brief는 결과가 한눈에 강하게 보이도록 인물, 행동, 장소, 스타일링, 빛과 시각적 긴장감을 구체적으로 설명한다. source_notes는 필수가 아니며 필요 없으면 빈 배열로 둔다. 실제 참고한 공개 콘셉트가 있을 때만 간단히 기록하고, source_notes 때문에 생성이 실패해서는 안 된다.`,
     AI_TIP:aiTipRule(recentAiTips),
@@ -1611,7 +1611,7 @@ HOT_ISSUE이면 source_notes의 사실 범위를 넘지 말 것.
 hook 6~10자 우선 최대 14자.
 본문 500자 이내. AI_PROMPT의 body 맨 마지막 줄은 정확히 "${AI_PROMPT_FIXED_HASHTAGS}"로 고정한다. 다른 카테고리는 새 본문과 직접 관련된 검색용 해시태그를 정확히 5개 넣는다. 이 해시태그는 body 외 다른 필드에는 넣지 않는다.
 이미지 브리프도 새 각도에 맞게 변경.
-AI_PROMPT는 reply_prompt(사진용) 외에 video_prompt(영상용)도 반드시 함께 작성한다. 둘은 동일 장소·의상·조명의 같은 콘셉트여야 한다. video_prompt는 Meta AI 연결용 영문 형식이며 정확히 8줄을 Part 1 (0-10s):, Location:, Action:, End Frame MUST BE:, Part 2 (10-20s):, START from this image:, Same exact:, Action: 순서로 작성한다. Reference 줄이나 업로드 사진의 얼굴·헤어스타일·피부톤·초기 의상 설명은 넣지 않는다. 첫 Action에는 0-5s와 5-10s를 쓴다. End Frame MUST BE에는 자세, 양손 위치, 숫자로 된 시선 각도, 표정, 카메라 프레이밍·높이/각도·거리, 조명 방향을 구체적으로 고정한다. START 줄은 정확히 "START from this image: [Part 1 final-frame capture]"로 쓴다. Same exact에는 pose, face, wardrobe, lighting, camera height, distance, angle 유지를 명시한다. 두 번째 Action에는 10-15s와 15-20s를 쓴다. 전체는 ${AI_PROMPT_VIDEO_MAX_CHARS}자를 넘지 않는다.
+AI_PROMPT는 reply_prompt(사진용) 외에 video_prompt(영상용)도 반드시 함께 작성한다. 둘은 동일 콘셉트의 연장이어야 하며 동일 인물·장소·의상 continuity를 유지한다. video_prompt는 10초짜리 Part 1과 Part 2를 이어 하나의 연속된 20초 영상으로 만드는 Higgsfield용 영문 형식이다. 정확히 4줄만 사용하여 Prompt: 내용, Action: 내용, Settings: 내용, Negative: 내용을 이 순서로 작성하고 라벨과 내용을 같은 줄에 둔다. Prompt에는 "a single continuous 20-second video"를 반드시 넣는다. Action은 "Part 1 (0-10s): 0-5s ... / 5-10s ...; End frame: ... || Part 2 (10-20s): Continue from the exact Part 1 end frame with identical pose, position, wardrobe, lighting, and camera direction; 10-15s ... / 15-20s ..." 구조를 정확히 사용한다. Settings에는 Soul Cinematic, Motion 0.6, Style 0.85, Consistency 98 (face lock)을 반드시 포함한다. 전체는 ${AI_PROMPT_VIDEO_MAX_CHARS}자를 넘지 않는다.
 기존:${JSON.stringify(x).slice(0,6000)}
 
 JSON만:
