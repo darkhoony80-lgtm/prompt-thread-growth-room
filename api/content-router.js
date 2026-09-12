@@ -973,7 +973,7 @@ function validateAiPromptEvidence(value,idx){
   const evidence=String(value||'').trim();
   if(!evidence)throw new Error(`AI_PROMPT_TREND_EVIDENCE_MISSING_${idx}`);
   if(!/(\b\d{4}[-./]\d{1,2}[-./]\d{1,2}\b|\b\d{4}\s*년\s*\d{1,2}\s*월\s*\d{1,2}\s*일\b|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|최근|7일|30일|30\s*days|7\s*days)/i.test(evidence))throw new Error(`AI_PROMPT_TREND_EVIDENCE_TIMING_${idx}`);
-  const hasPlatform=/(?:instagram|tiktok|threads|pinterest|twitter|x|인스타그램|틱톡|스레드|핀터레스트)/i.test(evidence);
+  const hasPlatform=/(?:instagram|tiktok|threads|pinterest|twitter|\bx\b|인스타그램|틱톡|스레드|핀터레스트)/i.test(evidence);
   const hasExternalSource=/(?:https?:\/\/|www\\.)|기사|리포트|보고서|트렌드\s*자료|공개\s*자료|article|report|study/i.test(evidence);
   if(!hasPlatform&&!hasExternalSource)throw new Error(`AI_PROMPT_TREND_EVIDENCE_SOURCE_${idx}`);
 }
