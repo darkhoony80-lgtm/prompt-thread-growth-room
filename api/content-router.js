@@ -1002,8 +1002,6 @@ function validateAiPromptSelection(output,item,recentAiPrompts=[]){
     for(const [field,prefix] of requiredFields){
       if(!String(entry?.[field]||'').trim())throw new Error(`${prefix}${index+1}`);
     }
-    validateAiPromptEvidence(entry?.trend_evidence,index+1);
-
     const scores=entry?.scores||{};
     if(AI_PROMPT_SCORE_KEYS.some(key=>!Number.isFinite(Number(scores[key]))||Number(scores[key])<0||Number(scores[key])>10)){
       throw new Error(`AI_PROMPT_SCORE_INVALID_${index+1}`);
@@ -1019,6 +1017,7 @@ function validateAiPromptSelection(output,item,recentAiPrompts=[]){
   if(totals[selectedIndex]<Math.max(...totals))throw new Error('AI_PROMPT_SELECTED_NOT_STRONGEST');
 
   const selected=shortlist[selectedIndex];
+  validateAiPromptEvidence(selected?.trend_evidence,selectedIndex+1);
   const selectedText=`${aiPromptEntryText(selected)} ${item.topic} ${item.hook} ${item.image_brief}`;
   const recent=aiPromptRecentLines(recentAiPrompts);
   const fingerprints=[`${item.topic} ${item.hook}`,aiPromptEntryText(selected),selectedText];
