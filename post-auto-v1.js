@@ -22,6 +22,7 @@ Follow first, then comment PROMPT!`;
 let candidates=[null,null,null,null];
 let instagramCarousel=null,instagramPublishing=false,instagramModalOpen=false;
 let videoMergeRuntimePromise=null;
+const videoMergeDrafts=new Map();
 function read(k,d=[]){try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}}
 function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
 function masterRecords(){const value=read(CM,{});return value&&typeof value==='object'&&!Array.isArray(value)?value:{}}
@@ -276,7 +277,7 @@ function emptyCard(pillar,i){
 </div>`:`<button class="btn p" id="v3gen-${i}" onclick="PostAuto.generate(${i})">✨ 생성</button>`}</article>`;
 }
 function mediaEditorHtml(i,master){
- return `<section class="cm-editor"><div class="section"><div><b>공통 미디어</b><p class="mut">현재 배열 순서가 Threads와 Instagram의 실제 게시 순서입니다. 영상 2개를 한 번에 선택하면 순서대로 하나의 MP4로 합쳐 업로드합니다.</p></div><label class="btn">사진/영상 추가<input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" multiple hidden onchange="PostAuto.addMedia(${i},this.files);this.value=''" /></label></div><div id="v3media-${i}" class="cm-media"></div></section>`;
+ return `<section class="cm-editor"><div class="section"><div><b>공통 미디어</b><p class="mut">영상 여러 개를 한 번에 선택하면 순서를 정한 뒤 하나의 MP4로 인코딩할 수 있습니다.</p></div><label class="btn">사진/영상 추가<input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" multiple hidden onchange="PostAuto.addMedia(${i},this.files);this.value=''" /></label></div><div id="v3merge-${i}"></div><div id="v3media-${i}" class="cm-media"></div></section>`;
 }
 function promptTextareas(pillar,i,master){
  const replyPromptValue=esc(master.reply_prompt||'');
@@ -294,12 +295,45 @@ function render(){
  const box=document.getElementById('v3list');if(!box)return;
  box.innerHTML=PILLARS.map((pillar,i)=>{const x=candidates[i];if(!x)return emptyCard(pillar,i);const master=ensureMaster(i);return `<article class="card" id="v3card-${i}"><div class="post-meta"><span class="badge">${esc(CATS[pillar]||x.category_label)}</span><span class="badge">Content Master</span><span class="mut">총점 ${x.score?.total||0}</span></div><div class="v3grid" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,430px);gap:18px;align-items:start"><div><div style="display:flex;justify-content:flex-end;gap:8px;align-items:center">${pillar==='AI_PROMPT'?`<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="btn" id="v3gen-${i}" onclick="PostAuto.generate(${i},'RANDOM')">🎲 랜덤</button><button class="btn" onclick="PostAuto.generate(${i},'HAPPY')">😊 행복</button><button class="btn" onclick="PostAuto.generate(${i},'LOVE')">❤️ 사랑</button><button class="btn" onclick="PostAuto.generate(${i},'COMIC')">😂 코믹</button><button class="btn" onclick="PostAuto.generate(${i},'HORROR')">👻 공포</button><button class="btn" onclick="PostAuto.generate(${i},'FANTASY')">🧚 판타지</button></div>`:pillar==='AI_TIP'?`<button class="btn" onclick="PostAuto.reset(${i})">↺ 리셋</button>`:`<button class="btn p" id="v3gen-${i}" onclick="PostAuto.generate(${i})">✨ 생성</button>`}</div><label class="mut">공통 본문</label><textarea id="v3body-${i}" maxlength="500" oninput="PostAuto.save(${i})" class="cm-body">${esc(master.master_body)}</textarea>${promptTextareas(pillar,i,master)}<p class="mut">소재 · ${esc(x.topic)}</p><p class="mut">추천 이유 · ${esc(x.reason)}</p>${x.source_notes?.length?`<p class="mut">검증 메모 · ${esc(x.source_notes.join(' / '))}</p>`:''}<div style="margin:10px 0"><label class="mut">🏷 Threads 추천 Topic ${x.topic_tag_verified?'· TAG 검색 확인 ✅':(x.topic_tag_search_available===false?'· 검색 확인 불가':'· 추천값')}</label><input id="v3topic-${i}" maxlength="80" oninput="PostAuto.save(${i})" value="${esc(master.topic_tag||'')}" placeholder="예: AI 이미지" class="cm-input"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" onclick="PostAuto.image(${i})">🖼 AI 이미지 추가</button><button class="btn" onclick="PostAuto.reimage(${i})">🔄 AI 이미지 추가 생성</button><button class="btn" onclick="PostAuto.instagram(${i})">AI 이미지 스토리 만들기</button><button class="btn" onclick="PostAuto.variant(${i})">다른 버전</button><button class="btn" onclick="PostAuto.keep(${i})">👍 발행 대기</button><button class="btn p" onclick="PostAuto.now(${i})">Threads 게시</button><button class="btn p" onclick="PostAuto.instagramMasterPublish(${i})">Instagram 게시</button><button class="btn p" onclick="PostAuto.facebookPublish(${i})">Facebook 게시</button><button class="btn p" onclick="PostAuto.youtubePublish(${i})">YouTube 게시</button></div></div><div>${mediaEditorHtml(i,master)}</div></div></article>`}).join('');
  if(!document.getElementById('v3css'))document.head.insertAdjacentHTML('beforeend',`<style id="v3css">@media(max-width:900px){.v3grid{grid-template-columns:1fr!important}}.cm-body,.cm-reply,.cm-input{width:100%;margin-top:5px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:12px;line-height:1.55}.cm-body{min-height:190px}.cm-reply{min-height:150px}.cm-editor{border:1px solid var(--l);border-radius:12px;padding:12px}.cm-media{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:10px 0}.cm-item{position:relative;border:1px solid var(--l);border-radius:10px;padding:6px;background:#090b0f}.cm-item img,.cm-item video{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:7px;display:block}.cm-item-actions{display:flex;gap:4px;margin-top:5px}.cm-item-actions .btn{padding:5px 8px}.cm-kind{position:absolute;top:10px;left:10px;background:#090b0fdd;border-radius:10px;padding:3px 6px;font-size:10px}.cm-reply-toolbar{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}</style>`);
- candidates.forEach((x,i)=>{if(x)renderMedia(i)});
+ if(!document.getElementById('v3mergecss'))document.head.insertAdjacentHTML('beforeend',`<style id="v3mergecss">.cm-merge{margin-top:10px;padding:10px;border:1px solid #3b536f;border-radius:10px;background:#0a1119}.cm-merge-row{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:7px;align-items:center;padding:7px 0;border-bottom:1px solid var(--l)}.cm-merge-row:last-child{border-bottom:0}.cm-merge-actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:10px}.cm-merge-actions .btn{padding:6px 9px}</style>`);
+ candidates.forEach((x,i)=>{if(x){renderMedia(i);renderVideoMergeDraft(i)}});
 }
 function renderMedia(i){
  const box=document.getElementById(`v3media-${i}`),master=ensureMaster(i);if(!box||!master)return;
  box.innerHTML=master.media.length?master.media.map((m,index)=>`<div class="cm-item"><span class="cm-kind">${index+1} · ${m.source==='ai'?'AI':'업로드'} ${m.type==='video'?'영상':'사진'}</span>${m.type==='video'?`<video src="${esc(m.previewUrl||m.url)}" controls preload="metadata"></video>`:`<img src="${esc(m.previewUrl||m.url)}" alt="${index+1}번 미디어">`}<div class="cm-item-actions"><button class="btn" onclick="PostAuto.moveMedia(${i},'${esc(m.id)}',-1)" ${index===0?'disabled':''}>←</button><button class="btn" onclick="PostAuto.moveMedia(${i},'${esc(m.id)}',1)" ${index===master.media.length-1?'disabled':''}>→</button><button class="btn" onclick="PostAuto.removeMedia(${i},'${esc(m.id)}')">삭제</button></div></div>`).join(''):'<div class="card empty"><div><b>미디어 없음</b>AI 이미지 생성 전에도 사진이나 영상을 추가할 수 있습니다.</div></div>';
 }
+function videoMergeDraft(i){return videoMergeDrafts.get(masterKey(i))||null}
+function renderVideoMergeDraft(i){
+ const box=document.getElementById(`v3merge-${i}`),draft=videoMergeDraft(i);if(!box)return;
+ if(!draft?.files?.length){box.innerHTML='';return}
+ const disabled=draft.encoding?'disabled':'';
+ box.innerHTML=`<div class="cm-merge"><b>🎬 영상 병합 순서 · ${draft.files.length}개</b><p class="mut" id="v3merge-status-${i}">${esc(draft.status||'화살표로 순서를 정한 뒤 인코딩을 시작하세요.')}</p>${draft.files.map((file,index)=>`<div class="cm-merge-row"><b>${index+1}</b><span title="${esc(file.name)}">${esc(file.name)} · ${(file.size/1024/1024).toFixed(1)}MB</span><span><button class="btn" onclick="PostAuto.moveMergeVideo(${i},${index},-1)" ${disabled||index===0?'disabled':''}>↑</button><button class="btn" onclick="PostAuto.moveMergeVideo(${i},${index},1)" ${disabled||index===draft.files.length-1?'disabled':''}>↓</button><button class="btn" onclick="PostAuto.removeMergeVideo(${i},${index})" ${disabled}>삭제</button></span></div>`).join('')}<div class="cm-merge-actions"><label class="btn">영상 더 추가<input type="file" accept="video/mp4,video/quicktime" multiple hidden onchange="PostAuto.addMergeVideos(${i},this.files);this.value=''" ${disabled}/></label><button class="btn p" onclick="PostAuto.encodeMergeVideos(${i})" ${disabled||draft.files.length<2?'disabled':''}>${draft.encoding?'인코딩 중…':'이 순서로 인코딩 및 업로드'}</button><button class="btn" onclick="PostAuto.cancelMergeVideos(${i})" ${disabled}>취소</button></div></div>`;
+}
+function setVideoMergeStatus(i,text){
+ const draft=videoMergeDraft(i);if(draft)draft.status=String(text||'');
+ const local=document.getElementById(`v3merge-status-${i}`),globalStatus=document.getElementById('v3status');
+ if(local)local.textContent=String(text||'');if(globalStatus)globalStatus.textContent=String(text||'');
+}
+function addVideoMergeFiles(i,fileList){
+ const incoming=Array.from(fileList||[]);if(!incoming.length)return;
+ try{
+  if(incoming.some(file=>validateLocalMedia(file)!=='video'))throw new Error('MP4 또는 MOV 영상만 병합 목록에 추가할 수 있습니다.');
+  const current=videoMergeDraft(i),files=[...(current?.files||[]),...incoming];
+  if(files.reduce((sum,file)=>sum+Number(file.size||0),0)>500*1024*1024)throw new Error('병합할 원본 영상 합계는 500MB 이하여야 합니다.');
+  videoMergeDrafts.set(masterKey(i),{files,encoding:false,status:'화살표로 순서를 정한 뒤 인코딩을 시작하세요.'});renderVideoMergeDraft(i);
+  setVideoMergeStatus(i,`영상 ${files.length}개가 병합 대기 중입니다. 순서를 확인하세요.`);
+ }catch(e){alert('영상 병합 목록 추가 실패: '+String(e?.message||e))}
+}
+function moveVideoMergeFile(i,index,direction){
+ const draft=videoMergeDraft(i),to=index+direction;if(!draft||draft.encoding||to<0||to>=draft.files.length)return;
+ [draft.files[index],draft.files[to]]=[draft.files[to],draft.files[index]];draft.status='변경된 순서로 인코딩할 준비가 됐습니다.';renderVideoMergeDraft(i);
+}
+function removeVideoMergeFile(i,index){
+ const draft=videoMergeDraft(i);if(!draft||draft.encoding)return;draft.files.splice(index,1);
+ if(!draft.files.length)videoMergeDrafts.delete(masterKey(i));else draft.status=draft.files.length<2?'영상을 하나 이상 더 추가하세요.':'순서를 확인한 뒤 인코딩을 시작하세요.';
+ renderVideoMergeDraft(i);
+}
+function cancelVideoMerge(i){const draft=videoMergeDraft(i);if(!draft||draft.encoding)return;videoMergeDrafts.delete(masterKey(i));renderVideoMergeDraft(i);setVideoMergeStatus(i,'영상 병합 대기를 취소했습니다.')}
 async function videoDuration(file){
  const info=await videoMetadata(file);
  return info.duration;
@@ -338,16 +372,16 @@ function mergedVideoSize(firstInfo){
  return {width:Math.max(2,Math.floor(width*scale/2)*2),height:Math.max(2,Math.floor(height*scale/2)*2)};
 }
 async function mergeVideoFiles(files,status){
- if(files.length!==2)throw new Error('병합할 영상 2개를 선택해 주세요.');
- if(files.some(file=>validateLocalMedia(file)!=='video'))throw new Error('MP4 또는 MOV 영상 2개만 병합할 수 있습니다.');
+ if(files.length<2)throw new Error('병합할 영상을 2개 이상 선택해 주세요.');
+ if(files.some(file=>validateLocalMedia(file)!=='video'))throw new Error('MP4 또는 MOV 영상만 병합할 수 있습니다.');
  const totalBytes=files.reduce((sum,file)=>sum+Number(file.size||0),0);
  if(totalBytes>500*1024*1024)throw new Error('브라우저 영상 병합은 원본 합계 500MB 이하만 지원합니다.');
  const infos=await Promise.all(files.map(videoMetadata));
  if(infos.some(info=>!info.duration||!info.width||!info.height))throw new Error('영상 길이 또는 해상도를 확인할 수 없습니다.');
  const {width,height}=mergedVideoSize(infos[0]),{ffmpeg,fetchFile}=await loadVideoMergeRuntime(status);
  const inputNames=files.map((file,index)=>`merge-input-${index}.${String(file.name||'video.mp4').split('.').pop().replace(/[^a-z0-9]/gi,'').toLowerCase()||'mp4'}`);
- const normalizedNames=['merge-normalized-0.mp4','merge-normalized-1.mp4'],created=[...inputNames,...normalizedNames,'merge-list.txt','merge-output.mp4'];
- const progress=({progress:value})=>{if(status&&Number.isFinite(value))status.textContent=`영상 병합 중… ${Math.min(99,Math.max(1,Math.round(value*100)))}%`};
+ const normalizedNames=files.map((_,index)=>`merge-normalized-${index}.mp4`),created=[...inputNames,...normalizedNames,'merge-list.txt','merge-output.mp4'];
+ const progress=({progress:value})=>{if(status&&Number.isFinite(value))status.textContent=`영상 인코딩 중… ${Math.min(99,Math.max(1,Math.round(value*100)))}%`};
  ffmpeg.on('progress',progress);
  try{
   for(let index=0;index<files.length;index++)await ffmpeg.writeFile(inputNames[index],await fetchFile(files[index]));
@@ -364,7 +398,7 @@ async function mergeVideoFiles(files,status){
   const concatCode=await ffmpeg.exec(['-y','-f','concat','-safe','0','-i','merge-list.txt','-c','copy','-movflags','+faststart','merge-output.mp4']);
   if(concatCode!==0)throw new Error('변환한 영상 연결에 실패했습니다.');
   const output=await ffmpeg.readFile('merge-output.mp4');
-  const merged=new File([output],`${String(files[0].name||'video').replace(/\.[^.]+$/,'')}-${String(files[1].name||'video').replace(/\.[^.]+$/,'')}-merged.mp4`,{type:'video/mp4',lastModified:Date.now()});
+  const merged=new File([output],`${String(files[0].name||'video').replace(/\.[^.]+$/,'')}-${files.length}clips-merged.mp4`,{type:'video/mp4',lastModified:Date.now()});
   if(!merged.size)throw new Error('병합된 영상 파일이 비어 있습니다.');
   if(merged.size>1024*1024*1024)throw new Error('병합된 영상이 1GB를 초과합니다.');
   return merged;
@@ -405,19 +439,7 @@ async function uploadLocalMedia(file,i,type){
 async function addLocalMedia(i,fileList){
  const files=Array.from(fileList||[]);if(!files.length)return;
  const status=document.getElementById('v3status');
- if(files.length===2&&files.every(file=>['video/mp4','video/quicktime'].includes(String(file?.type||'').toLowerCase()))){
-  let file;
-  try{
-   file=await mergeVideoFiles(files,status);
-  }catch(e){const message=String(e?.message||e||'알 수 없는 오류');if(status)status.textContent='영상 병합 실패: '+message;alert('영상 병합 실패: '+message);return}
-  try{
-   const duration=await videoDuration(file);if(status)status.textContent=`영상 병합 완료 (${duration.toFixed(1)}초) · 업로드 중…`;
-   const blob=await uploadLocalMedia(file,i,'video');
-   appendMasterMedia(i,{id:mediaId('upload'),type:'video',source:'upload',url:blob.url,previewUrl:blob.url,mime_type:file.type,size:file.size,duration});
-   if(status)status.textContent='영상 2개 병합 및 공통 미디어 저장 완료';
-  }catch(e){const message=String(e?.message||e||'알 수 없는 오류');if(status)status.textContent='영상 병합 완료 / 업로드 실패: '+message;alert('병합된 영상 업로드 실패: '+message)}
-  return;
- }
+ if(files.length>=2&&files.every(file=>['video/mp4','video/quicktime'].includes(String(file?.type||'').toLowerCase()))){addVideoMergeFiles(i,files);return}
  for(const original of files){
   try{
    if(status&&/^image\/(?:png|webp)$/.test(String(original?.type||'')))status.textContent=`${original.name} JPEG 변환 중…`;
@@ -429,6 +451,18 @@ async function addLocalMedia(i,fileList){
   }catch(e){alert('미디어 추가 실패: '+e.message)}
  }
  if(status)status.textContent='공통 미디어 저장 완료';
+}
+async function encodeVideoMerge(i){
+ const draft=videoMergeDraft(i);if(!draft||draft.encoding||draft.files.length<2)return;
+ draft.encoding=true;draft.status='인코딩 준비 중…';renderVideoMergeDraft(i);setVideoMergeStatus(i,'인코딩 준비 중…');
+ try{
+  const progress={set textContent(value){setVideoMergeStatus(i,value)}};
+  const file=await mergeVideoFiles(draft.files,progress),duration=await videoDuration(file);
+  setVideoMergeStatus(i,`인코딩 완료 (${duration.toFixed(1)}초) · 업로드 중…`);
+  const blob=await uploadLocalMedia(file,i,'video');
+  appendMasterMedia(i,{id:mediaId('upload'),type:'video',source:'upload',url:blob.url,previewUrl:blob.url,mime_type:file.type,size:file.size,duration});
+  const count=draft.files.length;videoMergeDrafts.delete(masterKey(i));renderVideoMergeDraft(i);setVideoMergeStatus(i,`영상 ${count}개 인코딩 및 업로드 완료`);
+ }catch(e){draft.encoding=false;draft.status='실패: '+String(e?.message||e||'알 수 없는 오류');renderVideoMergeDraft(i);setVideoMergeStatus(i,draft.status);alert('영상 인코딩 또는 업로드 실패: '+String(e?.message||e))}
 }
 function preview(i){const x=candidates[i],b=document.getElementById(`v3img-${i}`),src=x?.final_image||x?.image_url;if(!src){b.innerHTML='<span class="mut">이미지를 생성한 뒤 직접 확인하세요.</span>';return}b.innerHTML=`<div><img src="${src}" style="width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:11px;display:block"><p class="mut" style="margin:8px 2px 0">최종 썸네일 미리보기 · 확인 후 채택/게시</p></div>`}
 async function makeImage(i,redo=false){
@@ -768,6 +802,6 @@ function patchReplies(){
  const b=document.getElementById('batchReply');if(!b)return;b.onclick=async()=>{if(window._batchRunning||window._replyHistoryAvailable===false)return;const all=window._replyItems||[],targets=[];all.forEach((x,i)=>{if(x.review_required||x.already_replied)return;const text=document.getElementById(`replyText-${i}`)?.value.trim();if(text)targets.push({i,id:x.id,text})});if(!targets.length||!confirm(`${targets.length}개 미응답 댓글을 순차 답장할까요?`))return;window._batchRunning=true;updateBatchButton();let ok=0,fail=0;for(let n=0;n<targets.length;n++){const t=targets[n];b.textContent=`일괄 답장 ${n+1}/${targets.length}`;try{await postReply(t.id,t.text);markReplyDone(t.i,t.id,t.text);ok++}catch{fail++}if(n<targets.length-1)await new Promise(r=>setTimeout(r,500))}window._batchRunning=false;updateBatchButton();alert(`완료 · 성공 ${ok} / 실패 ${fail}`);await syncReplies(currentPostIds).catch(()=>{})};
  setTimeout(()=>{try{updateBatchButton()}catch{}},100);
 }
-window.PostAuto={generate:generatePillar,image:i=>makeImage(i,false),reimage:i=>makeImage(i,true),keep,now,variant,no,reset:resetCard,drop,publishQueue,save:syncDraft,deliveryType:setPromptDeliveryType,addMedia:addLocalMedia,removeMedia:removeMasterMedia,moveMedia:moveMasterMedia,instagram:openInstagramCarousel,instagramSelect:selectInstagramSlide,instagramCaption:setInstagramCaption,instagramReplyPrompt:setInstagramReplyPrompt,instagramClose:closeInstagramCarousel,instagramRegenerate:regenerateInstagramSlide,instagramRegenerateAll:regenerateInstagramCarousel,instagramPublish:publishInstagramCarousel,instagramMasterPublish:publishInstagramMaster,facebookPublish:publishFacebookMaster,youtubePublish:publishYoutubeMaster,copyText,instagramPromptStoreRetry:retryInstagramPromptStore};
+window.PostAuto={generate:generatePillar,image:i=>makeImage(i,false),reimage:i=>makeImage(i,true),keep,now,variant,no,reset:resetCard,drop,publishQueue,save:syncDraft,deliveryType:setPromptDeliveryType,addMedia:addLocalMedia,addMergeVideos:addVideoMergeFiles,moveMergeVideo:moveVideoMergeFile,removeMergeVideo:removeVideoMergeFile,cancelMergeVideos:cancelVideoMerge,encodeMergeVideos:encodeVideoMerge,removeMedia:removeMasterMedia,moveMedia:moveMasterMedia,instagram:openInstagramCarousel,instagramSelect:selectInstagramSlide,instagramCaption:setInstagramCaption,instagramReplyPrompt:setInstagramReplyPrompt,instagramClose:closeInstagramCarousel,instagramRegenerate:regenerateInstagramSlide,instagramRegenerateAll:regenerateInstagramCarousel,instagramPublish:publishInstagramCarousel,instagramMasterPublish:publishInstagramMaster,facebookPublish:publishFacebookMaster,youtubePublish:publishYoutubeMaster,copyText,instagramPromptStoreRetry:retryInstagramPromptStore};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ensure);else ensure();
 })();
