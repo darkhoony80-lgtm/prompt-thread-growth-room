@@ -537,8 +537,8 @@ function classifyInstagramPromptIntentRule(value){
     /(?:씹|썅)\s*(?:새끼|년|놈)/,
     /(?:꺼져|닥쳐|엿\s*먹어|지랄)/
   ];
-  if(explicitAbuse.some(pattern=>pattern.test(text)))return {result:false,source:'rule_abuse',confidence:1};
-  return {result:true,source:'rule_default',confidence:1};
+  if(explicitAbuse.some(pattern=>pattern.test(text)))return {result:false,source:'rule_no',confidence:1};
+  return {result:true,source:'rule_yes',confidence:1};
 }
 
 async function classifyInstagramPromptIntentWithGemini(value){
