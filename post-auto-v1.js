@@ -9,7 +9,7 @@ const PLATFORM_BODY_CTA={
  threads:'링크/추가 내용은 첫 댓글에 남겨둘게 👇',
  instagram:'필요하면 댓글 남겨줘. DM으로 보내줄게 💌'
 };
-const INSTAGRAM_AI_PROMPT_HEADER='이쁜 프로필 사진 필요해? 댓글에 "프롬프트" 남겨줘 1분만에 날라간당';
+const INSTAGRAM_AI_PROMPT_HEADER='✨ 이쁜 프로필 사진 필요해? 댓글에 "프롬프트" 남겨줘 1분만에 날라간당';
 let candidates=[null,null,null,null];
 let instagramCarousel=null,instagramPublishing=false,instagramModalOpen=false;
 function read(k,d=[]){try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}}
@@ -22,6 +22,9 @@ function ensureMaster(i){
  const key=masterKey(i),records=masterRecords();
  if(records[key]){
   const master=records[key];
+  if(PILLARS[i]==='AI_PROMPT'&&typeof master.video_prompt!=='string'){
+   master.video_prompt=String(x.video_prompt||'');records[key]=master;write(CM,records);
+  }
   if(!String(master.master_body||'').trim()){
    master.master_body=String(master.threads_body_override||master.instagram_caption_override||x.body||'');
    master.updated_at=Date.now();records[key]=master;write(CM,records);
@@ -30,7 +33,8 @@ function ensureMaster(i){
  }
  const media=[];
  if(x.image_url)media.push({id:mediaId('legacy'),type:'image',source:'ai',url:x.image_url,previewUrl:x.image_url,order:0,status:'ready',mime_type:/\.jpe?g(?:$|\?)/i.test(x.image_url)?'image/jpeg':'image/png'});
- const master={version:1,content_id:key,content_type:PILLARS[i],title:x.topic||x.category_label||'',master_body:x.body||'',threads_body_override:'',instagram_caption_override:'',reply_prompt:x.reply_prompt||'',topic_tag:x.topic_tag||'',topic_tag_verified:x.topic_tag_verified===true,media,status:{threads:'draft',instagram:'draft',facebook:'draft',youtube:'draft'},updated_at:Date.now()};
+ const master={version:1,content_id:key,content_type:PILLARS[i],title:x.topic||x.category_label||'',master_body:x.body||'',threads_body_override:'',instagram_caption_override:'',reply_prompt:x.reply_prompt||'',video_prompt:String(x.video_prompt||''),
+  topic_tag:x.topic_tag||'',topic_tag_verified:x.topic_tag_verified===true,media,status:{threads:'draft',instagram:'draft',facebook:'draft',youtube:'draft'},updated_at:Date.now()};
  records[key]=master;write(CM,records);return master;
 }
 function saveMaster(i,master){if(!master)return;master.media=(master.media||[]).map((m,order)=>({...m,order}));master.updated_at=Date.now();const records=masterRecords();records[master.content_id]=master;write(CM,records)}
@@ -104,10 +108,17 @@ function ensureCoupangWorkspace(){
 function syncDraft(i){
  const x=candidates[i];if(!x)return;
  const pillar=PILLARS[i],aiThumbnail=['AI_PROMPT','AI_TIP'].includes(pillar),oldBody=x.body||'',oldReply=x.reply_prompt||'',oldTopicTag=String(x.topic_tag||'').replace(/^#+/,'').trim().slice(0,80),nextTopicTag=topicTag(i),nextBody=body(i),nextReply=aiThumbnail?replyPrompt(i):'';
+ const nextVideoPrompt=pillar==='AI_PROMPT'?videoPrompt(i):'';
  x.body=nextBody;x.topic_tag=nextTopicTag;if(oldTopicTag!==nextTopicTag)x.topic_tag_verified=false;if(aiThumbnail)x.reply_prompt=nextReply;
+ if(pillar==='AI_PROMPT')x.video_prompt=nextVideoPrompt;
  if(x.final_image&&((aiThumbnail&&oldBody!==nextBody)||(pillar==='AI_PROMPT'&&oldReply!==nextReply)))x.thumbnail_dirty=true;
  const master=ensureMaster(i);
- if(master){master.master_body=nextBody;master.reply_prompt=aiThumbnail?nextReply:master.reply_prompt||'';master.topic_tag=nextTopicTag;master.topic_tag_verified=x.topic_tag_verified===true;saveMaster(i,master)}
+ if(master){
+  master.master_body=nextBody;
+  master.reply_prompt=aiThumbnail?nextReply:master.reply_prompt||'';
+  if(pillar==='AI_PROMPT')master.video_prompt=nextVideoPrompt;
+  master.topic_tag=nextTopicTag;master.topic_tag_verified=x.topic_tag_verified===true;saveMaster(i,master)
+ }
  saveDrafts();
 }
 function withoutLegacyPromptCta(value){
@@ -134,6 +145,7 @@ function esc(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt
 function fb(x,kind){const a=read(F);a.unshift({kind,category:x.category,topic:x.topic,hook:x.hook,at:Date.now()});write(F,a.slice(0,80))}
 function body(i){return document.getElementById(`v3body-${i}`)?.value.trim()||candidates[i]?.body||''}
 function replyPrompt(i){return document.getElementById(`v3reply-${i}`)?.value.trim()||candidates[i]?.reply_prompt||''}
+function videoPrompt(i){return document.getElementById(`v3video-${i}`)?.value.trim()||candidates[i]?.video_prompt||''}
 function topicTag(i){return String(document.getElementById(`v3topic-${i}`)?.value||candidates[i]?.topic_tag||'').replace(/^#+/,'').trim().slice(0,80)}
 async function verifyTopicCandidates(x){
  const list=[...(x?.topic_tag_candidates||[]),x?.topic_tag].map(v=>String(v||'').replace(/^#+/,'').trim()).filter(Boolean);
@@ -248,10 +260,21 @@ function emptyCard(pillar,i){
 function mediaEditorHtml(i,master){
  return `<section class="cm-editor"><div class="section"><div><b>공통 미디어</b><p class="mut">현재 배열 순서가 Threads와 Instagram의 실제 게시 순서입니다. 직접 추가한 미디어와 AI 이미지 스토리는 삭제·이동 전까지 그대로 유지됩니다.</p></div><label class="btn">사진/영상 추가<input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" multiple hidden onchange="PostAuto.addMedia(${i},this.files);this.value=''" /></label></div><div id="v3media-${i}" class="cm-media"></div></section>`;
 }
+function promptTextareas(pillar,i,master){
+ const replyPromptValue=esc(master.reply_prompt||'');
+ const videoPromptValue=esc(master.video_prompt||'');
+ if(pillar==='AI_PROMPT'){
+  return `<label class="mut" style="display:block;margin-top:10px">[사진 프롬프트]</label><textarea id="v3reply-${i}" oninput="PostAuto.save(${i})" class="cm-reply" placeholder="사진용 영문 프롬프트">${replyPromptValue}</textarea><div class="cm-reply-toolbar"><button class="btn" type="button" onclick="PostAuto.copyText(${i},'reply')">복사</button></div><label class="mut" style="display:block;margin-top:10px">[영상 프롬프트]</label><textarea id="v3video-${i}" oninput="PostAuto.save(${i})" class="cm-reply" placeholder="영상용 영문 프롬프트">${videoPromptValue}</textarea><div class="cm-reply-toolbar"><button class="btn" type="button" onclick="PostAuto.copyText(${i},'video')">복사</button></div><p class="mut">사진 프롬프트는 기존 게시·Instagram 자동 답장/DM에 사용되고, 영상 프롬프트는 화면 확인·복사용입니다.</p>`;
+ }
+ if(pillar==='AI_TIP'){
+  return `<label class="mut" style="display:block;margin-top:10px">댓글 및 답장 입력</label><textarea id="v3reply-${i}" oninput="PostAuto.save(${i})" class="cm-reply" placeholder="예: https://link.coupang.com/a/...">${replyPromptValue}</textarea><div class="cm-reply-toolbar"><button class="btn" type="button" onclick="PostAuto.copyText(${i},'reply')">복사</button></div><p class="mut">Threads 첫 일반 댓글 · Instagram 자동 답장/DM · YouTube 첫 댓글+답장</p>`;
+ }
+ return '';
+}
 function render(){
  const box=document.getElementById('v3list');if(!box)return;
- box.innerHTML=PILLARS.map((pillar,i)=>{const x=candidates[i];if(!x)return emptyCard(pillar,i);const master=ensureMaster(i);return `<article class="card" id="v3card-${i}"><div class="post-meta"><span class="badge">${esc(CATS[pillar]||x.category_label)}</span><span class="badge">Content Master</span><span class="mut">총점 ${x.score?.total||0}</span></div><div class="v3grid" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,430px);gap:18px;align-items:start"><div><div style="display:flex;justify-content:flex-end;gap:8px;align-items:center">${pillar==='AI_PROMPT'?`<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="btn" id="v3gen-${i}" onclick="PostAuto.generate(${i},'RANDOM')">🎲 랜덤</button><button class="btn" onclick="PostAuto.generate(${i},'HAPPY')">😊 행복</button><button class="btn" onclick="PostAuto.generate(${i},'LOVE')">❤️ 사랑</button><button class="btn" onclick="PostAuto.generate(${i},'COMIC')">😂 코믹</button><button class="btn" onclick="PostAuto.generate(${i},'HORROR')">👻 공포</button><button class="btn" onclick="PostAuto.generate(${i},'FANTASY')">🧚 판타지</button></div>`:pillar==='AI_TIP'?`<button class="btn" onclick="PostAuto.reset(${i})">↺ 리셋</button>`:`<button class="btn p" id="v3gen-${i}" onclick="PostAuto.generate(${i})">✨ 생성</button>`}</div><label class="mut">공통 본문</label><textarea id="v3body-${i}" maxlength="500" oninput="PostAuto.save(${i})" class="cm-body">${esc(master.master_body)}</textarea>${['AI_PROMPT','AI_TIP'].includes(pillar)?`<label class="mut" style="display:block;margin-top:10px">댓글 및 답장 입력</label><textarea id="v3reply-${i}" oninput="PostAuto.save(${i})" class="cm-reply" placeholder="예: https://link.coupang.com/a/...">${esc(master.reply_prompt||'')}</textarea><p class="mut">${pillar==='AI_PROMPT'?'Threads 첫 댓글 텍스트 첨부(스니펫) · Instagram 자동 답장/DM · YouTube 첫 댓글+답장':'Threads 첫 일반 댓글 · Instagram 자동 답장/DM · YouTube 첫 댓글+답장'}에 사용됩니다.</p>`:''}<p class="mut">소재 · ${esc(x.topic)}</p><p class="mut">추천 이유 · ${esc(x.reason)}</p>${x.source_notes?.length?`<p class="mut">검증 메모 · ${esc(x.source_notes.join(' / '))}</p>`:''}<div style="margin:10px 0"><label class="mut">🏷 Threads 추천 Topic ${x.topic_tag_verified?'· TAG 검색 확인 ✅':(x.topic_tag_search_available===false?'· 검색 확인 불가':'· 추천값')}</label><input id="v3topic-${i}" maxlength="80" oninput="PostAuto.save(${i})" value="${esc(master.topic_tag||'')}" placeholder="예: AI 이미지" class="cm-input"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" onclick="PostAuto.image(${i})">🖼 AI 이미지 추가</button><button class="btn" onclick="PostAuto.reimage(${i})">🔄 AI 이미지 추가 생성</button><button class="btn" onclick="PostAuto.instagram(${i})">AI 이미지 스토리 만들기</button><button class="btn" onclick="PostAuto.variant(${i})">다른 버전</button><button class="btn" onclick="PostAuto.keep(${i})">👍 발행 대기</button><button class="btn p" onclick="PostAuto.now(${i})">Threads 게시</button><button class="btn p" onclick="PostAuto.instagramMasterPublish(${i})">Instagram 게시</button><button class="btn p" onclick="PostAuto.facebookPublish(${i})">Facebook 게시</button><button class="btn p" onclick="PostAuto.youtubePublish(${i})">YouTube 게시</button></div></div><div>${mediaEditorHtml(i,master)}</div></div></article>`}).join('');
- if(!document.getElementById('v3css'))document.head.insertAdjacentHTML('beforeend',`<style id="v3css">@media(max-width:900px){.v3grid{grid-template-columns:1fr!important}}.cm-body,.cm-reply,.cm-input{width:100%;margin-top:5px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:12px;line-height:1.55}.cm-body{min-height:190px}.cm-reply{min-height:150px}.cm-editor{border:1px solid var(--l);border-radius:12px;padding:12px}.cm-media{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:10px 0}.cm-item{position:relative;border:1px solid var(--l);border-radius:10px;padding:6px;background:#090b0f}.cm-item img,.cm-item video{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:7px;display:block}.cm-item-actions{display:flex;gap:4px;margin-top:5px}.cm-item-actions .btn{padding:5px 8px}.cm-kind{position:absolute;top:10px;left:10px;background:#090b0fdd;border-radius:10px;padding:3px 6px;font-size:10px}</style>`);
+ box.innerHTML=PILLARS.map((pillar,i)=>{const x=candidates[i];if(!x)return emptyCard(pillar,i);const master=ensureMaster(i);return `<article class="card" id="v3card-${i}"><div class="post-meta"><span class="badge">${esc(CATS[pillar]||x.category_label)}</span><span class="badge">Content Master</span><span class="mut">총점 ${x.score?.total||0}</span></div><div class="v3grid" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,430px);gap:18px;align-items:start"><div><div style="display:flex;justify-content:flex-end;gap:8px;align-items:center">${pillar==='AI_PROMPT'?`<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="btn" id="v3gen-${i}" onclick="PostAuto.generate(${i},'RANDOM')">🎲 랜덤</button><button class="btn" onclick="PostAuto.generate(${i},'HAPPY')">😊 행복</button><button class="btn" onclick="PostAuto.generate(${i},'LOVE')">❤️ 사랑</button><button class="btn" onclick="PostAuto.generate(${i},'COMIC')">😂 코믹</button><button class="btn" onclick="PostAuto.generate(${i},'HORROR')">👻 공포</button><button class="btn" onclick="PostAuto.generate(${i},'FANTASY')">🧚 판타지</button></div>`:pillar==='AI_TIP'?`<button class="btn" onclick="PostAuto.reset(${i})">↺ 리셋</button>`:`<button class="btn p" id="v3gen-${i}" onclick="PostAuto.generate(${i})">✨ 생성</button>`}</div><label class="mut">공통 본문</label><textarea id="v3body-${i}" maxlength="500" oninput="PostAuto.save(${i})" class="cm-body">${esc(master.master_body)}</textarea>${promptTextareas(pillar,i,master)}<p class="mut">소재 · ${esc(x.topic)}</p><p class="mut">추천 이유 · ${esc(x.reason)}</p>${x.source_notes?.length?`<p class="mut">검증 메모 · ${esc(x.source_notes.join(' / '))}</p>`:''}<div style="margin:10px 0"><label class="mut">🏷 Threads 추천 Topic ${x.topic_tag_verified?'· TAG 검색 확인 ✅':(x.topic_tag_search_available===false?'· 검색 확인 불가':'· 추천값')}</label><input id="v3topic-${i}" maxlength="80" oninput="PostAuto.save(${i})" value="${esc(master.topic_tag||'')}" placeholder="예: AI 이미지" class="cm-input"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" onclick="PostAuto.image(${i})">🖼 AI 이미지 추가</button><button class="btn" onclick="PostAuto.reimage(${i})">🔄 AI 이미지 추가 생성</button><button class="btn" onclick="PostAuto.instagram(${i})">AI 이미지 스토리 만들기</button><button class="btn" onclick="PostAuto.variant(${i})">다른 버전</button><button class="btn" onclick="PostAuto.keep(${i})">👍 발행 대기</button><button class="btn p" onclick="PostAuto.now(${i})">Threads 게시</button><button class="btn p" onclick="PostAuto.instagramMasterPublish(${i})">Instagram 게시</button><button class="btn p" onclick="PostAuto.facebookPublish(${i})">Facebook 게시</button><button class="btn p" onclick="PostAuto.youtubePublish(${i})">YouTube 게시</button></div></div><div>${mediaEditorHtml(i,master)}</div></div></article>`}).join('');
+ if(!document.getElementById('v3css'))document.head.insertAdjacentHTML('beforeend',`<style id="v3css">@media(max-width:900px){.v3grid{grid-template-columns:1fr!important}}.cm-body,.cm-reply,.cm-input{width:100%;margin-top:5px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:12px;line-height:1.55}.cm-body{min-height:190px}.cm-reply{min-height:150px}.cm-editor{border:1px solid var(--l);border-radius:12px;padding:12px}.cm-media{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:10px 0}.cm-item{position:relative;border:1px solid var(--l);border-radius:10px;padding:6px;background:#090b0f}.cm-item img,.cm-item video{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:7px;display:block}.cm-item-actions{display:flex;gap:4px;margin-top:5px}.cm-item-actions .btn{padding:5px 8px}.cm-kind{position:absolute;top:10px;left:10px;background:#090b0fdd;border-radius:10px;padding:3px 6px;font-size:10px}.cm-reply-toolbar{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}</style>`);
  candidates.forEach((x,i)=>{if(x)renderMedia(i)});
 }
 function renderMedia(i){
@@ -320,6 +343,12 @@ async function makeImage(i,redo=false){
   x.thumbnail_dirty=false;
   const url=await upload(i);appendMasterMedia(i,{id:mediaId('ai'),type:'image',source:'ai',url,previewUrl:url,mime_type:'image/jpeg'});saveDrafts();if(box)box.textContent='AI 이미지가 공통 미디어에 추가되었습니다.';
  }catch(e){if(box)box.textContent='이미지 생성 실패';alert('이미지 생성 실패: '+e.message)}
+}
+function copyText(i,kind){
+ const value=kind==='video'?videoPrompt(i):replyPrompt(i);
+ if(!value) return alert('복사할 내용이 없습니다.');
+ if(!navigator?.clipboard?.writeText)return alert('복사 기능을 사용할 수 없습니다.');
+ navigator.clipboard.writeText(value).then(()=>alert('복사했습니다.')).catch(()=>alert('복사에 실패했습니다.'));
 }
 function instagramCandidate(i){
  const x=candidates[i];if(!x)return null;
@@ -591,13 +620,27 @@ async function publishYoutubeMaster(i){
   alert('YouTube 게시 완료 ✅'+(j.paid_promotion_applied===true?'\n유료 프로모션 적용 확인 ✅':j.paid_promotion_applied===false?'\n⚠️ 유료 프로모션 적용 확인 실패':'')+(j.synthetic_media_applied===true?'\nAI 사용 표시 적용 확인 ✅':'')+(j.first_comment_error?`\n첫 댓글 실패: ${j.first_comment_error}`:'\n첫 댓글 등록 완료 ✅'));
  }catch(e){alert('YouTube 게시 실패: '+e.message)}
 }
-async function variant(i){const x=candidates[i];try{x.body=body(i);if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))x.reply_prompt=replyPrompt(i);const r=await fetch('/api/content-router?action=variant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate:x})}),j=await r.json();if(!r.ok)throw new Error(j.detail||j.error);candidates[i]=j.item;candidates[i].variation=1;const master=ensureMaster(i);master.master_body=j.item.body||master.master_body;if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))master.reply_prompt=j.item.reply_prompt||master.reply_prompt;saveMaster(i,master);fb(x,'VARIANT');saveDrafts();render()}catch(e){alert('다른 버전 실패: '+e.message)}}
+async function variant(i){
+ const x=candidates[i];
+ try{
+  x.body=body(i);
+  if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))x.reply_prompt=replyPrompt(i);
+  if(PILLARS[i]==='AI_PROMPT')x.video_prompt=videoPrompt(i);
+  const r=await fetch('/api/content-router?action=variant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate:x})}),j=await r.json();
+  if(!r.ok)throw new Error(j.detail||j.error);
+  candidates[i]=j.item;candidates[i].variation=1;
+  const master=ensureMaster(i);master.master_body=j.item.body||master.master_body;
+  if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))master.reply_prompt=j.item.reply_prompt||master.reply_prompt;
+  if(PILLARS[i]==='AI_PROMPT')master.video_prompt=j.item.video_prompt||master.video_prompt||'';
+  saveMaster(i,master);fb(x,'VARIANT');saveDrafts();render();
+ }catch(e){alert('다른 버전 실패: '+e.message)}
+}
 function resetCard(i){
  const x=candidates[i];if(!x)return;
  if(!confirm('이 카드의 본문, 댓글/답장, Topic, 미디어 등 작업 내용을 모두 지울까요?\n\n카드 UI는 그대로 유지됩니다.'))return;
  const key=masterKey(i),records=masterRecords(),master=ensureMaster(i);
- x.topic='';x.hook='';x.hook_candidates=[];x.body='';x.reply_prompt='';x.reason='';x.image_brief='';x.source_notes=[];x.topic_tag='';x.topic_tag_candidates=[];x.topic_tag_verified=false;x.topic_tag_search_available=true;x.score={stop:0,save:0,share:0,comment:0,follow:0,novelty:0,visual:0,total:0};x.variation=1;x.image_url=null;x.final_image=null;x.base_image=null;x.thumbnail_hook='';x.thumbnail_dirty=false;
- if(master){master.title='';master.master_body='';master.threads_body_override='';master.instagram_caption_override='';master.reply_prompt='';master.topic_tag='';master.topic_tag_verified=false;master.media=[];master.status={threads:'draft',instagram:'draft',facebook:'draft',youtube:'draft'};delete master.facebook_post_id;delete master.youtube_video_id;records[key]=master;write(CM,records)}
+ x.topic='';x.hook='';x.hook_candidates=[];x.body='';x.reply_prompt='';x.video_prompt='';x.reason='';x.image_brief='';x.source_notes=[];x.topic_tag='';x.topic_tag_candidates=[];x.topic_tag_verified=false;x.topic_tag_search_available=true;x.score={stop:0,save:0,share:0,comment:0,follow:0,novelty:0,visual:0,total:0};x.variation=1;x.image_url=null;x.final_image=null;x.base_image=null;x.thumbnail_hook='';x.thumbnail_dirty=false;
+ if(master){master.title='';master.master_body='';master.threads_body_override='';master.instagram_caption_override='';master.reply_prompt='';master.video_prompt='';master.topic_tag='';master.topic_tag_verified=false;master.media=[];master.status={threads:'draft',instagram:'draft',facebook:'draft',youtube:'draft'};delete master.facebook_post_id;delete master.youtube_video_id;records[key]=master;write(CM,records)}
  const ig=instagramRecords();if(ig[key]){delete ig[key];write(IGC,ig)}
  if(instagramCarousel?.candidateId===key){instagramCarousel=null;instagramModalOpen=false}
  saveDrafts();render();
@@ -613,6 +656,6 @@ function patchReplies(){
  const b=document.getElementById('batchReply');if(!b)return;b.onclick=async()=>{if(window._batchRunning||window._replyHistoryAvailable===false)return;const all=window._replyItems||[],targets=[];all.forEach((x,i)=>{if(x.review_required||x.already_replied)return;const text=document.getElementById(`replyText-${i}`)?.value.trim();if(text)targets.push({i,id:x.id,text})});if(!targets.length||!confirm(`${targets.length}개 미응답 댓글을 순차 답장할까요?`))return;window._batchRunning=true;updateBatchButton();let ok=0,fail=0;for(let n=0;n<targets.length;n++){const t=targets[n];b.textContent=`일괄 답장 ${n+1}/${targets.length}`;try{await postReply(t.id,t.text);markReplyDone(t.i,t.id,t.text);ok++}catch{fail++}if(n<targets.length-1)await new Promise(r=>setTimeout(r,500))}window._batchRunning=false;updateBatchButton();alert(`완료 · 성공 ${ok} / 실패 ${fail}`);await syncReplies(currentPostIds).catch(()=>{})};
  setTimeout(()=>{try{updateBatchButton()}catch{}},100);
 }
-window.PostAuto={generate:generatePillar,image:i=>makeImage(i,false),reimage:i=>makeImage(i,true),keep,now,variant,no,reset:resetCard,drop,publishQueue,save:syncDraft,addMedia:addLocalMedia,removeMedia:removeMasterMedia,moveMedia:moveMasterMedia,instagram:openInstagramCarousel,instagramSelect:selectInstagramSlide,instagramCaption:setInstagramCaption,instagramReplyPrompt:setInstagramReplyPrompt,instagramClose:closeInstagramCarousel,instagramRegenerate:regenerateInstagramSlide,instagramRegenerateAll:regenerateInstagramCarousel,instagramPublish:publishInstagramCarousel,instagramMasterPublish:publishInstagramMaster,facebookPublish:publishFacebookMaster,youtubePublish:publishYoutubeMaster,instagramPromptStoreRetry:retryInstagramPromptStore};
+window.PostAuto={generate:generatePillar,image:i=>makeImage(i,false),reimage:i=>makeImage(i,true),keep,now,variant,no,reset:resetCard,drop,publishQueue,save:syncDraft,addMedia:addLocalMedia,removeMedia:removeMasterMedia,moveMedia:moveMasterMedia,instagram:openInstagramCarousel,instagramSelect:selectInstagramSlide,instagramCaption:setInstagramCaption,instagramReplyPrompt:setInstagramReplyPrompt,instagramClose:closeInstagramCarousel,instagramRegenerate:regenerateInstagramSlide,instagramRegenerateAll:regenerateInstagramCarousel,instagramPublish:publishInstagramCarousel,instagramMasterPublish:publishInstagramMaster,facebookPublish:publishFacebookMaster,youtubePublish:publishYoutubeMaster,copyText,instagramPromptStoreRetry:retryInstagramPromptStore};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ensure);else ensure();
 })();
