@@ -963,16 +963,16 @@ function normalizeAiPromptOutputFormat(value){
   if(/(3x2|3×2|3by2)/.test(v))return '3x2';
   if(/(3x3|3×3|3by3)/.test(v))return '3x3';
   if(/(1장|single|single-shot|singlephoto)/.test(v))return '1장';
-  if(/(4컷|4x|4by|4pannel|4pannel)/.test(v))return '4컷';
-  if(/(6컷|6x|6by|6pannel)/.test(v))return '6컷';
-  if(/(9컷|9x|9by|9pannel)/.test(v))return '9컷';
+  if(/(4pannel|4panel|4-panel|4panels|4\s*panels|4x|4by|4컷)/.test(v))return '4컷';
+  if(/(6pannel|6panel|6-panel|6panels|6\s*panels|6x|6by|6컷)/.test(v))return '6컷';
+  if(/(9pannel|9panel|9-panel|9panels|9\s*panels|9x|9by|9컷)/.test(v))return '9컷';
   return String(value||'').trim();
 }
 
 function validateAiPromptEvidence(value,idx){
   const evidence=String(value||'').trim();
   if(!evidence)throw new Error(`AI_PROMPT_TREND_EVIDENCE_MISSING_${idx}`);
-  if(!/(?:\d+\s*일|최근|7일|30일|30 days|7 days)/i.test(evidence))throw new Error(`AI_PROMPT_TREND_EVIDENCE_TIMING_${idx}`);
+  if(!/(\b\d{4}[-./]\d{1,2}[-./]\d{1,2}\b|\b\d{4}\s*년\s*\d{1,2}\s*월\s*\d{1,2}\s*일\b|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|최근|7일|30일|30\s*days|7\s*days)/i.test(evidence))throw new Error(`AI_PROMPT_TREND_EVIDENCE_TIMING_${idx}`);
   if(!/(?:instagram|tiktok|threads|pinterest|twitter|x|인스타그램|틱톡|스레드|핀터레스트)/i.test(evidence))throw new Error(`AI_PROMPT_TREND_EVIDENCE_PLATFORM_${idx}`);
 }
 
