@@ -268,7 +268,16 @@ async function generatePillar(i,mood='RANDOM',useCustom=false){
     write(FH,dedup);
    }
    saveDrafts();render();s.textContent=`${CATS[pillar]} 생성 완료 · 다른 섹션은 호출하지 않았습니다.`;
- }catch(e){s.textContent='';alert(`${CATS[pillar]} 생성 실패: `+e.message)}
+ }catch(e){
+  const message=String(e?.message||e);
+  if(pillar==='AI_PROMPT'&&message.includes('AI_PROMPT_VIDEO_PROMPT_TOO_LONG')){
+   const retryMood=['RANDOM','HAPPY','LOVE','COMIC','HORROR','FANTASY'].includes(mood)?mood:'RANDOM';
+   const retryAction=useCustom?`PostAuto.generateCustom(${i})`:`PostAuto.generate(${i},'${retryMood}')`;
+   s.innerHTML=`영상 프롬프트가 980자를 초과했습니다. <button class="btn p" type="button" onclick="${retryAction}">↻ 같은 조건으로 다시 생성</button>`;
+  }else{
+   s.textContent='';alert(`${CATS[pillar]} 생성 실패: `+message);
+  }
+ }
  finally{const nb=document.getElementById(buttonId);if(nb){nb.disabled=false;nb.textContent=old}}
 }
 function setAiPromptCustomRequest(value){aiPromptCustomRequest=String(value||'').slice(0,500);write(AIC,aiPromptCustomRequest)}
