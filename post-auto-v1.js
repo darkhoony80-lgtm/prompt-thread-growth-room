@@ -21,6 +21,7 @@ I can't DM you if you don't follow - it goes to spamㅠ
 Follow first, then comment PROMPT!`;
 let candidates=[null,null,null,null];
 let instagramCarousel=null,instagramPublishing=false,instagramModalOpen=false;
+let videoMergeRuntimePromise=null;
 function read(k,d=[]){try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}}
 function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
 function masterRecords(){const value=read(CM,{});return value&&typeof value==='object'&&!Array.isArray(value)?value:{}}
@@ -273,7 +274,7 @@ function emptyCard(pillar,i){
 </div>`:`<button class="btn p" id="v3gen-${i}" onclick="PostAuto.generate(${i})">✨ 생성</button>`}</article>`;
 }
 function mediaEditorHtml(i,master){
- return `<section class="cm-editor"><div class="section"><div><b>공통 미디어</b><p class="mut">현재 배열 순서가 Threads와 Instagram의 실제 게시 순서입니다. 직접 추가한 미디어와 AI 이미지 스토리는 삭제·이동 전까지 그대로 유지됩니다.</p></div><label class="btn">사진/영상 추가<input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" multiple hidden onchange="PostAuto.addMedia(${i},this.files);this.value=''" /></label></div><div id="v3media-${i}" class="cm-media"></div></section>`;
+ return `<section class="cm-editor"><div class="section"><div><b>공통 미디어</b><p class="mut">현재 배열 순서가 Threads와 Instagram의 실제 게시 순서입니다. 영상 2개를 한 번에 선택하면 순서대로 하나의 MP4로 합쳐 업로드합니다.</p></div><label class="btn">사진/영상 추가<input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" multiple hidden onchange="PostAuto.addMedia(${i},this.files);this.value=''" /></label></div><div id="v3media-${i}" class="cm-media"></div></section>`;
 }
 function promptTextareas(pillar,i,master){
  const replyPromptValue=esc(master.reply_prompt||'');
@@ -298,7 +299,77 @@ function renderMedia(i){
  box.innerHTML=master.media.length?master.media.map((m,index)=>`<div class="cm-item"><span class="cm-kind">${index+1} · ${m.source==='ai'?'AI':'업로드'} ${m.type==='video'?'영상':'사진'}</span>${m.type==='video'?`<video src="${esc(m.previewUrl||m.url)}" controls preload="metadata"></video>`:`<img src="${esc(m.previewUrl||m.url)}" alt="${index+1}번 미디어">`}<div class="cm-item-actions"><button class="btn" onclick="PostAuto.moveMedia(${i},'${esc(m.id)}',-1)" ${index===0?'disabled':''}>←</button><button class="btn" onclick="PostAuto.moveMedia(${i},'${esc(m.id)}',1)" ${index===master.media.length-1?'disabled':''}>→</button><button class="btn" onclick="PostAuto.removeMedia(${i},'${esc(m.id)}')">삭제</button></div></div>`).join(''):'<div class="card empty"><div><b>미디어 없음</b>AI 이미지 생성 전에도 사진이나 영상을 추가할 수 있습니다.</div></div>';
 }
 async function videoDuration(file){
- return new Promise((resolve,reject)=>{const video=document.createElement('video'),url=URL.createObjectURL(file);video.preload='metadata';video.onloadedmetadata=()=>{const value=Number(video.duration)||0;URL.revokeObjectURL(url);resolve(value)};video.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('영상 정보를 읽지 못했습니다.'))};video.src=url});
+ const info=await videoMetadata(file);
+ return info.duration;
+}
+async function videoMetadata(file){
+ return new Promise((resolve,reject)=>{const video=document.createElement('video'),url=URL.createObjectURL(file);video.preload='metadata';video.onloadedmetadata=()=>{const value={duration:Number(video.duration)||0,width:Number(video.videoWidth)||0,height:Number(video.videoHeight)||0};URL.revokeObjectURL(url);resolve(value)};video.onerror=()=>{URL.revokeObjectURL(url);reject(new Error(`${file?.name||'영상'}: 영상 정보를 읽지 못했습니다.`))};video.src=url});
+}
+async function loadVideoMergeRuntime(status){
+ if(!videoMergeRuntimePromise)videoMergeRuntimePromise=(async()=>{
+  if(status)status.textContent='영상 병합 도구 불러오는 중…';
+  const [{FFmpeg},{fetchFile,toBlobURL}]=await Promise.all([
+   import('https://esm.sh/@ffmpeg/ffmpeg@0.12.15?bundle'),
+   import('https://esm.sh/@ffmpeg/util@0.12.2?bundle')
+  ]);
+  const ffmpeg=new FFmpeg(),baseURL='https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm';
+  await ffmpeg.load({
+   classWorkerURL:await toBlobURL('https://esm.sh/@ffmpeg/ffmpeg@0.12.15/es2022/worker.bundle.mjs','text/javascript'),
+   coreURL:await toBlobURL(`${baseURL}/ffmpeg-core.js`,'text/javascript'),
+   wasmURL:await toBlobURL(`${baseURL}/ffmpeg-core.wasm`,'application/wasm')
+  });
+  return {ffmpeg,fetchFile};
+ })().catch(error=>{videoMergeRuntimePromise=null;throw error});
+ return videoMergeRuntimePromise;
+}
+async function ffmpegInputHasAudio(ffmpeg,inputName){
+ let logs='';
+ const listener=({message})=>{logs+=`${message}\n`};
+ ffmpeg.on('log',listener);
+ try{await ffmpeg.exec(['-hide_banner','-i',inputName])}catch{}
+ finally{ffmpeg.off('log',listener)}
+ return /Stream #\d+:\d+[^\r\n]*:\s*Audio:/i.test(logs);
+}
+function mergedVideoSize(firstInfo){
+ const width=Math.max(2,Number(firstInfo?.width)||1080),height=Math.max(2,Number(firstInfo?.height)||1920);
+ const scale=Math.min(1,1080/width,1920/height);
+ return {width:Math.max(2,Math.floor(width*scale/2)*2),height:Math.max(2,Math.floor(height*scale/2)*2)};
+}
+async function mergeVideoFiles(files,status){
+ if(files.length!==2)throw new Error('병합할 영상 2개를 선택해 주세요.');
+ if(files.some(file=>validateLocalMedia(file)!=='video'))throw new Error('MP4 또는 MOV 영상 2개만 병합할 수 있습니다.');
+ const totalBytes=files.reduce((sum,file)=>sum+Number(file.size||0),0);
+ if(totalBytes>500*1024*1024)throw new Error('브라우저 영상 병합은 원본 합계 500MB 이하만 지원합니다.');
+ const infos=await Promise.all(files.map(videoMetadata));
+ if(infos.some(info=>!info.duration||!info.width||!info.height))throw new Error('영상 길이 또는 해상도를 확인할 수 없습니다.');
+ const {width,height}=mergedVideoSize(infos[0]),{ffmpeg,fetchFile}=await loadVideoMergeRuntime(status);
+ const inputNames=files.map((file,index)=>`merge-input-${index}.${String(file.name||'video.mp4').split('.').pop().replace(/[^a-z0-9]/gi,'').toLowerCase()||'mp4'}`);
+ const normalizedNames=['merge-normalized-0.mp4','merge-normalized-1.mp4'],created=[...inputNames,...normalizedNames,'merge-list.txt','merge-output.mp4'];
+ const progress=({progress:value})=>{if(status&&Number.isFinite(value))status.textContent=`영상 병합 중… ${Math.min(99,Math.max(1,Math.round(value*100)))}%`};
+ ffmpeg.on('progress',progress);
+ try{
+  for(let index=0;index<files.length;index++)await ffmpeg.writeFile(inputNames[index],await fetchFile(files[index]));
+  const filter=`scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps=30,format=yuv420p`;
+  for(let index=0;index<files.length;index++){
+   const hasAudio=await ffmpegInputHasAudio(ffmpeg,inputNames[index]);
+   const args=hasAudio
+    ?['-i',inputNames[index],'-map','0:v:0','-map','0:a:0','-vf',filter,'-c:v','libx264','-preset','ultrafast','-crf','23','-c:a','aac','-b:a','128k','-ar','48000','-ac','2','-shortest',normalizedNames[index]]
+    :['-i',inputNames[index],'-f','lavfi','-t',String(infos[index].duration),'-i','anullsrc=channel_layout=stereo:sample_rate=48000','-map','0:v:0','-map','1:a:0','-vf',filter,'-c:v','libx264','-preset','ultrafast','-crf','23','-c:a','aac','-b:a','128k','-ar','48000','-ac','2','-shortest',normalizedNames[index]];
+   const code=await ffmpeg.exec(['-y',...args]);
+   if(code!==0)throw new Error(`${index+1}번 영상 변환에 실패했습니다.`);
+  }
+  await ffmpeg.writeFile('merge-list.txt',new TextEncoder().encode(normalizedNames.map(name=>`file '${name}'`).join('\n')));
+  const concatCode=await ffmpeg.exec(['-y','-f','concat','-safe','0','-i','merge-list.txt','-c','copy','-movflags','+faststart','merge-output.mp4']);
+  if(concatCode!==0)throw new Error('변환한 영상 연결에 실패했습니다.');
+  const output=await ffmpeg.readFile('merge-output.mp4');
+  const merged=new File([output],`${String(files[0].name||'video').replace(/\.[^.]+$/,'')}-${String(files[1].name||'video').replace(/\.[^.]+$/,'')}-merged.mp4`,{type:'video/mp4',lastModified:Date.now()});
+  if(!merged.size)throw new Error('병합된 영상 파일이 비어 있습니다.');
+  if(merged.size>1024*1024*1024)throw new Error('병합된 영상이 1GB를 초과합니다.');
+  return merged;
+ }finally{
+  ffmpeg.off('progress',progress);
+  for(const name of created){try{await ffmpeg.deleteFile(name)}catch{}}
+ }
 }
 function validateLocalMedia(file){
  const type=String(file?.type||'').toLowerCase();
@@ -332,6 +403,19 @@ async function uploadLocalMedia(file,i,type){
 async function addLocalMedia(i,fileList){
  const files=Array.from(fileList||[]);if(!files.length)return;
  const status=document.getElementById('v3status');
+ if(files.length===2&&files.every(file=>['video/mp4','video/quicktime'].includes(String(file?.type||'').toLowerCase()))){
+  let file;
+  try{
+   file=await mergeVideoFiles(files,status);
+  }catch(e){const message=String(e?.message||e||'알 수 없는 오류');if(status)status.textContent='영상 병합 실패: '+message;alert('영상 병합 실패: '+message);return}
+  try{
+   const duration=await videoDuration(file);if(status)status.textContent=`영상 병합 완료 (${duration.toFixed(1)}초) · 업로드 중…`;
+   const blob=await uploadLocalMedia(file,i,'video');
+   appendMasterMedia(i,{id:mediaId('upload'),type:'video',source:'upload',url:blob.url,previewUrl:blob.url,mime_type:file.type,size:file.size,duration});
+   if(status)status.textContent='영상 2개 병합 및 공통 미디어 저장 완료';
+  }catch(e){const message=String(e?.message||e||'알 수 없는 오류');if(status)status.textContent='영상 병합 완료 / 업로드 실패: '+message;alert('병합된 영상 업로드 실패: '+message)}
+  return;
+ }
  for(const original of files){
   try{
    if(status&&/^image\/(?:png|webp)$/.test(String(original?.type||'')))status.textContent=`${original.name} JPEG 변환 중…`;
