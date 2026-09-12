@@ -2,7 +2,7 @@
 (function(){
 const CATS={AI_PROMPT:'AI 프롬프트',AI_TIP:'쿠팡파트너스',FOOD_PICK:'오늘 뭐 먹지?',HOT_ISSUE:'🔥 오늘의 핫이슈'};
 const Q='pt_queue_v3',F='pt_feedback_v3',P='pt_published_v3',D='pt_drafts_v6',FH='pt_food_history_v1',IGC='pt_instagram_carousels_v1',CM='pt_content_masters_v1';
-const ARCHIVE_DB='prompt-thread-growth-room',ARCHIVE_STORE='directory-handles',ARCHIVE_KEY='content-master-archive-root';
+const ARCHIVE_DB='prompt-thread-growth-room',ARCHIVE_STORE='directory-handles',ARCHIVE_KEY_PREFIX='content-master-archive-root';
 const PILLARS=['AI_TIP','AI_PROMPT','FOOD_PICK','HOT_ISSUE'];
 const PLATFORM_LIMITS={threads:{maxMedia:20},instagram:{maxMedia:10},facebook:{maxMedia:10},youtube:{maxMedia:1}};
 const PROMPT_CATEGORIES=['AI_TIP','AI_PROMPT'];
@@ -23,7 +23,7 @@ Follow first, then comment PROMPT!`;
 let candidates=[null,null,null,null];
 let instagramCarousel=null,instagramPublishing=false,instagramModalOpen=false;
 let videoMergeRuntimePromise=null;
-let contentArchiveRootHandle=null,contentArchiveRestorePromise=null;
+let contentArchiveRootHandles={},contentArchiveRestorePromise=null;
 const videoMergeDrafts=new Map();
 function read(k,d=[]){try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}}
 function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
@@ -284,7 +284,7 @@ function mediaEditorHtml(i,master){
 }
 function localArchiveHtml(pillar,i){
  if(!['AI_PROMPT','AI_TIP'].includes(pillar))return '';
- return `<section class="cm-local-archive"><div><b>📁 로컬 작업 저장</b><p class="mut">지정한 폴더 안에 후킹 제목과 날짜로 새 폴더를 만들고 미디어·본문·프롬프트 JSON을 저장합니다.</p></div><div class="cm-local-actions"><button class="btn" type="button" onclick="PostAuto.chooseArchiveFolder()">저장 폴더 지정</button><button class="btn p" type="button" onclick="PostAuto.saveArchive(${i})">저장</button><button class="btn" type="button" onclick="PostAuto.loadArchive(${i})">불러오기</button></div><span class="mut cm-local-folder" data-content-archive-folder>저장 폴더 미지정</span><span class="mut" id="v3archive-status-${i}"></span></section>`;
+ return `<section class="cm-local-archive"><div><b>📁 로컬 작업 저장</b><p class="mut">이 콘텐츠 종류에 지정한 전용 폴더 안에 후킹 제목과 날짜로 새 폴더를 만들고 미디어·본문·프롬프트 JSON을 저장합니다.</p></div><div class="cm-local-actions"><button class="btn" type="button" onclick="PostAuto.chooseArchiveFolder(${i})">저장 폴더 지정</button><button class="btn p" type="button" onclick="PostAuto.saveArchive(${i})">저장</button><button class="btn" type="button" onclick="PostAuto.loadArchive(${i})">불러오기</button></div><span class="mut cm-local-folder" data-content-archive-folder="${pillar}">저장 폴더 미지정</span><span class="mut" id="v3archive-status-${i}"></span></section>`;
 }
 function promptTextareas(pillar,i,master){
  const replyPromptValue=esc(master.reply_prompt||'');
@@ -313,29 +313,31 @@ function renderMedia(i){
 function openContentArchiveDb(){
  return new Promise((resolve,reject)=>{const request=indexedDB.open(ARCHIVE_DB,1);request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains(ARCHIVE_STORE))request.result.createObjectStore(ARCHIVE_STORE)};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
 }
-async function storeContentArchiveHandle(handle){
+async function storeContentArchiveHandle(pillar,handle){
  const db=await openContentArchiveDb();
- try{await new Promise((resolve,reject)=>{const tx=db.transaction(ARCHIVE_STORE,'readwrite');tx.objectStore(ARCHIVE_STORE).put(handle,ARCHIVE_KEY);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}finally{db.close()}
+ try{await new Promise((resolve,reject)=>{const tx=db.transaction(ARCHIVE_STORE,'readwrite');tx.objectStore(ARCHIVE_STORE).put(handle,`${ARCHIVE_KEY_PREFIX}-${pillar}`);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}finally{db.close()}
 }
 async function restoreContentArchiveHandle(){
  try{
   const db=await openContentArchiveDb();
-  try{contentArchiveRootHandle=await new Promise((resolve,reject)=>{const tx=db.transaction(ARCHIVE_STORE,'readonly'),request=tx.objectStore(ARCHIVE_STORE).get(ARCHIVE_KEY);request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>reject(request.error)})}finally{db.close()}
+  try{for(const pillar of ['AI_PROMPT','AI_TIP'])contentArchiveRootHandles[pillar]=await new Promise((resolve,reject)=>{const tx=db.transaction(ARCHIVE_STORE,'readonly'),request=tx.objectStore(ARCHIVE_STORE).get(`${ARCHIVE_KEY_PREFIX}-${pillar}`);request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>reject(request.error)})}finally{db.close()}
  }catch{}
  await refreshContentArchiveFolderState();
 }
-async function contentArchivePermission(request=false){
- if(!contentArchiveRootHandle)return 'denied';
- try{let state=await contentArchiveRootHandle.queryPermission({mode:'readwrite'});if(state!=='granted'&&request)state=await contentArchiveRootHandle.requestPermission({mode:'readwrite'});return state}catch{return 'denied'}
+async function contentArchivePermission(pillar,request=false){
+ const handle=contentArchiveRootHandles[pillar];if(!handle)return 'denied';
+ try{let state=await handle.queryPermission({mode:'readwrite'});if(state!=='granted'&&request)state=await handle.requestPermission({mode:'readwrite'});return state}catch{return 'denied'}
 }
 async function refreshContentArchiveFolderState(){
- const nodes=document.querySelectorAll('[data-content-archive-folder]');if(!nodes.length)return;
- const permission=await contentArchivePermission(false),text=contentArchiveRootHandle?`${contentArchiveRootHandle.name} · ${permission==='granted'?'연결됨':'권한 확인 필요'}`:'저장 폴더 미지정';
- nodes.forEach(node=>{node.textContent=text});
+ for(const pillar of ['AI_PROMPT','AI_TIP']){
+  const nodes=document.querySelectorAll(`[data-content-archive-folder="${pillar}"]`),handle=contentArchiveRootHandles[pillar];if(!nodes.length)continue;
+  const permission=await contentArchivePermission(pillar,false),text=handle?`${handle.name} · ${permission==='granted'?'연결됨':'권한 확인 필요'}`:'저장 폴더 미지정';nodes.forEach(node=>{node.textContent=text});
+ }
 }
-async function chooseContentArchiveFolder(){
+async function chooseContentArchiveFolder(i){
  if(!window.showDirectoryPicker)return alert('로컬 폴더 저장은 최신 Chrome 또는 Edge에서 사용할 수 있습니다.');
- try{const handle=await window.showDirectoryPicker({id:'content-master-archive',mode:'readwrite',startIn:'downloads'});contentArchiveRootHandle=handle;await storeContentArchiveHandle(handle);await refreshContentArchiveFolderState();const status=document.getElementById('v3status');if(status)status.textContent=`로컬 저장 폴더 연결 완료 · ${handle.name}`}
+ const pillar=PILLARS[i];if(!['AI_PROMPT','AI_TIP'].includes(pillar))return;
+ try{const handle=await window.showDirectoryPicker({id:`content-master-archive-${pillar.toLowerCase()}`,mode:'readwrite',startIn:'downloads'});contentArchiveRootHandles[pillar]=handle;await storeContentArchiveHandle(pillar,handle);await refreshContentArchiveFolderState();setContentArchiveStatus(i,`${CATS[pillar]} 저장 폴더 연결 완료 · ${handle.name}`)}
  catch(error){if(error?.name!=='AbortError')alert('저장 폴더 연결 실패: '+String(error?.message||error))}
 }
 function setContentArchiveStatus(i,text){const local=document.getElementById(`v3archive-status-${i}`),globalStatus=document.getElementById('v3status');if(local)local.textContent=String(text||'');if(globalStatus)globalStatus.textContent=String(text||'')}
@@ -352,12 +354,12 @@ async function uniqueArchiveDirectory(root,base){
  throw new Error('같은 이름의 저장 폴더가 너무 많습니다.');
 }
 async function saveContentArchive(i){
- if(!['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))return;
+ const pillar=PILLARS[i];if(!['AI_PROMPT','AI_TIP'].includes(pillar))return;
  if(!window.showDirectoryPicker)return alert('로컬 폴더 저장은 최신 Chrome 또는 Edge에서 사용할 수 있습니다.');
- if(!contentArchiveRootHandle)return alert('먼저 저장 폴더를 지정해 주세요.');
- if(await contentArchivePermission(true)!=='granted')return alert('선택한 폴더의 읽기/쓰기 권한이 필요합니다.');
+ const rootHandle=contentArchiveRootHandles[pillar];if(!rootHandle)return alert(`${CATS[pillar]} 저장 폴더를 먼저 지정해 주세요.`);
+ if(await contentArchivePermission(pillar,true)!=='granted')return alert('선택한 폴더의 읽기/쓰기 권한이 필요합니다.');
  try{
-  syncDraft(i);const master=snapshotMaster(i),draft=videoMergeDraft(i),base=`${archiveTitle(i,master)}_${archiveStamp()}`,created=await uniqueArchiveDirectory(contentArchiveRootHandle,base),archivedMedia=[];
+  syncDraft(i);const master=snapshotMaster(i),draft=videoMergeDraft(i),base=`${archiveTitle(i,master)}_${archiveStamp()}`,created=await uniqueArchiveDirectory(rootHandle,base),archivedMedia=[];
   for(let index=0;index<master.media.length;index++){
    const item=master.media[index];setContentArchiveStatus(i,`미디어 저장 중… ${index+1}/${master.media.length}`);
    const response=await fetch(item.url);if(!response.ok)throw new Error(`${index+1}번 미디어를 내려받지 못했습니다. HTTP ${response.status}`);
@@ -377,8 +379,8 @@ async function loadContentArchive(i){
  if(!['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))return;
  if(!window.showDirectoryPicker)return alert('로컬 폴더 불러오기는 최신 Chrome 또는 Edge에서 사용할 수 있습니다.');
  try{
-  const options={id:'content-master-import',mode:'read'};if(contentArchiveRootHandle&&await contentArchivePermission(false)==='granted')options.startIn=contentArchiveRootHandle;
-  const directory=await window.showDirectoryPicker(options),jsonFile=await (await directory.getFileHandle('content.json')).getFile(),manifest=JSON.parse(await jsonFile.text()),pillar=PILLARS[i];
+  const pillar=PILLARS[i],rootHandle=contentArchiveRootHandles[pillar],options={id:`content-master-import-${pillar.toLowerCase()}`,mode:'read'};if(rootHandle&&await contentArchivePermission(pillar,false)==='granted')options.startIn=rootHandle;
+  const directory=await window.showDirectoryPicker(options),jsonFile=await (await directory.getFileHandle('content.json')).getFile(),manifest=JSON.parse(await jsonFile.text());
   if(manifest?.version!==1||manifest?.content_type!==pillar||!manifest?.master)throw new Error(`${CATS[pillar]}에서 저장한 올바른 작업 폴더가 아닙니다.`);
   const oldKey=masterKey(i),oldDraft=videoMergeDraft(i);if(oldDraft){releaseVideoMergePreviews(oldDraft);videoMergeDrafts.delete(oldKey)}
   const id=`${pillar}-local-${Date.now()}`,storedCandidate=manifest.candidate&&typeof manifest.candidate==='object'?manifest.candidate:{};
