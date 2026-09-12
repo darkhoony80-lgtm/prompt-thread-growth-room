@@ -761,6 +761,27 @@ async function generateJson(key,prompt,temp=.9){
   return parseJson(textFromGemini(j));
 }
 
+async function compactAiPromptVideoPrompt(key,videoPrompt,replyPrompt){
+  const beforeLength=String(videoPrompt||'').trim().length;
+  const out=await generateJson(key,`Rewrite only the Higgsfield video prompt below so it is complete and no more than ${AI_PROMPT_VIDEO_MAX_CHARS} characters including spaces. Aim for 850-950 characters.
+Preserve the exact person, concept, location, wardrobe, lighting, actions, and camera direction from the original and photo prompt. Remove repetition and shorten wording; do not truncate sentences or change the scene.
+Use exactly four non-empty lines in this order: Prompt:, Action:, Settings:, Negative:.
+Prompt must include the exact phrase "a single continuous 20-second video", uploaded reference photo identity preservation, full face visible, and the same location and wardrobe.
+Action must retain Part 1 (0-10s), 0-5s, 5-10s, an End frame, Part 2 (10-20s), the exact Part 1 end frame continuity instruction, 10-15s, and 15-20s.
+Settings must include Soul Cinematic, Motion 0.6, Style 0.85, Consistency 98 (face lock).
+Negative must concisely include different face, blurry face, extra fingers, body distortion, abrupt cuts, teleportation, discontinuity, camera jump, cartoon, nude.
+Return JSON only: {"video_prompt":"..."}
+
+PHOTO PROMPT:
+${String(replyPrompt||'').trim().slice(0,GENERATED_REPLY_PROMPT_MAX_CHARS)}
+
+ORIGINAL VIDEO PROMPT:
+${String(videoPrompt||'').trim().slice(0,2400)}`,.25);
+  const compacted=String(out?.video_prompt||'').trim();
+  console.warn('[AI_PROMPT_VIDEO_PROMPT_COMPACTED]',JSON.stringify({before_length:beforeLength,after_length:compacted.length}));
+  return compacted||String(videoPrompt||'').trim();
+}
+
 async function groundedResearch(key,input){
   const j=await geminiGenerate(key,{
     model:TEXT_MODEL,
@@ -1113,7 +1134,13 @@ async function actionGenerate(req,res){
     const out=await generateJson(key,pillarPrompt({pillar,research,feedback,performance,mood,customAiPrompt,recentAiTips,recentAiPrompts}),.88);
     const raw=out?.candidate||out?.item||out;
     const item=cleanCandidate({...raw,category:pillar},0);
-    if(pillar==='AI_PROMPT'){item.mood=mood;if(customAiPrompt)item.custom_request=customAiPrompt}
+    if(pillar==='AI_PROMPT'){
+      item.mood=mood;
+      if(customAiPrompt)item.custom_request=customAiPrompt;
+      if(item.video_prompt.length>AI_PROMPT_VIDEO_MAX_CHARS){
+        item.video_prompt=await compactAiPromptVideoPrompt(key,item.video_prompt,item.reply_prompt);
+      }
+    }
     if(!item.body||!item.hook)throw new Error('PILLAR_CONTENT_INVALID');
     const aiTipSelection=pillar==='AI_TIP'?validateAiTipSelection(out,item,recentAiTips):null;
     if(pillar==='AI_PROMPT')validateAiPromptCandidate(item);
@@ -1583,9 +1610,12 @@ JSON만:
     const v=await generateJson(key,prompt,1);
   const nextReplyPrompt=['AI_PROMPT','AI_TIP'].includes(x.category)
       ?String(v.reply_prompt||x.reply_prompt||'').trim():'';
-  const nextVideoPrompt=x.category==='AI_PROMPT'
+  let nextVideoPrompt=x.category==='AI_PROMPT'
       ?String(v.video_prompt||x.video_prompt||'').trim()
       :'';
+    if(x.category==='AI_PROMPT'&&nextVideoPrompt.length>AI_PROMPT_VIDEO_MAX_CHARS){
+      nextVideoPrompt=await compactAiPromptVideoPrompt(key,nextVideoPrompt,nextReplyPrompt);
+    }
     if(x.category==='AI_PROMPT'&&/[가-힣]/.test(nextReplyPrompt)){
       throw new Error('AI_PROMPT_REPLY_PROMPT_NOT_ENGLISH');
     }
