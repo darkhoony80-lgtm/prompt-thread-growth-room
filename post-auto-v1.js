@@ -25,6 +25,9 @@ function ensureMaster(i){
   if(PILLARS[i]==='AI_PROMPT'&&typeof master.video_prompt!=='string'){
    master.video_prompt=String(x.video_prompt||'');records[key]=master;write(CM,records);
   }
+  if(PILLARS[i]==='AI_PROMPT'&&!['photo','video'].includes(master.prompt_delivery_type)){
+   master.prompt_delivery_type='photo';records[key]=master;write(CM,records);
+  }
   if(!String(master.master_body||'').trim()){
    master.master_body=String(master.threads_body_override||master.instagram_caption_override||x.body||'');
    master.updated_at=Date.now();records[key]=master;write(CM,records);
@@ -33,7 +36,7 @@ function ensureMaster(i){
  }
  const media=[];
  if(x.image_url)media.push({id:mediaId('legacy'),type:'image',source:'ai',url:x.image_url,previewUrl:x.image_url,order:0,status:'ready',mime_type:/\.jpe?g(?:$|\?)/i.test(x.image_url)?'image/jpeg':'image/png'});
- const master={version:1,content_id:key,content_type:PILLARS[i],title:x.topic||x.category_label||'',master_body:x.body||'',threads_body_override:'',instagram_caption_override:'',reply_prompt:x.reply_prompt||'',video_prompt:String(x.video_prompt||''),
+ const master={version:1,content_id:key,content_type:PILLARS[i],title:x.topic||x.category_label||'',master_body:x.body||'',threads_body_override:'',instagram_caption_override:'',reply_prompt:x.reply_prompt||'',video_prompt:String(x.video_prompt||''),prompt_delivery_type:'photo',
   topic_tag:x.topic_tag||'',topic_tag_verified:x.topic_tag_verified===true,media,status:{threads:'draft',instagram:'draft',facebook:'draft',youtube:'draft'},updated_at:Date.now()};
  records[key]=master;write(CM,records);return master;
 }
@@ -117,6 +120,7 @@ function syncDraft(i){
   master.master_body=nextBody;
   master.reply_prompt=aiThumbnail?nextReply:master.reply_prompt||'';
   if(pillar==='AI_PROMPT')master.video_prompt=nextVideoPrompt;
+  if(pillar==='AI_PROMPT')master.prompt_delivery_type=promptDeliveryType(i);
   master.topic_tag=nextTopicTag;master.topic_tag_verified=x.topic_tag_verified===true;saveMaster(i,master)
  }
  saveDrafts();
@@ -146,6 +150,8 @@ function fb(x,kind){const a=read(F);a.unshift({kind,category:x.category,topic:x.
 function body(i){return document.getElementById(`v3body-${i}`)?.value.trim()||candidates[i]?.body||''}
 function replyPrompt(i){return document.getElementById(`v3reply-${i}`)?.value.trim()||candidates[i]?.reply_prompt||''}
 function videoPrompt(i){return document.getElementById(`v3video-${i}`)?.value.trim()||candidates[i]?.video_prompt||''}
+function promptDeliveryType(i){return document.getElementById(`v3delivery-${i}`)?.value==='video'?'video':'photo'}
+function selectedDeliveryPrompt(snapshot){return snapshot?.prompt_delivery_type==='video'?String(snapshot.video_prompt||'').trim():String(snapshot.reply_prompt||'').trim()}
 function topicTag(i){return String(document.getElementById(`v3topic-${i}`)?.value||candidates[i]?.topic_tag||'').replace(/^#+/,'').trim().slice(0,80)}
 async function verifyTopicCandidates(x){
  const list=[...(x?.topic_tag_candidates||[]),x?.topic_tag].map(v=>String(v||'').replace(/^#+/,'').trim()).filter(Boolean);
@@ -264,7 +270,8 @@ function promptTextareas(pillar,i,master){
  const replyPromptValue=esc(master.reply_prompt||'');
  const videoPromptValue=esc(master.video_prompt||'');
  if(pillar==='AI_PROMPT'){
-  return `<label class="mut" style="display:block;margin-top:10px">[사진 프롬프트]</label><textarea id="v3reply-${i}" oninput="PostAuto.save(${i})" class="cm-reply" placeholder="사진용 영문 프롬프트">${replyPromptValue}</textarea><div class="cm-reply-toolbar"><button class="btn" type="button" onclick="PostAuto.copyText(${i},'reply')">복사</button></div><label class="mut" style="display:block;margin-top:10px">[영상 프롬프트]</label><textarea id="v3video-${i}" oninput="PostAuto.save(${i})" class="cm-reply" placeholder="영상용 영문 프롬프트">${videoPromptValue}</textarea><div class="cm-reply-toolbar"><button class="btn" type="button" onclick="PostAuto.copyText(${i},'video')">복사</button></div><p class="mut">사진 프롬프트는 기존 게시·Instagram 자동 답장/DM에 사용되고, 영상 프롬프트는 화면 확인·복사용입니다.</p>`;
+  const deliveryType=master.prompt_delivery_type==='video'?'video':'photo';
+  return `<label class="mut" style="display:block;margin-top:10px">자동 전달 프롬프트</label><select id="v3delivery-${i}" class="cm-input" onchange="PostAuto.deliveryType(${i},this.value)"><option value="photo" ${deliveryType==='photo'?'selected':''}>사진 프롬프트</option><option value="video" ${deliveryType==='video'?'selected':''}>영상 프롬프트</option></select><p class="mut">선택한 프롬프트가 Threads 댓글과 Instagram 자동 DM으로 전달됩니다.</p><label class="mut" style="display:block;margin-top:10px">[사진 프롬프트]</label><textarea id="v3reply-${i}" oninput="PostAuto.save(${i})" class="cm-reply" placeholder="사진용 영문 프롬프트">${replyPromptValue}</textarea><div class="cm-reply-toolbar"><button class="btn" type="button" onclick="PostAuto.copyText(${i},'reply')">복사</button></div><label class="mut" style="display:block;margin-top:10px">[영상 프롬프트]</label><textarea id="v3video-${i}" oninput="PostAuto.save(${i})" class="cm-reply" placeholder="영상용 영문 프롬프트">${videoPromptValue}</textarea><div class="cm-reply-toolbar"><button class="btn" type="button" onclick="PostAuto.copyText(${i},'video')">복사</button></div>`;
  }
  if(pillar==='AI_TIP'){
   return `<label class="mut" style="display:block;margin-top:10px">댓글 및 답장 입력</label><textarea id="v3reply-${i}" oninput="PostAuto.save(${i})" class="cm-reply" placeholder="예: https://link.coupang.com/a/...">${replyPromptValue}</textarea><div class="cm-reply-toolbar"><button class="btn" type="button" onclick="PostAuto.copyText(${i},'reply')">복사</button></div><p class="mut">Threads 첫 일반 댓글 · Instagram 자동 답장/DM · YouTube 첫 댓글+답장</p>`;
@@ -350,11 +357,20 @@ function copyText(i,kind){
  if(!navigator?.clipboard?.writeText)return alert('복사 기능을 사용할 수 없습니다.');
  navigator.clipboard.writeText(value).then(()=>alert('복사했습니다.')).catch(()=>alert('복사에 실패했습니다.'));
 }
+function setPromptDeliveryType(i,value){
+ const master=ensureMaster(i);if(!master||PILLARS[i]!=='AI_PROMPT')return;
+ master.prompt_delivery_type=value==='video'?'video':'photo';saveMaster(i,master);
+ if(instagramCarousel?.candidateIndex===i&&!instagramCarousel.published){
+  instagramCarousel.replyPrompt=selectedDeliveryPrompt(master);persistInstagramCarousel(instagramCarousel);
+ }
+}
 function instagramCandidate(i){
  const x=candidates[i];if(!x)return null;
  syncDraft(i);
+ const master=ensureMaster(i);
  const source={
   category:PILLARS[i],topic:x.topic||'',body:body(i),reply_prompt:['AI_PROMPT','AI_TIP'].includes(PILLARS[i])?replyPrompt(i):'',
+  delivery_prompt:PILLARS[i]==='AI_PROMPT'?selectedDeliveryPrompt(master):replyPrompt(i),
   image_brief:x.image_brief||'',source_notes:Array.isArray(x.source_notes)?x.source_notes:[]
  };
  return source.body?source:null;
@@ -432,11 +448,12 @@ async function openInstagramCarousel(i){
  if(instagramCarousel?.candidateId===candidateId){renderInstagramCarousel();return}
  const restored=restoreInstagramCarousel(instagramRecord(candidateId),i,candidate);
  if(restored){
+  restored.replyPrompt=candidate.delivery_prompt||candidate.reply_prompt||'';
   instagramCarousel=restored;renderInstagramCarousel();
   if(restored.images.filter(Boolean).length<restored.plan.slide_count&&!restored.published){restored.generating=true;restored.recordStatus='generating';await completeInstagramCarousel(restored,false)}
   return;
  }
- const state={candidate,candidateId,plan:null,caption:'',replyPrompt:candidate.reply_prompt||'',images:[],cutImages:[],variations:[],selected:0,status:'스토리보드 생성 중…',generating:true,published:false,requestId:instagramRequestId(),candidateIndex:i,createdAt:Date.now(),recordStatus:'generating'};
+ const state={candidate,candidateId,plan:null,caption:'',replyPrompt:candidate.delivery_prompt||candidate.reply_prompt||'',images:[],cutImages:[],variations:[],selected:0,status:'스토리보드 생성 중…',generating:true,published:false,requestId:instagramRequestId(),candidateIndex:i,createdAt:Date.now(),recordStatus:'generating'};
  instagramCarousel=state;renderInstagramCarousel();await completeInstagramCarousel(state,true);
 }
 function selectInstagramSlide(index){if(!instagramCarousel)return;instagramCarousel.selected=index;renderInstagramCarousel()}
@@ -508,13 +525,13 @@ async function publishFirstReply(parentId,text,mode='text'){
 function threadsAdapter(snapshot){
  const text=withPlatformBodyCta(snapshot.master_body,snapshot.content_type,'threads'),media=snapshot.media.map(({type,url})=>({type,url}));
  if(!text)throw new Error('Threads 본문을 입력해 주세요.');if(text.length>500)throw new Error(`Threads 본문은 500자 이하입니다. 현재 ${text.length}자입니다.`);if(media.length>PLATFORM_LIMITS.threads.maxMedia)throw new Error(`Threads 미디어는 최대 ${PLATFORM_LIMITS.threads.maxMedia}개입니다.`);
- return {text,media,topic_tag:snapshot.topic_tag,topic_tag_verified:snapshot.topic_tag_verified===true,reply_prompt:snapshot.reply_prompt||''};
+ return {text,media,topic_tag:snapshot.topic_tag,topic_tag_verified:snapshot.topic_tag_verified===true,reply_prompt:snapshot.content_type==='AI_PROMPT'?selectedDeliveryPrompt(snapshot):snapshot.reply_prompt||''};
 }
 function instagramAdapter(snapshot){
  const caption=withPlatformBodyCta(snapshot.master_body,snapshot.content_type,'instagram'),media=snapshot.media.map(m=>({type:m.type,url:m.url,mime_type:m.mime_type,duration:m.duration||0}));
  if(!caption)throw new Error('Instagram 캡션을 입력해 주세요.');if(caption.length>2200)throw new Error(`Instagram 캡션은 2200자 이하입니다. 현재 ${caption.length}자입니다.`);if(!media.length)throw new Error('Instagram 게시에는 미디어가 필요합니다.');if(media.length>PLATFORM_LIMITS.instagram.maxMedia)throw new Error(`Instagram 미디어는 최대 ${PLATFORM_LIMITS.instagram.maxMedia}개입니다.`);
  for(const item of media){if(item.type==='image'&&item.mime_type&&item.mime_type!=='image/jpeg')throw new Error('Instagram 이미지 게시에는 JPEG 미디어만 사용할 수 있습니다.');if(item.type==='video'&&item.duration&&(item.duration<3||item.duration>900))throw new Error('Instagram 영상은 3초 이상 15분 이하여야 합니다.')}
- return {media,caption,request_id:instagramRequestId(),content_id:snapshot.content_id,content_type:snapshot.content_type,reply_prompt:snapshot.reply_prompt||''};
+ return {media,caption,request_id:instagramRequestId(),content_id:snapshot.content_id,content_type:snapshot.content_type,reply_prompt:snapshot.content_type==='AI_PROMPT'?selectedDeliveryPrompt(snapshot):snapshot.reply_prompt||''};
 }
 function facebookAdapter(snapshot){
  const message=String(snapshot.master_body||'').trim(),media=snapshot.media.map(m=>({type:m.type,url:m.url,mime_type:m.mime_type}));
@@ -640,7 +657,7 @@ function resetCard(i){
  if(!confirm('이 카드의 본문, 댓글/답장, Topic, 미디어 등 작업 내용을 모두 지울까요?\n\n카드 UI는 그대로 유지됩니다.'))return;
  const key=masterKey(i),records=masterRecords(),master=ensureMaster(i);
  x.topic='';x.hook='';x.hook_candidates=[];x.body='';x.reply_prompt='';x.video_prompt='';x.reason='';x.image_brief='';x.source_notes=[];x.topic_tag='';x.topic_tag_candidates=[];x.topic_tag_verified=false;x.topic_tag_search_available=true;x.score={stop:0,save:0,share:0,comment:0,follow:0,novelty:0,visual:0,total:0};x.variation=1;x.image_url=null;x.final_image=null;x.base_image=null;x.thumbnail_hook='';x.thumbnail_dirty=false;
- if(master){master.title='';master.master_body='';master.threads_body_override='';master.instagram_caption_override='';master.reply_prompt='';master.video_prompt='';master.topic_tag='';master.topic_tag_verified=false;master.media=[];master.status={threads:'draft',instagram:'draft',facebook:'draft',youtube:'draft'};delete master.facebook_post_id;delete master.youtube_video_id;records[key]=master;write(CM,records)}
+ if(master){master.title='';master.master_body='';master.threads_body_override='';master.instagram_caption_override='';master.reply_prompt='';master.video_prompt='';master.prompt_delivery_type='photo';master.topic_tag='';master.topic_tag_verified=false;master.media=[];master.status={threads:'draft',instagram:'draft',facebook:'draft',youtube:'draft'};delete master.facebook_post_id;delete master.youtube_video_id;records[key]=master;write(CM,records)}
  const ig=instagramRecords();if(ig[key]){delete ig[key];write(IGC,ig)}
  if(instagramCarousel?.candidateId===key){instagramCarousel=null;instagramModalOpen=false}
  saveDrafts();render();
@@ -656,6 +673,6 @@ function patchReplies(){
  const b=document.getElementById('batchReply');if(!b)return;b.onclick=async()=>{if(window._batchRunning||window._replyHistoryAvailable===false)return;const all=window._replyItems||[],targets=[];all.forEach((x,i)=>{if(x.review_required||x.already_replied)return;const text=document.getElementById(`replyText-${i}`)?.value.trim();if(text)targets.push({i,id:x.id,text})});if(!targets.length||!confirm(`${targets.length}개 미응답 댓글을 순차 답장할까요?`))return;window._batchRunning=true;updateBatchButton();let ok=0,fail=0;for(let n=0;n<targets.length;n++){const t=targets[n];b.textContent=`일괄 답장 ${n+1}/${targets.length}`;try{await postReply(t.id,t.text);markReplyDone(t.i,t.id,t.text);ok++}catch{fail++}if(n<targets.length-1)await new Promise(r=>setTimeout(r,500))}window._batchRunning=false;updateBatchButton();alert(`완료 · 성공 ${ok} / 실패 ${fail}`);await syncReplies(currentPostIds).catch(()=>{})};
  setTimeout(()=>{try{updateBatchButton()}catch{}},100);
 }
-window.PostAuto={generate:generatePillar,image:i=>makeImage(i,false),reimage:i=>makeImage(i,true),keep,now,variant,no,reset:resetCard,drop,publishQueue,save:syncDraft,addMedia:addLocalMedia,removeMedia:removeMasterMedia,moveMedia:moveMasterMedia,instagram:openInstagramCarousel,instagramSelect:selectInstagramSlide,instagramCaption:setInstagramCaption,instagramReplyPrompt:setInstagramReplyPrompt,instagramClose:closeInstagramCarousel,instagramRegenerate:regenerateInstagramSlide,instagramRegenerateAll:regenerateInstagramCarousel,instagramPublish:publishInstagramCarousel,instagramMasterPublish:publishInstagramMaster,facebookPublish:publishFacebookMaster,youtubePublish:publishYoutubeMaster,copyText,instagramPromptStoreRetry:retryInstagramPromptStore};
+window.PostAuto={generate:generatePillar,image:i=>makeImage(i,false),reimage:i=>makeImage(i,true),keep,now,variant,no,reset:resetCard,drop,publishQueue,save:syncDraft,deliveryType:setPromptDeliveryType,addMedia:addLocalMedia,removeMedia:removeMasterMedia,moveMedia:moveMasterMedia,instagram:openInstagramCarousel,instagramSelect:selectInstagramSlide,instagramCaption:setInstagramCaption,instagramReplyPrompt:setInstagramReplyPrompt,instagramClose:closeInstagramCarousel,instagramRegenerate:regenerateInstagramSlide,instagramRegenerateAll:regenerateInstagramCarousel,instagramPublish:publishInstagramCarousel,instagramMasterPublish:publishInstagramMaster,facebookPublish:publishFacebookMaster,youtubePublish:publishYoutubeMaster,copyText,instagramPromptStoreRetry:retryInstagramPromptStore};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ensure);else ensure();
 })();
