@@ -9,7 +9,13 @@ const PLATFORM_BODY_CTA={
  threads:'링크/추가 내용은 첫 댓글에 남겨둘게 👇',
  instagram:'필요하면 댓글 남겨줘. DM으로 보내줄게 💌'
 };
-const INSTAGRAM_AI_PROMPT_HEADER='✨ 이쁜 프로필 사진 필요해? 댓글에 "프롬프트" 남겨줘 1분만에 날라간당';
+const INSTAGRAM_AI_PROMPT_HEADER=`✨이쁜사진  프롬프트 필요해?👇댓글에 프롬프트 남겨줘
+팔로우 안하면 DM이 스팸인식돼서 내가 못보내ㅠ
+팔로우하고 댓글 달아줘!
+
+Want this prompt?👇Comment PROMPT
+I can't DM you if you don't follow -
+it goes to spamㅠFollow + comment!`;
 let candidates=[null,null,null,null];
 let instagramCarousel=null,instagramPublishing=false,instagramModalOpen=false;
 function read(k,d=[]){try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}}
