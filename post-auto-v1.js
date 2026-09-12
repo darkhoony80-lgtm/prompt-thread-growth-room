@@ -9,6 +9,7 @@ const PLATFORM_BODY_CTA={
  threads:'링크/추가 내용은 첫 댓글에 남겨둘게 👇',
  instagram:'필요하면 댓글 남겨줘. DM으로 보내줄게 💌'
 };
+const INSTAGRAM_AI_PROMPT_HEADER='이쁜 프로필 사진 필요해? 댓글에 "프롬프트" 남겨줘 1분만에 날라간당';
 let candidates=[null,null,null,null];
 let instagramCarousel=null,instagramPublishing=false,instagramModalOpen=false;
 function read(k,d=[]){try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}}
@@ -122,6 +123,11 @@ function withoutLegacyPromptCta(value){
 function withPlatformBodyCta(value,contentType,platform){
  if(!PROMPT_CATEGORIES.includes(contentType))return String(value||'').trim();
  const body=withoutLegacyPromptCta(value);
+  if(platform==='instagram'&&contentType==='AI_PROMPT'){
+   const trimmed=String(body||'').trim();
+   const alreadyHasPrefix=trimmed.startsWith(INSTAGRAM_AI_PROMPT_HEADER);
+   return alreadyHasPrefix ? trimmed : `${INSTAGRAM_AI_PROMPT_HEADER}${trimmed?`\n\n${trimmed}`:''}`;
+  }
  return [body,PLATFORM_BODY_CTA[platform]].filter(Boolean).join('\n\n');
 }
 function esc(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
