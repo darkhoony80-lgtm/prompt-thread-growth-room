@@ -156,7 +156,7 @@ function withPlatformBodyCta(value,contentType,platform){
  return [body,PLATFORM_BODY_CTA[platform]].filter(Boolean).join('\n\n');
 }
 function esc(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function fb(x,kind){const a=read(F);a.unshift({kind,category:x.category,topic:x.topic,hook:x.hook,at:Date.now()});write(F,a.slice(0,80))}
+function fb(x,kind){const a=read(F),styleContext=x?.category==='AI_PROMPT'?[x.body,x.image_brief,x.reply_prompt].map(v=>String(v||'').trim()).filter(Boolean).join(' | ').slice(0,700):'';a.unshift({kind,category:x.category,topic:x.topic,hook:x.hook,...(styleContext?{style_context:styleContext}:{}),at:Date.now()});write(F,a.slice(0,80))}
 function body(i){return document.getElementById(`v3body-${i}`)?.value.trim()||candidates[i]?.body||''}
 function replyPrompt(i){return document.getElementById(`v3reply-${i}`)?.value.trim()||candidates[i]?.reply_prompt||''}
 function videoPrompt(i){return document.getElementById(`v3video-${i}`)?.value.trim()||candidates[i]?.video_prompt||''}
@@ -205,7 +205,8 @@ function recentAiPrompts(){
  const seen=new Set(),rows=[...read(P),...read(F)];
  return rows.filter(x=>x?.category==='AI_PROMPT').map(x=>({
   topic:String(x?.topic||'').trim().slice(0,140),
-  hook:String(x?.hook||'').trim().slice(0,60)
+  hook:String(x?.hook||'').trim().slice(0,60),
+  style_context:String(x?.style_context||'').trim().slice(0,700)
  })).filter(x=>{
   const key=`${x.topic}|${x.hook}`.toLocaleLowerCase('ko-KR');
   if(!x.topic||seen.has(key))return false;
@@ -240,6 +241,7 @@ async function generatePillar(i,mood='RANDOM'){
   const recentFood=pillar==='FOOD_PICK'?read(FH,[]).slice(0,8):[];
   const recentHot=pillar==='HOT_ISSUE'?recentHotIssues():[];
   const recentAi=pillar==='AI_TIP'?recentAiTips():[];
+  if(pillar==='AI_PROMPT'&&candidates[i]?.topic)fb(candidates[i],'REGENERATED');
   const recentPrompts=pillar==='AI_PROMPT'?recentAiPrompts():[];
    const r=await fetch('/api/content-router?action=generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pillar,feedback,performance,recentFood,recentHotIssues:recentHot,recentAiTips:recentAi,recentAiPrompts:recentPrompts,mood:pillar==='AI_PROMPT'?mood:'RANDOM'})});
   const text=await r.text();let j;try{j=JSON.parse(text)}catch{throw new Error(text.slice(0,180)||`HTTP ${r.status}`)}
