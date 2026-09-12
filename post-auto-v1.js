@@ -2,6 +2,7 @@
 (function(){
 const CATS={AI_PROMPT:'AI 프롬프트',AI_TIP:'쿠팡파트너스',FOOD_PICK:'오늘 뭐 먹지?',HOT_ISSUE:'🔥 오늘의 핫이슈'};
 const Q='pt_queue_v3',F='pt_feedback_v3',P='pt_published_v3',D='pt_drafts_v6',FH='pt_food_history_v1',IGC='pt_instagram_carousels_v1',CM='pt_content_masters_v1';
+const ARCHIVE_DB='prompt-thread-growth-room',ARCHIVE_STORE='directory-handles',ARCHIVE_KEY='content-master-archive-root';
 const PILLARS=['AI_TIP','AI_PROMPT','FOOD_PICK','HOT_ISSUE'];
 const PLATFORM_LIMITS={threads:{maxMedia:20},instagram:{maxMedia:10},facebook:{maxMedia:10},youtube:{maxMedia:1}};
 const PROMPT_CATEGORIES=['AI_TIP','AI_PROMPT'];
@@ -22,6 +23,7 @@ Follow first, then comment PROMPT!`;
 let candidates=[null,null,null,null];
 let instagramCarousel=null,instagramPublishing=false,instagramModalOpen=false;
 let videoMergeRuntimePromise=null;
+let contentArchiveRootHandle=null,contentArchiveRestorePromise=null;
 const videoMergeDrafts=new Map();
 function read(k,d=[]){try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}}
 function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
@@ -225,6 +227,7 @@ function ensure(){
  dash.insertAdjacentHTML('afterbegin',`<div class="card" id="autoV5" style="margin-bottom:12px"><div class="section"><div><b>✨ 게시물 성장 엔진</b><p class="mut">필요한 콘텐츠만 독립 호출합니다. 생성 → 검토/수정 → 이미지 생성 → 최종 확인 → 게시 순서입니다.</p></div></div><div id="v3status" class="mut" style="margin-bottom:10px"></div><div id="v3list" class="post-list"></div></div>`);
  const cal=document.getElementById('calendar');if(cal)cal.innerHTML=`<div class="section"><div><b>발행 대기함</b><p class="mut">이미지를 직접 확인하고 👍한 게시물만 저장됩니다.</p></div><span class="badge" id="v3qcount">0</span></div><div id="v3queue" class="post-list"></div>`;
  patchReplies();render();renderQueue();
+ if(!contentArchiveRestorePromise)contentArchiveRestorePromise=restoreContentArchiveHandle();
 }
 async function generatePillar(i,mood='RANDOM'){
  const pillar=PILLARS[i],b=document.getElementById(`v3gen-${i}`),s=document.getElementById('v3status');
@@ -267,7 +270,7 @@ async function generatePillar(i,mood='RANDOM'){
 }
 function emptyCard(pillar,i){
  const desc={AI_TIP:'쿠팡파트너스 게시물과 제휴 링크 전달을 관리',AI_PROMPT:'저장하고 싶은 상세 영문 프롬프트',FOOD_PICK:'점심·저녁·술안주를 실제 전국 맛집으로 추천',HOT_ISSUE:'오늘 실제 뉴스에서 가장 강한 이슈 하나'}[pillar];
- return `<article class="card" id="v3card-${i}"><div class="post-meta"><span class="badge">${esc(CATS[pillar])}</span></div><h3 style="margin:10px 0 6px">${esc(CATS[pillar])}</h3><p class="mut">${esc(desc)}</p>${pillar==='AI_PROMPT'?`<div style="display:flex;gap:6px;flex-wrap:wrap">
+ return `<article class="card" id="v3card-${i}"><div class="post-meta"><span class="badge">${esc(CATS[pillar])}</span></div><h3 style="margin:10px 0 6px">${esc(CATS[pillar])}</h3><p class="mut">${esc(desc)}</p>${localArchiveHtml(pillar,i)}${pillar==='AI_PROMPT'?`<div style="display:flex;gap:6px;flex-wrap:wrap">
 <button class="btn p" id="v3gen-${i}" onclick="PostAuto.generate(${i},'RANDOM')">🎲 랜덤</button>
 <button class="btn" onclick="PostAuto.generate(${i},'HAPPY')">😊 행복</button>
 <button class="btn" onclick="PostAuto.generate(${i},'LOVE')">❤️ 사랑</button>
@@ -278,6 +281,10 @@ function emptyCard(pillar,i){
 }
 function mediaEditorHtml(i,master){
  return `<section class="cm-editor"><div class="section"><div><b>공통 미디어</b><p class="mut">영상 여러 개를 한 번에 선택하면 순서를 정한 뒤 하나의 MP4로 인코딩할 수 있습니다.</p></div><label class="btn">사진/영상 추가<input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" multiple hidden onchange="PostAuto.addMedia(${i},this.files);this.value=''" /></label></div><div id="v3merge-${i}"></div><div id="v3media-${i}" class="cm-media"></div></section>`;
+}
+function localArchiveHtml(pillar,i){
+ if(!['AI_PROMPT','AI_TIP'].includes(pillar))return '';
+ return `<section class="cm-local-archive"><div><b>📁 로컬 작업 저장</b><p class="mut">지정한 폴더 안에 후킹 제목과 날짜로 새 폴더를 만들고 미디어·본문·프롬프트 JSON을 저장합니다.</p></div><div class="cm-local-actions"><button class="btn" type="button" onclick="PostAuto.chooseArchiveFolder()">저장 폴더 지정</button><button class="btn p" type="button" onclick="PostAuto.saveArchive(${i})">저장</button><button class="btn" type="button" onclick="PostAuto.loadArchive(${i})">불러오기</button></div><span class="mut cm-local-folder" data-content-archive-folder>저장 폴더 미지정</span><span class="mut" id="v3archive-status-${i}"></span></section>`;
 }
 function promptTextareas(pillar,i,master){
  const replyPromptValue=esc(master.reply_prompt||'');
@@ -293,14 +300,102 @@ function promptTextareas(pillar,i,master){
 }
 function render(){
  const box=document.getElementById('v3list');if(!box)return;
- box.innerHTML=PILLARS.map((pillar,i)=>{const x=candidates[i];if(!x)return emptyCard(pillar,i);const master=ensureMaster(i);return `<article class="card" id="v3card-${i}"><div class="post-meta"><span class="badge">${esc(CATS[pillar]||x.category_label)}</span><span class="badge">Content Master</span><span class="mut">총점 ${x.score?.total||0}</span></div><div class="v3grid" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,430px);gap:18px;align-items:start"><div><div style="display:flex;justify-content:flex-end;gap:8px;align-items:center">${pillar==='AI_PROMPT'?`<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="btn" id="v3gen-${i}" onclick="PostAuto.generate(${i},'RANDOM')">🎲 랜덤</button><button class="btn" onclick="PostAuto.generate(${i},'HAPPY')">😊 행복</button><button class="btn" onclick="PostAuto.generate(${i},'LOVE')">❤️ 사랑</button><button class="btn" onclick="PostAuto.generate(${i},'COMIC')">😂 코믹</button><button class="btn" onclick="PostAuto.generate(${i},'HORROR')">👻 공포</button><button class="btn" onclick="PostAuto.generate(${i},'FANTASY')">🧚 판타지</button></div>`:pillar==='AI_TIP'?`<button class="btn" onclick="PostAuto.reset(${i})">↺ 리셋</button>`:`<button class="btn p" id="v3gen-${i}" onclick="PostAuto.generate(${i})">✨ 생성</button>`}</div><label class="mut">공통 본문</label><textarea id="v3body-${i}" maxlength="500" oninput="PostAuto.save(${i})" class="cm-body">${esc(master.master_body)}</textarea>${promptTextareas(pillar,i,master)}<p class="mut">소재 · ${esc(x.topic)}</p><p class="mut">추천 이유 · ${esc(x.reason)}</p>${x.source_notes?.length?`<p class="mut">검증 메모 · ${esc(x.source_notes.join(' / '))}</p>`:''}<div style="margin:10px 0"><label class="mut">🏷 Threads 추천 Topic ${x.topic_tag_verified?'· TAG 검색 확인 ✅':(x.topic_tag_search_available===false?'· 검색 확인 불가':'· 추천값')}</label><input id="v3topic-${i}" maxlength="80" oninput="PostAuto.save(${i})" value="${esc(master.topic_tag||'')}" placeholder="예: AI 이미지" class="cm-input"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" onclick="PostAuto.image(${i})">🖼 AI 이미지 추가</button><button class="btn" onclick="PostAuto.reimage(${i})">🔄 AI 이미지 추가 생성</button><button class="btn" onclick="PostAuto.instagram(${i})">AI 이미지 스토리 만들기</button><button class="btn" onclick="PostAuto.variant(${i})">다른 버전</button><button class="btn" onclick="PostAuto.keep(${i})">👍 발행 대기</button><button class="btn p" onclick="PostAuto.now(${i})">Threads 게시</button><button class="btn p" onclick="PostAuto.instagramMasterPublish(${i})">Instagram 게시</button><button class="btn p" onclick="PostAuto.facebookPublish(${i})">Facebook 게시</button><button class="btn p" onclick="PostAuto.youtubePublish(${i})">YouTube 게시</button></div></div><div>${mediaEditorHtml(i,master)}</div></div></article>`}).join('');
- if(!document.getElementById('v3css'))document.head.insertAdjacentHTML('beforeend',`<style id="v3css">@media(max-width:900px){.v3grid{grid-template-columns:1fr!important}}.cm-body,.cm-reply,.cm-input{width:100%;margin-top:5px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:12px;line-height:1.55}.cm-body{min-height:190px}.cm-reply{min-height:150px}.cm-editor{border:1px solid var(--l);border-radius:12px;padding:12px}.cm-media{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:10px 0}.cm-item{position:relative;border:1px solid var(--l);border-radius:10px;padding:6px;background:#090b0f}.cm-item img,.cm-item video{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:7px;display:block}.cm-item-actions{display:flex;gap:4px;margin-top:5px}.cm-item-actions .btn{padding:5px 8px}.cm-kind{position:absolute;top:10px;left:10px;background:#090b0fdd;border-radius:10px;padding:3px 6px;font-size:10px}.cm-reply-toolbar{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}</style>`);
+ box.innerHTML=PILLARS.map((pillar,i)=>{const x=candidates[i];if(!x)return emptyCard(pillar,i);const master=ensureMaster(i);return `<article class="card" id="v3card-${i}"><div class="post-meta"><span class="badge">${esc(CATS[pillar]||x.category_label)}</span><span class="badge">Content Master</span><span class="mut">총점 ${x.score?.total||0}</span></div>${localArchiveHtml(pillar,i)}<div class="v3grid" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,430px);gap:18px;align-items:start"><div><div style="display:flex;justify-content:flex-end;gap:8px;align-items:center">${pillar==='AI_PROMPT'?`<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="btn" id="v3gen-${i}" onclick="PostAuto.generate(${i},'RANDOM')">🎲 랜덤</button><button class="btn" onclick="PostAuto.generate(${i},'HAPPY')">😊 행복</button><button class="btn" onclick="PostAuto.generate(${i},'LOVE')">❤️ 사랑</button><button class="btn" onclick="PostAuto.generate(${i},'COMIC')">😂 코믹</button><button class="btn" onclick="PostAuto.generate(${i},'HORROR')">👻 공포</button><button class="btn" onclick="PostAuto.generate(${i},'FANTASY')">🧚 판타지</button></div>`:pillar==='AI_TIP'?`<button class="btn" onclick="PostAuto.reset(${i})">↺ 리셋</button>`:`<button class="btn p" id="v3gen-${i}" onclick="PostAuto.generate(${i})">✨ 생성</button>`}</div><label class="mut">공통 본문</label><textarea id="v3body-${i}" maxlength="500" oninput="PostAuto.save(${i})" class="cm-body">${esc(master.master_body)}</textarea>${promptTextareas(pillar,i,master)}<p class="mut">소재 · ${esc(x.topic)}</p><p class="mut">추천 이유 · ${esc(x.reason)}</p>${x.source_notes?.length?`<p class="mut">검증 메모 · ${esc(x.source_notes.join(' / '))}</p>`:''}<div style="margin:10px 0"><label class="mut">🏷 Threads 추천 Topic ${x.topic_tag_verified?'· TAG 검색 확인 ✅':(x.topic_tag_search_available===false?'· 검색 확인 불가':'· 추천값')}</label><input id="v3topic-${i}" maxlength="80" oninput="PostAuto.save(${i})" value="${esc(master.topic_tag||'')}" placeholder="예: AI 이미지" class="cm-input"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" onclick="PostAuto.image(${i})">🖼 AI 이미지 추가</button><button class="btn" onclick="PostAuto.reimage(${i})">🔄 AI 이미지 추가 생성</button><button class="btn" onclick="PostAuto.instagram(${i})">AI 이미지 스토리 만들기</button><button class="btn" onclick="PostAuto.variant(${i})">다른 버전</button><button class="btn" onclick="PostAuto.keep(${i})">👍 발행 대기</button><button class="btn p" onclick="PostAuto.now(${i})">Threads 게시</button><button class="btn p" onclick="PostAuto.instagramMasterPublish(${i})">Instagram 게시</button><button class="btn p" onclick="PostAuto.facebookPublish(${i})">Facebook 게시</button><button class="btn p" onclick="PostAuto.youtubePublish(${i})">YouTube 게시</button></div></div><div>${mediaEditorHtml(i,master)}</div></div></article>`}).join('');
+ if(!document.getElementById('v3css'))document.head.insertAdjacentHTML('beforeend',`<style id="v3css">@media(max-width:900px){.v3grid{grid-template-columns:1fr!important}}.cm-body,.cm-reply,.cm-input{width:100%;margin-top:5px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:12px;line-height:1.55}.cm-body{min-height:190px}.cm-reply{min-height:150px}.cm-editor{border:1px solid var(--l);border-radius:12px;padding:12px}.cm-media{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:10px 0}.cm-item{position:relative;border:1px solid var(--l);border-radius:10px;padding:6px;background:#090b0f}.cm-item img,.cm-item video{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:7px;display:block}.cm-item-actions{display:flex;gap:4px;margin-top:5px}.cm-item-actions .btn{padding:5px 8px}.cm-kind{position:absolute;top:10px;left:10px;background:#090b0fdd;border-radius:10px;padding:3px 6px;font-size:10px}.cm-reply-toolbar{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.cm-local-archive{display:grid;gap:7px;margin:12px 0;padding:11px;border:1px solid var(--l);border-radius:11px;background:#0a1119}.cm-local-archive p{margin:4px 0 0}.cm-local-actions{display:flex;gap:6px;flex-wrap:wrap}.cm-local-folder{overflow-wrap:anywhere}</style>`);
  if(!document.getElementById('v3mergecss'))document.head.insertAdjacentHTML('beforeend',`<style id="v3mergecss">.cm-merge{margin-top:10px;padding:10px;border:1px solid #3b536f;border-radius:10px;background:#0a1119}.cm-merge-row{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;align-items:start;padding:10px 0;border-bottom:1px solid var(--l)}.cm-merge-row:last-child{border-bottom:0}.cm-merge-preview{width:110px;aspect-ratio:9/16;object-fit:cover;border-radius:8px;background:#000;display:block}.cm-merge-info{min-width:0}.cm-merge-name{display:block;margin-top:4px;line-height:1.35;overflow-wrap:anywhere}.cm-merge-buttons{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}.cm-merge-actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:10px}.cm-merge-actions .btn,.cm-merge-buttons .btn{padding:6px 9px}</style>`);
  candidates.forEach((x,i)=>{if(x){renderMedia(i);renderVideoMergeDraft(i)}});
+ refreshContentArchiveFolderState();
 }
 function renderMedia(i){
  const box=document.getElementById(`v3media-${i}`),master=ensureMaster(i);if(!box||!master)return;
  box.innerHTML=master.media.length?master.media.map((m,index)=>`<div class="cm-item"><span class="cm-kind">${index+1} · ${m.source==='ai'?'AI':'업로드'} ${m.type==='video'?'영상':'사진'}</span>${m.type==='video'?`<video src="${esc(m.previewUrl||m.url)}" controls preload="metadata"></video>`:`<img src="${esc(m.previewUrl||m.url)}" alt="${index+1}번 미디어">`}<div class="cm-item-actions"><button class="btn" onclick="PostAuto.moveMedia(${i},'${esc(m.id)}',-1)" ${index===0?'disabled':''}>←</button><button class="btn" onclick="PostAuto.moveMedia(${i},'${esc(m.id)}',1)" ${index===master.media.length-1?'disabled':''}>→</button><button class="btn" onclick="PostAuto.removeMedia(${i},'${esc(m.id)}')">삭제</button></div></div>`).join(''):'<div class="card empty"><div><b>미디어 없음</b>AI 이미지 생성 전에도 사진이나 영상을 추가할 수 있습니다.</div></div>';
+}
+function openContentArchiveDb(){
+ return new Promise((resolve,reject)=>{const request=indexedDB.open(ARCHIVE_DB,1);request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains(ARCHIVE_STORE))request.result.createObjectStore(ARCHIVE_STORE)};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
+}
+async function storeContentArchiveHandle(handle){
+ const db=await openContentArchiveDb();
+ try{await new Promise((resolve,reject)=>{const tx=db.transaction(ARCHIVE_STORE,'readwrite');tx.objectStore(ARCHIVE_STORE).put(handle,ARCHIVE_KEY);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}finally{db.close()}
+}
+async function restoreContentArchiveHandle(){
+ try{
+  const db=await openContentArchiveDb();
+  try{contentArchiveRootHandle=await new Promise((resolve,reject)=>{const tx=db.transaction(ARCHIVE_STORE,'readonly'),request=tx.objectStore(ARCHIVE_STORE).get(ARCHIVE_KEY);request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>reject(request.error)})}finally{db.close()}
+ }catch{}
+ await refreshContentArchiveFolderState();
+}
+async function contentArchivePermission(request=false){
+ if(!contentArchiveRootHandle)return 'denied';
+ try{let state=await contentArchiveRootHandle.queryPermission({mode:'readwrite'});if(state!=='granted'&&request)state=await contentArchiveRootHandle.requestPermission({mode:'readwrite'});return state}catch{return 'denied'}
+}
+async function refreshContentArchiveFolderState(){
+ const nodes=document.querySelectorAll('[data-content-archive-folder]');if(!nodes.length)return;
+ const permission=await contentArchivePermission(false),text=contentArchiveRootHandle?`${contentArchiveRootHandle.name} · ${permission==='granted'?'연결됨':'권한 확인 필요'}`:'저장 폴더 미지정';
+ nodes.forEach(node=>{node.textContent=text});
+}
+async function chooseContentArchiveFolder(){
+ if(!window.showDirectoryPicker)return alert('로컬 폴더 저장은 최신 Chrome 또는 Edge에서 사용할 수 있습니다.');
+ try{const handle=await window.showDirectoryPicker({id:'content-master-archive',mode:'readwrite',startIn:'downloads'});contentArchiveRootHandle=handle;await storeContentArchiveHandle(handle);await refreshContentArchiveFolderState();const status=document.getElementById('v3status');if(status)status.textContent=`로컬 저장 폴더 연결 완료 · ${handle.name}`}
+ catch(error){if(error?.name!=='AbortError')alert('저장 폴더 연결 실패: '+String(error?.message||error))}
+}
+function setContentArchiveStatus(i,text){const local=document.getElementById(`v3archive-status-${i}`),globalStatus=document.getElementById('v3status');if(local)local.textContent=String(text||'');if(globalStatus)globalStatus.textContent=String(text||'')}
+function archiveStamp(date=new Date()){const pad=value=>String(value).padStart(2,'0');return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}_${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`}
+function safeArchiveName(value,fallback='콘텐츠'){const clean=String(value||'').replace(/[<>:"/\\|?*\u0000-\u001f]/g,' ').replace(/\s+/g,' ').replace(/[. ]+$/g,'').trim().slice(0,60);return clean||fallback}
+function archiveTitle(i,master){const x=candidates[i],firstLine=String(master?.master_body||'').split(/\r?\n/).map(line=>line.trim()).find(Boolean);return safeArchiveName(x?.hook||x?.topic||master?.title||firstLine||CATS[PILLARS[i]])}
+function archiveExtension(type,mime=''){if(type==='video')return /quicktime/i.test(mime)?'mov':'mp4';if(/png/i.test(mime))return 'png';if(/webp/i.test(mime))return 'webp';return 'jpg'}
+async function writeArchiveFile(directory,name,value){const handle=await directory.getFileHandle(name,{create:true}),writable=await handle.createWritable();try{await writable.write(value)}finally{await writable.close()}}
+async function uniqueArchiveDirectory(root,base){
+ for(let number=1;number<=99;number++){
+  const name=number===1?base:`${base} (${number})`;
+  try{await root.getDirectoryHandle(name)}catch(error){if(error?.name==='NotFoundError')return {name,handle:await root.getDirectoryHandle(name,{create:true})};throw error}
+ }
+ throw new Error('같은 이름의 저장 폴더가 너무 많습니다.');
+}
+async function saveContentArchive(i){
+ if(!['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))return;
+ if(!window.showDirectoryPicker)return alert('로컬 폴더 저장은 최신 Chrome 또는 Edge에서 사용할 수 있습니다.');
+ if(!contentArchiveRootHandle)return alert('먼저 저장 폴더를 지정해 주세요.');
+ if(await contentArchivePermission(true)!=='granted')return alert('선택한 폴더의 읽기/쓰기 권한이 필요합니다.');
+ try{
+  syncDraft(i);const master=snapshotMaster(i),draft=videoMergeDraft(i),base=`${archiveTitle(i,master)}_${archiveStamp()}`,created=await uniqueArchiveDirectory(contentArchiveRootHandle,base),archivedMedia=[];
+  for(let index=0;index<master.media.length;index++){
+   const item=master.media[index];setContentArchiveStatus(i,`미디어 저장 중… ${index+1}/${master.media.length}`);
+   const response=await fetch(item.url);if(!response.ok)throw new Error(`${index+1}번 미디어를 내려받지 못했습니다. HTTP ${response.status}`);
+   const blob=await response.blob(),mime=blob.type||item.mime_type||'',fileName=`media-${String(index+1).padStart(2,'0')}.${archiveExtension(item.type,mime)}`;
+   await writeArchiveFile(created.handle,fileName,blob);archivedMedia.push({...item,file_name:fileName,mime_type:mime||item.mime_type,url:undefined,previewUrl:undefined});
+  }
+  const mergeVideos=[];
+  for(let index=0;index<(draft?.files?.length||0);index++){
+   const file=draft.files[index],extension=String(file.name||'video.mp4').split('.').pop().replace(/[^a-z0-9]/gi,'').toLowerCase()||'mp4',fileName=`merge-${String(index+1).padStart(2,'0')}.${extension}`;
+   setContentArchiveStatus(i,`병합 대기 영상 저장 중… ${index+1}/${draft.files.length}`);await writeArchiveFile(created.handle,fileName,file);mergeVideos.push({file_name:fileName,original_name:file.name,mime_type:file.type,size:file.size,order:index});
+  }
+  const manifest={version:1,saved_at:new Date().toISOString(),content_type:PILLARS[i],hook:String(candidates[i]?.hook||''),title:String(candidates[i]?.topic||master.title||''),body:String(master.master_body||''),reply_prompt:String(master.reply_prompt||''),video_prompt:String(master.video_prompt||''),candidate:draftSafe(candidates[i]),master:{...master,media:archivedMedia},merge_videos:mergeVideos};
+  await writeArchiveFile(created.handle,'content.json',JSON.stringify(manifest,null,2));setContentArchiveStatus(i,`로컬 저장 완료 · ${created.name}`);
+ }catch(error){setContentArchiveStatus(i,'로컬 저장 실패');alert('로컬 저장 실패: '+String(error?.message||error))}
+}
+async function loadContentArchive(i){
+ if(!['AI_PROMPT','AI_TIP'].includes(PILLARS[i]))return;
+ if(!window.showDirectoryPicker)return alert('로컬 폴더 불러오기는 최신 Chrome 또는 Edge에서 사용할 수 있습니다.');
+ try{
+  const options={id:'content-master-import',mode:'read'};if(contentArchiveRootHandle&&await contentArchivePermission(false)==='granted')options.startIn=contentArchiveRootHandle;
+  const directory=await window.showDirectoryPicker(options),jsonFile=await (await directory.getFileHandle('content.json')).getFile(),manifest=JSON.parse(await jsonFile.text()),pillar=PILLARS[i];
+  if(manifest?.version!==1||manifest?.content_type!==pillar||!manifest?.master)throw new Error(`${CATS[pillar]}에서 저장한 올바른 작업 폴더가 아닙니다.`);
+  const oldKey=masterKey(i),oldDraft=videoMergeDraft(i);if(oldDraft){releaseVideoMergePreviews(oldDraft);videoMergeDrafts.delete(oldKey)}
+  const id=`${pillar}-local-${Date.now()}`,storedCandidate=manifest.candidate&&typeof manifest.candidate==='object'?manifest.candidate:{};
+  candidates[i]={...storedCandidate,id,category:pillar,category_label:CATS[pillar],body:String(manifest.master.master_body||storedCandidate.body||''),reply_prompt:String(manifest.master.reply_prompt||storedCandidate.reply_prompt||''),video_prompt:pillar==='AI_PROMPT'?String(manifest.master.video_prompt||storedCandidate.video_prompt||''):''};
+  const loadedMaster={...manifest.master,content_id:id,content_type:pillar,media:[],status:{threads:'draft',instagram:'draft',facebook:'draft',youtube:'draft'},updated_at:Date.now()};
+  const records=masterRecords();records[id]=loadedMaster;write(CM,records);saveDrafts();render();
+  const mediaEntries=Array.isArray(manifest.master.media)?manifest.master.media:[];
+  for(let index=0;index<mediaEntries.length;index++){
+   const entry=mediaEntries[index];setContentArchiveStatus(i,`저장 미디어 불러와 업로드 중… ${index+1}/${mediaEntries.length}`);
+   const raw=await (await directory.getFileHandle(entry.file_name)).getFile(),source=new File([raw],raw.name,{type:entry.mime_type||raw.type,lastModified:raw.lastModified}),file=await imageToJpeg(source),type=validateLocalMedia(file),duration=type==='video'?(Number(entry.duration)||await videoDuration(file)):0,blob=await uploadLocalMedia(file,i,type);
+   loadedMaster.media.push(cleanMediaItem({id:mediaId('local'),type,source:entry.source||'upload',url:blob.url,previewUrl:blob.url,mime_type:file.type,size:file.size,duration},loadedMaster.media.length));
+  }
+  const mergeFiles=[];
+  for(const entry of Array.isArray(manifest.merge_videos)?manifest.merge_videos:[]){const raw=await (await directory.getFileHandle(entry.file_name)).getFile(),file=new File([raw],entry.original_name||raw.name,{type:entry.mime_type||raw.type,lastModified:raw.lastModified});validateLocalMedia(file);mergeFiles.push(file)}
+  if(mergeFiles.length)videoMergeDrafts.set(id,{files:mergeFiles,previewUrls:mergeFiles.map(file=>URL.createObjectURL(file)),encoding:false,status:'저장된 병합 순서로 불러왔습니다. 영상을 확인한 뒤 인코딩하세요.'});
+  saveMaster(i,loadedMaster);render();setContentArchiveStatus(i,`불러오기 완료 · ${directory.name}`);
+ }catch(error){if(error?.name!=='AbortError'){setContentArchiveStatus(i,'불러오기 실패');alert('불러오기 실패: '+String(error?.message||error))}}
 }
 function videoMergeDraft(i){return videoMergeDrafts.get(masterKey(i))||null}
 function releaseVideoMergePreviews(draft){for(const url of draft?.previewUrls||[]){if(url)URL.revokeObjectURL(url)}}
@@ -805,6 +900,6 @@ function patchReplies(){
  const b=document.getElementById('batchReply');if(!b)return;b.onclick=async()=>{if(window._batchRunning||window._replyHistoryAvailable===false)return;const all=window._replyItems||[],targets=[];all.forEach((x,i)=>{if(x.review_required||x.already_replied)return;const text=document.getElementById(`replyText-${i}`)?.value.trim();if(text)targets.push({i,id:x.id,text})});if(!targets.length||!confirm(`${targets.length}개 미응답 댓글을 순차 답장할까요?`))return;window._batchRunning=true;updateBatchButton();let ok=0,fail=0;for(let n=0;n<targets.length;n++){const t=targets[n];b.textContent=`일괄 답장 ${n+1}/${targets.length}`;try{await postReply(t.id,t.text);markReplyDone(t.i,t.id,t.text);ok++}catch{fail++}if(n<targets.length-1)await new Promise(r=>setTimeout(r,500))}window._batchRunning=false;updateBatchButton();alert(`완료 · 성공 ${ok} / 실패 ${fail}`);await syncReplies(currentPostIds).catch(()=>{})};
  setTimeout(()=>{try{updateBatchButton()}catch{}},100);
 }
-window.PostAuto={generate:generatePillar,image:i=>makeImage(i,false),reimage:i=>makeImage(i,true),keep,now,variant,no,reset:resetCard,drop,publishQueue,save:syncDraft,deliveryType:setPromptDeliveryType,addMedia:addLocalMedia,addMergeVideos:addVideoMergeFiles,moveMergeVideo:moveVideoMergeFile,removeMergeVideo:removeVideoMergeFile,cancelMergeVideos:cancelVideoMerge,encodeMergeVideos:encodeVideoMerge,removeMedia:removeMasterMedia,moveMedia:moveMasterMedia,instagram:openInstagramCarousel,instagramSelect:selectInstagramSlide,instagramCaption:setInstagramCaption,instagramReplyPrompt:setInstagramReplyPrompt,instagramClose:closeInstagramCarousel,instagramRegenerate:regenerateInstagramSlide,instagramRegenerateAll:regenerateInstagramCarousel,instagramPublish:publishInstagramCarousel,instagramMasterPublish:publishInstagramMaster,facebookPublish:publishFacebookMaster,youtubePublish:publishYoutubeMaster,copyText,instagramPromptStoreRetry:retryInstagramPromptStore};
+window.PostAuto={generate:generatePillar,image:i=>makeImage(i,false),reimage:i=>makeImage(i,true),keep,now,variant,no,reset:resetCard,drop,publishQueue,save:syncDraft,deliveryType:setPromptDeliveryType,chooseArchiveFolder:chooseContentArchiveFolder,saveArchive:saveContentArchive,loadArchive:loadContentArchive,addMedia:addLocalMedia,addMergeVideos:addVideoMergeFiles,moveMergeVideo:moveVideoMergeFile,removeMergeVideo:removeVideoMergeFile,cancelMergeVideos:cancelVideoMerge,encodeMergeVideos:encodeVideoMerge,removeMedia:removeMasterMedia,moveMedia:moveMasterMedia,instagram:openInstagramCarousel,instagramSelect:selectInstagramSlide,instagramCaption:setInstagramCaption,instagramReplyPrompt:setInstagramReplyPrompt,instagramClose:closeInstagramCarousel,instagramRegenerate:regenerateInstagramSlide,instagramRegenerateAll:regenerateInstagramCarousel,instagramPublish:publishInstagramCarousel,instagramMasterPublish:publishInstagramMaster,facebookPublish:publishFacebookMaster,youtubePublish:publishYoutubeMaster,copyText,instagramPromptStoreRetry:retryInstagramPromptStore};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ensure);else ensure();
 })();
