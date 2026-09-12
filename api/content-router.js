@@ -776,8 +776,8 @@ async function compactAiPromptVideoPrompt(key,videoPrompt,replyPrompt){
   const beforeLength=String(videoPrompt||'').trim().length;
   const out=await generateJson(key,`Rewrite only the Meta AI continuation video prompt below so it is complete and no more than ${AI_PROMPT_VIDEO_MAX_CHARS} characters including spaces. Aim for 700-900 characters.
 Preserve the exact person, concept, location, wardrobe, lighting, actions, and camera direction from the original and photo prompt. Remove repetition and shorten wording; do not truncate sentences or change the scene.
-Use exactly nine non-empty lines in this order: Reference:, Part 1 (0-10s):, Location:, Action:, End Frame MUST BE:, Part 2 (10-20s):, START from this image:, Same exact:, Action:.
-Reference must preserve the uploaded photo's exact face, hairstyle, and skin tone. Use the positive instruction "preserve original wardrobe" when keeping the uploaded clothes, or "change wardrobe to [specific clothes], keep face identical" when changing them.
+Use exactly eight non-empty lines in this order: Part 1 (0-10s):, Location:, Action:, End Frame MUST BE:, Part 2 (10-20s):, START from this image:, Same exact:, Action:.
+Do not add a Reference line or instructions about the uploaded photo's face, hairstyle, skin tone, or initial clothes.
 The first Action line must contain 0-5s and 5-10s. End Frame MUST BE must precisely lock body pose, both hand positions, gaze direction in degrees, facial expression, camera framing, camera height or angle, distance, and lighting direction.
 START from this image must be exactly "START from this image: [Part 1 final-frame capture]". Same exact must lock the End Frame pose, face, wardrobe, lighting, camera height, distance, and angle. The second Action line must contain 10-15s and 15-20s.
 Return JSON only: {"video_prompt":"..."}
@@ -990,19 +990,17 @@ function validateAiPromptVideoPrompt(value,replyPrompt){
   if(videoPrompt.length>AI_PROMPT_VIDEO_MAX_CHARS)throw new Error('AI_PROMPT_VIDEO_PROMPT_TOO_LONG');
   if(/[가-힣]/.test(videoPrompt))throw new Error('AI_PROMPT_VIDEO_PROMPT_NOT_ENGLISH');
   const continuationLines=videoPrompt.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
-  const labels=['Reference:','Part 1 (0-10s):','Location:','Action:','End Frame MUST BE:','Part 2 (10-20s):','START from this image:','Same exact:','Action:'];
+  const labels=['Part 1 (0-10s):','Location:','Action:','End Frame MUST BE:','Part 2 (10-20s):','START from this image:','Same exact:','Action:'];
   if(continuationLines.length!==labels.length||labels.some((label,index)=>!continuationLines[index]?.startsWith(label))){
     throw new Error('AI_PROMPT_VIDEO_PROMPT_CONTINUATION_FORMAT_REQUIRED');
   }
-  if(!/^Reference:.*(?:preserve|keep).*face/im.test(videoPrompt))throw new Error('AI_PROMPT_VIDEO_PROMPT_FACE_LOCK_REQUIRED');
-  if(!/(?:preserve original wardrobe|change wardrobe to)/i.test(continuationLines[0]))throw new Error('AI_PROMPT_VIDEO_PROMPT_WARDROBE_INSTRUCTION_REQUIRED');
   if(!/0\s*[-–]\s*5\s*s/i.test(videoPrompt)||!/5\s*[-–]\s*10\s*s/i.test(videoPrompt)||!/10\s*[-–]\s*15\s*s/i.test(videoPrompt)||!/15\s*[-–]\s*20\s*s/i.test(videoPrompt)){
     throw new Error('AI_PROMPT_VIDEO_PROMPT_20_SECOND_TIMELINE_REQUIRED');
   }
   if(!/^START from this image:\s*\[Part\s*1\s+final-frame capture\]\s*$/im.test(videoPrompt)||!/^Same exact:.*(?:pose|position).*face.*wardrobe.*lighting.*camera/im.test(videoPrompt)){
     throw new Error('AI_PROMPT_VIDEO_PROMPT_TWO_PART_CONTINUITY_REQUIRED');
   }
-  if(!/End Frame MUST BE:.*\d+\s*(?:degrees?|deg).*camera.*(?:light|lighting)/i.test(continuationLines[4]))throw new Error('AI_PROMPT_VIDEO_PROMPT_END_FRAME_REQUIRED');
+  if(!/End Frame MUST BE:.*\d+\s*(?:degrees?|deg).*camera.*(?:light|lighting)/i.test(continuationLines[3]))throw new Error('AI_PROMPT_VIDEO_PROMPT_END_FRAME_REQUIRED');
   const hasAction=/(walk|walks|sit|lift|sip|blow|tuck|smile|turn|look|pick|grab|open|close|enter|exit|drop|hold|reach|lean|nod|adjust|touch|step|speak|pause|start|finish|move|동작)/i.test(videoPrompt);
   const hasCamera=/(camera|shot|dolly|track|tracking|pan|tilt|push|pull|zoom|static|handheld|over.?the.?shoulder|low.?angle|bird.?eye|wide|macro|telephoto|focus|lens|pan.?shot|orbit|follow.?in)/i.test(videoPrompt);
   const hasIdentity=/(same|identity|VOA|person|protagonist|character|figure|main|retain|preserve|keep the same|same person|same character)/i.test(videoPrompt);
@@ -1107,7 +1105,7 @@ body는 Threads에 실제 게시되는 자연스러운 한국어 반말 SNS 본�
 
 reply_prompt는 사진용으로 독립 실행 가능한 자연스러운 완성형 영문 프롬프트다. 아래 Identity Lock 문장으로 반드시 시작한 뒤 장면, 장소, 행동·포즈, 의상, 헤어·메이크업, 주변 사물, 조명, 카메라·렌즈·촬영 스타일, 질감과 필요한 Negative Constraints를 중복 없이 포함한다: "Use the attached reference image as the PRIMARY IDENTITY REFERENCE. Preserve the exact identity and recognizable facial characteristics. Never reinterpret, replace, beautify, idealize, or age-shift the person. Identity preservation overrides styling. Keep the full face and both eyes visible and unobstructed." 이후 인물은 오직 "the same person"으로만 지칭한다. woman, man, girl, boy, model, young, Korean, Asian, ethnicity, 나이 숫자처럼 참조 인물의 성별·인종·나이를 재정의하는 단어를 절대 쓰지 않는다. 영문 프롬프트 본문만 쓰고 450~550자로 매우 간결하게 완결하며 최대 ${GENERATED_REPLY_PROMPT_MAX_CHARS}자를 절대 넘지 않는다.
 
-video_prompt는 reply_prompt와 같은 인물·장소·의상·조명·세계관을 공유하며 Meta AI가 Part 1의 마지막 프레임을 내부적으로 추출해 Part 2 시작 이미지로 사용할 수 있는 영문 연결 프롬프트다. 정확히 9개의 비어 있지 않은 줄을 Reference:, Part 1 (0-10s):, Location:, Action:, End Frame MUST BE:, Part 2 (10-20s):, START from this image:, Same exact:, Action: 순서로 쓴다. Reference에는 uploaded photo의 exact face, hairstyle, skin tone 유지 지시를 넣는다. 원본 옷을 유지할 때는 "preserve original wardrobe", 새 옷을 입힐 때는 "change wardrobe to [구체적 의상], keep face identical"을 긍정문으로 명시한다. 첫 Action은 0-5s와 5-10s, 두 번째 Action은 10-15s와 15-20s로 하나의 자연스러운 행동을 이어간다. End Frame MUST BE에는 신체 자세, 양손 위치, 숫자로 된 시선 각도, 표정, 카메라 프레이밍, 카메라 높이 또는 각도, 거리, 조명 방향을 구체적으로 고정한다. START 줄은 정확히 "START from this image: [Part 1 final-frame capture]"로 쓴다. Same exact에는 End Frame의 pose, face, wardrobe, lighting, camera height, distance, angle을 모두 유지한다고 쓴다. 무의미한 슬로모션, 계속 카메라만 보기, 얼굴·옷·신체 변화, 물체 생성·소멸, 방향 급변, 과도한 모션블러를 금지한다. 전체는 최대 ${AI_PROMPT_VIDEO_MAX_CHARS}자 안에서 완결한다.
+video_prompt는 reply_prompt와 같은 장소·의상·조명·세계관을 공유하며 Meta AI가 Part 1의 마지막 프레임을 내부적으로 추출해 Part 2 시작 이미지로 사용할 수 있는 영문 연결 프롬프트다. 정확히 8개의 비어 있지 않은 줄을 Part 1 (0-10s):, Location:, Action:, End Frame MUST BE:, Part 2 (10-20s):, START from this image:, Same exact:, Action: 순서로 쓴다. Reference 줄이나 업로드 사진의 얼굴·헤어스타일·피부톤·초기 의상을 설명하는 문장은 넣지 않는다. 첫 Action은 0-5s와 5-10s, 두 번째 Action은 10-15s와 15-20s로 하나의 자연스러운 행동을 이어간다. End Frame MUST BE에는 신체 자세, 양손 위치, 숫자로 된 시선 각도, 표정, 카메라 프레이밍, 카메라 높이 또는 각도, 거리, 조명 방향을 구체적으로 고정한다. START 줄은 정확히 "START from this image: [Part 1 final-frame capture]"로 쓴다. Same exact에는 End Frame의 pose, face, wardrobe, lighting, camera height, distance, angle을 모두 유지한다고 쓴다. 무의미한 슬로모션, 계속 카메라만 보기, 얼굴·옷·신체 변화, 물체 생성·소멸, 방향 급변, 과도한 모션블러를 금지한다. 전체는 최대 ${AI_PROMPT_VIDEO_MAX_CHARS}자 안에서 완결한다.
 
 image_brief는 결과가 한눈에 강하게 보이도록 인물, 행동, 장소, 스타일링, 빛과 시각적 긴장감을 구체적으로 설명한다. source_notes는 필수가 아니며 필요 없으면 빈 배열로 둔다. 실제 참고한 공개 콘셉트가 있을 때만 간단히 기록하고, source_notes 때문에 생성이 실패해서는 안 된다.`,
     AI_TIP:aiTipRule(recentAiTips),
@@ -1613,7 +1611,7 @@ HOT_ISSUE이면 source_notes의 사실 범위를 넘지 말 것.
 hook 6~10자 우선 최대 14자.
 본문 500자 이내. AI_PROMPT의 body 맨 마지막 줄은 정확히 "${AI_PROMPT_FIXED_HASHTAGS}"로 고정한다. 다른 카테고리는 새 본문과 직접 관련된 검색용 해시태그를 정확히 5개 넣는다. 이 해시태그는 body 외 다른 필드에는 넣지 않는다.
 이미지 브리프도 새 각도에 맞게 변경.
-AI_PROMPT는 reply_prompt(사진용) 외에 video_prompt(영상용)도 반드시 함께 작성한다. 둘은 동일 인물·장소·의상·조명의 같은 콘셉트여야 한다. video_prompt는 Meta AI 연결용 영문 형식이며 정확히 9줄을 Reference:, Part 1 (0-10s):, Location:, Action:, End Frame MUST BE:, Part 2 (10-20s):, START from this image:, Same exact:, Action: 순서로 작성한다. Reference에는 exact face, hairstyle, skin tone 유지와 "preserve original wardrobe" 또는 "change wardrobe to [구체적 의상], keep face identical" 중 맞는 지시를 쓴다. 첫 Action에는 0-5s와 5-10s를 쓴다. End Frame MUST BE에는 자세, 양손 위치, 숫자로 된 시선 각도, 표정, 카메라 프레이밍·높이/각도·거리, 조명 방향을 구체적으로 고정한다. START 줄은 정확히 "START from this image: [Part 1 final-frame capture]"로 쓴다. Same exact에는 pose, face, wardrobe, lighting, camera height, distance, angle 유지를 명시한다. 두 번째 Action에는 10-15s와 15-20s를 쓴다. 전체는 ${AI_PROMPT_VIDEO_MAX_CHARS}자를 넘지 않는다.
+AI_PROMPT는 reply_prompt(사진용) 외에 video_prompt(영상용)도 반드시 함께 작성한다. 둘은 동일 장소·의상·조명의 같은 콘셉트여야 한다. video_prompt는 Meta AI 연결용 영문 형식이며 정확히 8줄을 Part 1 (0-10s):, Location:, Action:, End Frame MUST BE:, Part 2 (10-20s):, START from this image:, Same exact:, Action: 순서로 작성한다. Reference 줄이나 업로드 사진의 얼굴·헤어스타일·피부톤·초기 의상 설명은 넣지 않는다. 첫 Action에는 0-5s와 5-10s를 쓴다. End Frame MUST BE에는 자세, 양손 위치, 숫자로 된 시선 각도, 표정, 카메라 프레이밍·높이/각도·거리, 조명 방향을 구체적으로 고정한다. START 줄은 정확히 "START from this image: [Part 1 final-frame capture]"로 쓴다. Same exact에는 pose, face, wardrobe, lighting, camera height, distance, angle 유지를 명시한다. 두 번째 Action에는 10-15s와 15-20s를 쓴다. 전체는 ${AI_PROMPT_VIDEO_MAX_CHARS}자를 넘지 않는다.
 기존:${JSON.stringify(x).slice(0,6000)}
 
 JSON만:
