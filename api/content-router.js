@@ -28,6 +28,7 @@ const AI_IMAGE_CTA='댓글 달면 무료 VOA 프롬프트 보내드려요 ♥️
 const FOOD_ISSUE_IMAGE_CTA='자세한 내용은 본문을 참고하세요♥️';
 const GENERATED_REPLY_PROMPT_MAX_CHARS=950;
 const AI_PROMPT_VIDEO_MAX_CHARS=980;
+const AI_PROMPT_FIXED_HASHTAGS='#AI사진 #AI프로필 #사진프롬프트 #영상프롬프트 #힉스필드';
 const OX_MODEL='stealth/ox-alpha';
 const OX_CONTENT_TABLE='ox_content_library';
 const OX_TYPES=['novel','longform','blog'];
@@ -650,6 +651,16 @@ function validateBodySearchHashtags(value){
   return body;
 }
 
+function withAiPromptFixedHashtags(value,category){
+  const body=String(value||'').trim();
+  if(category!=='AI_PROMPT')return body;
+  const lines=body.split(/\r?\n/);
+  const last=String(lines[lines.length-1]||'').trim();
+  if((last.match(/#[0-9A-Za-z가-힣_]+/g)||[]).length&&!last.replace(/#[0-9A-Za-z가-힣_]+/g,'').trim())lines.pop();
+  lines.push(AI_PROMPT_FIXED_HASHTAGS);
+  return lines.join('\n').trim();
+}
+
 function cleanCandidate(x,i){
   const allowed=Object.keys(LABELS);
   const category=allowed.includes(x?.category)?x.category:'AI_PROMPT';
@@ -669,7 +680,7 @@ function cleanCandidate(x,i){
       .filter(Boolean).slice(0,3),
     hook,
     hook_candidates:hooks.slice(0,5),
-    body:validateBodySearchHashtags(withoutGeneratedPromptCta(x?.body,category)).slice(0,500),
+    body:validateBodySearchHashtags(withAiPromptFixedHashtags(withoutGeneratedPromptCta(x?.body,category),category)).slice(0,500),
     reply_prompt:String(x?.reply_prompt||'').trim(),
     video_prompt:String(x?.video_prompt||'').trim(),
     reason:String(x?.reason||'').trim().slice(0,180),
@@ -1090,7 +1101,7 @@ ${customAiPrompt?`사용자가 직접 지정한 소재는 다음과 같다: <USE
 ${aiPromptRecentLines(recentAiPrompts).length?aiPromptRecentLines(recentAiPrompts).map(value=>`- ${value}`).join('\n'):'- 없음'}
 최근 이력과 장소, 상황, 핵심 스타일, 촬영 방식이 거의 같으면 의상 색이나 표현만 바꾸지 말고 다른 콘셉트를 선택한다.
 
-body는 Threads에 실제 게시되는 자연스러운 한국어 반말 SNS 본문이다. 사진 한 장으로 어떤 갖고 싶은 결과가 나오는지 바로 이해되게 쓰고 가벼운 이모지 1~2개를 사용한다. AI 기술, 프롬프트 구조, 트렌드 근거, 출처, 점수는 설명하지 않는다. 프롬프트 제공·댓글·첫 댓글·DM CTA도 넣지 않는다.
+body는 Threads에 실제 게시되는 자연스러운 한국어 반말 SNS 본문이다. 사진 한 장으로 어떤 갖고 싶은 결과가 나오는지 바로 이해되게 쓰고 가벼운 이모지 1~2개를 사용한다. AI 기술, 프롬프트 구조, 트렌드 근거, 출처, 점수는 설명하지 않는다. 프롬프트 제공·댓글·첫 댓글·DM CTA도 넣지 않는다. body 마지막 줄의 해시태그는 정확히 "${AI_PROMPT_FIXED_HASHTAGS}"로 고정한다.
 
 reply_prompt는 사진용으로 독립 실행 가능한 자연스러운 완성형 영문 프롬프트다. 아래 Identity Lock 문장으로 반드시 시작한 뒤 장면, 장소, 행동·포즈, 의상, 헤어·메이크업, 주변 사물, 조명, 카메라·렌즈·촬영 스타일, 질감과 필요한 Negative Constraints를 중복 없이 포함한다: "Use the attached reference image as the PRIMARY IDENTITY REFERENCE. Preserve the exact identity and recognizable facial characteristics. Never reinterpret, replace, beautify, idealize, or age-shift the person. Identity preservation overrides styling. Keep the full face and both eyes visible and unobstructed." 이후 인물은 오직 "the same person"으로만 지칭한다. woman, man, girl, boy, model, young, Korean, Asian, ethnicity, 나이 숫자처럼 참조 인물의 성별·인종·나이를 재정의하는 단어를 절대 쓰지 않는다. 영문 프롬프트 본문만 쓰고 450~550자로 매우 간결하게 완결하며 최대 ${GENERATED_REPLY_PROMPT_MAX_CHARS}자를 절대 넘지 않는다.
 
@@ -1598,7 +1609,7 @@ AI_PROMPT와 AI_TIP의 body에는 프롬프트 제공, 첫 댓글, 댓글 작성
 FOOD_PICK이면 기존 검증된 식당/메뉴 사실을 바꾸거나 지어내지 말 것.
 HOT_ISSUE이면 source_notes의 사실 범위를 넘지 말 것.
 hook 6~10자 우선 최대 14자.
-본문 500자 이내. body 맨 마지막 줄에는 새 본문과 직접 관련된 검색용 해시태그를 정확히 5개 넣고, 이 해시태그는 body 외 다른 필드에는 넣지 않는다.
+본문 500자 이내. AI_PROMPT의 body 맨 마지막 줄은 정확히 "${AI_PROMPT_FIXED_HASHTAGS}"로 고정한다. 다른 카테고리는 새 본문과 직접 관련된 검색용 해시태그를 정확히 5개 넣는다. 이 해시태그는 body 외 다른 필드에는 넣지 않는다.
 이미지 브리프도 새 각도에 맞게 변경.
 AI_PROMPT는 reply_prompt(사진용) 외에 video_prompt(영상용)도 반드시 함께 작성한다. 둘은 동일 콘셉트의 연장이어야 하며 동일 인물·장소·의상 continuity를 유지한다. video_prompt는 10초짜리 Part 1과 Part 2를 이어 하나의 연속된 20초 영상으로 만드는 Higgsfield용 영문 형식이다. 정확히 4줄만 사용하여 Prompt: 내용, Action: 내용, Settings: 내용, Negative: 내용을 이 순서로 작성하고 라벨과 내용을 같은 줄에 둔다. Prompt에는 "a single continuous 20-second video"를 반드시 넣는다. Action은 "Part 1 (0-10s): 0-5s ... / 5-10s ...; End frame: ... || Part 2 (10-20s): Continue from the exact Part 1 end frame with identical pose, position, wardrobe, lighting, and camera direction; 10-15s ... / 15-20s ..." 구조를 정확히 사용한다. Settings에는 Soul Cinematic, Motion 0.6, Style 0.85, Consistency 98 (face lock)을 반드시 포함한다. 전체는 ${AI_PROMPT_VIDEO_MAX_CHARS}자를 넘지 않는다.
 기존:${JSON.stringify(x).slice(0,6000)}
@@ -1632,7 +1643,7 @@ JSON만:
     if(x.category==='AI_PROMPT')validateAiPromptCandidate({
       ...x,
       hook:clampHook(v.hook||x.hook),
-      body:validateBodySearchHashtags(withoutGeneratedPromptCta(v.body||x.body,x.category)),
+      body:validateBodySearchHashtags(withAiPromptFixedHashtags(withoutGeneratedPromptCta(v.body||x.body,x.category),x.category)),
       reply_prompt:nextReplyPrompt,
       video_prompt:nextVideoPrompt,
       image_brief:String(v.image_brief||x.image_brief).trim()
@@ -1646,7 +1657,7 @@ JSON만:
         hook_candidates:Array.isArray(v.hook_candidates)
           ?v.hook_candidates.slice(0,5)
           :x.hook_candidates,
-        body:validateBodySearchHashtags(withoutGeneratedPromptCta(v.body||x.body,x.category)).slice(0,500),
+        body:validateBodySearchHashtags(withAiPromptFixedHashtags(withoutGeneratedPromptCta(v.body||x.body,x.category),x.category)).slice(0,500),
         reply_prompt:nextReplyPrompt,
         video_prompt:nextVideoPrompt,
         reason:String(v.reason||x.reason).slice(0,180),
