@@ -891,15 +891,19 @@ async function researchAiPromptTrends(key,recentAiPrompts=[]){
 탐색 우선순위:
 1. 최근 7일 안에 확인되는 흐름을 먼저 찾는다.
 2. 근거 있는 후보가 부족할 때만 최근 30일까지 확장한다.
-3. Instagram, TikTok, Threads, Pinterest, X와 최신 AI 사진 편집, 셀럽, 패션, 여행, 라이프스타일 사진 포맷을 폭넓게 검색한다. 로그인이나 접근 제한 때문에 원문을 직접 확인할 수 없으면 그 사실을 숨기지 말고, 검색으로 확인 가능한 기사·트렌드 리포트·공개 게시물 근거만 사용한다.
-4. 단순히 예쁜 이미지보다 "내 사진 한 장을 넣어 이 결과를 갖고 싶다"는 욕구가 큰 포맷을 우선한다. 한 인물의 여러 구도, 4컷·6컷·9컷 세트, photo dump, 같은 장소의 다른 포즈, 여행·호텔·엘리베이터·공항·카페 인생샷, 패션·헤어·메이크업 미리보기, 커플·친구 콘셉트, SNS 프로필 세트를 적극 검토한다.
+3. Instagram, TikTok, Threads, Pinterest, X에서 반복적으로 보이는 플랫폼 공통 포맷을 먼저 정리하고, 최신 AI 사진 편집/셀럽/패션/여행/라이프스타일 자료는 교차 검증한다.
+4. 단순히 예쁜 이미지보다 "내 사진 한 장으로 바로 따라 찍고 싶은" 포맷을 우선한다. 한 인물의 여러 구도, 2x2/3x2/3x3/4컷/6컷/9컷 세트, photo dump, 같은 장소의 다른 포즈, 여행·호텔·엘리베이터·공항·카페 인생샷, 패션·헤어·메이크업 미리보기, 커플·친구 콘셉트, SNS 프로필 세트를 적극 검토한다.
 5. 스마트폰 촬영, 자연스러운 플래시, 거울 반사, 약간 비대칭 구도, 우연히 찍힌 자세, 현실적인 피부와 표정처럼 실제 SNS 사진다운 결과를 우선한다.
 6. 1970년대·1980년대·1990년대, vintage film, retro editorial, old Hollywood, 고전 영화풍, 시대극, generic cinematic portrait, 의미 없는 몽환 판타지는 최근 근거가 명확하지 않으면 후보에서 제외한다. Y2K·필름·레트로가 현재 다시 유행한다는 최근 근거가 있을 때만 허용한다.
 
 ${history}
 위 이력과 장소, 상황, 구도, 분위기, 사용 목적, 핵심 아이디어가 지나치게 비슷한 후보는 제외한다. 같은 흐름을 다시 제안하려면 최근에도 강하게 이어진다는 별도 근거가 있어야 한다.
 
-최대 12개 후보를 정리해. 각 후보마다 콘셉트, 확인 플랫폼/출처, 확인 시점 또는 최근 7일·30일 중 어느 범위인지, 한 장의 사진이 어떤 결과 세트로 바뀌는지, 한국 20~40대 여성에게 매력적인 이유를 적어. 실제 검색 근거와 추론을 구분하고, 날짜를 확인할 수 없거나 단순 예측인 후보는 낮은 신뢰도로 표시해. 가짜 링크, 가짜 수치, 직접 보지 않은 게시물의 조회수는 만들지 마.`);
+최대 12개 후보를 정리해. 각 후보는 아래를 포함한다.
+- 콘셉트, 장소, 상황, 구성, 분위기, 사용 포맷(2x2/3x2/3x3/4컷/6컷/9컷/1장)
+- 플랫폼/출처, 확인 시점(7일/30일/직접확인), 왜 내 사진 1장을 넣으면 되는지
+- 실제 확인 가능한 검색 근거(링크, 채널명, 게시물명, 공개 리포트명)와 추론 근거 구분
+- 확인 불가 항목은 낮은 신뢰도로만 기재하고, 임의 수치/가짜 링크를 만들지 않는다.`);
   if(!result.trim())throw new Error('AI_PROMPT_TREND_RESEARCH_EMPTY');
   return result;
 }
@@ -950,7 +954,27 @@ function aiTipSimilarity(a,b){
 }
 
 const AI_PROMPT_SCORE_KEYS=['recency','try_desire','female_fit','shareability','instant_clarity','novelty','duplicate_distance'];
-const AI_PROMPT_STALE_STYLE=/(?:1970s?|1980s?|1990s?|1970년대|1980년대|1990년대|vintage(?:\s+film)?|retro(?:\s+editorial)?|old\s+hollywood|고전\s*(?:영화|화보)|빈티지|레트로|시대극|generic\s+cinematic\s+portrait)/i;
+const AI_PROMPT_STALE_STYLE=/(?:1970s?|1980s?|1990s?|1970년대|1980년대|1990년대|vintage(?:\s+film)?|retro(?:\s+editorial)?|old\s+hollywood|고전\s*(?:영화|화보)|빈티지|레트로|시대극|generic\s+cinematic\s+portrait|meaningless\s+fantasy|무의미)/i;
+const AI_PROMPT_OUTPUT_FORMATS=['1장','2x2','3x2','3x3','4컷','6컷','9컷'];
+
+function normalizeAiPromptOutputFormat(value){
+  const v=String(value||'').replace(/\s+/g,'').toLowerCase();
+  if(/(2x2|2×2|2by2)/.test(v))return '2x2';
+  if(/(3x2|3×2|3by2)/.test(v))return '3x2';
+  if(/(3x3|3×3|3by3)/.test(v))return '3x3';
+  if(/(1장|single|single-shot|singlephoto)/.test(v))return '1장';
+  if(/(4컷|4x|4by|4pannel|4pannel)/.test(v))return '4컷';
+  if(/(6컷|6x|6by|6pannel)/.test(v))return '6컷';
+  if(/(9컷|9x|9by|9pannel)/.test(v))return '9컷';
+  return String(value||'').trim();
+}
+
+function validateAiPromptEvidence(value,idx){
+  const evidence=String(value||'').trim();
+  if(!evidence)throw new Error(`AI_PROMPT_TREND_EVIDENCE_MISSING_${idx}`);
+  if(!/(?:\d+\s*일|최근|7일|30일|30 days|7 days)/i.test(evidence))throw new Error(`AI_PROMPT_TREND_EVIDENCE_TIMING_${idx}`);
+  if(!/(?:instagram|tiktok|threads|pinterest|twitter|x|인스타그램|틱톡|스레드|핀터레스트)/i.test(evidence))throw new Error(`AI_PROMPT_TREND_EVIDENCE_PLATFORM_${idx}`);
+}
 
 function aiPromptEntryText(entry){
   return ['concept','location','situation','composition','mood','use_case','output_format']
@@ -961,6 +985,23 @@ function validateAiPromptSelection(output,item,recentAiPrompts=[]){
   const shortlist=Array.isArray(output?.shortlist)?output.shortlist:[];
   if(shortlist.length!==6)throw new Error('AI_PROMPT_SHORTLIST_INVALID');
   const totals=shortlist.map((entry,index)=>{
+    const outputFormat=normalizeAiPromptOutputFormat(entry?.output_format);
+    if(!AI_PROMPT_OUTPUT_FORMATS.includes(outputFormat))throw new Error(`AI_PROMPT_OUTPUT_FORMAT_INVALID_${index+1}`);
+    entry.output_format=outputFormat;
+
+    const requiredFields=[
+      ['concept','AI_PROMPT_CONCEPT_MISSING_'],
+      ['location','AI_PROMPT_LOCATION_MISSING_'],
+      ['situation','AI_PROMPT_SITUATION_MISSING_'],
+      ['composition','AI_PROMPT_COMPOSITION_MISSING_'],
+      ['mood','AI_PROMPT_MOOD_MISSING_'],
+      ['use_case','AI_PROMPT_USE_CASE_MISSING_']
+    ];
+    for(const [field,prefix] of requiredFields){
+      if(!String(entry?.[field]||'').trim())throw new Error(`${prefix}${index+1}`);
+    }
+    validateAiPromptEvidence(entry?.trend_evidence,index+1);
+
     const scores=entry?.scores||{};
     if(AI_PROMPT_SCORE_KEYS.some(key=>!Number.isFinite(Number(scores[key]))||Number(scores[key])<0||Number(scores[key])>10)){
       throw new Error(`AI_PROMPT_SCORE_INVALID_${index+1}`);
@@ -979,13 +1020,14 @@ function validateAiPromptSelection(output,item,recentAiPrompts=[]){
   const selectedText=`${aiPromptEntryText(selected)} ${item.topic} ${item.hook} ${item.image_brief}`;
   const recent=aiPromptRecentLines(recentAiPrompts);
   const fingerprints=[`${item.topic} ${item.hook}`,aiPromptEntryText(selected),selectedText];
-  if(recent.some(value=>fingerprints.some(fingerprint=>aiTipSimilarity(fingerprint,value)>=.62)))throw new Error('AI_PROMPT_RECENT_TOPIC_DUPLICATE');
+  if(recent.some(value=>fingerprints.some(fingerprint=>aiTipSimilarity(fingerprint,value)>=.58)))throw new Error('AI_PROMPT_RECENT_TOPIC_DUPLICATE');
   if(AI_PROMPT_STALE_STYLE.test(selectedText)){
     const evidence=String(selected?.trend_evidence||'');
     if(Number(selected?.evidence_window_days)>7||!/(?:instagram|tiktok|threads|pinterest|\bX\b|인스타그램|틱톡|스레드|핀터레스트)/i.test(evidence)){
       throw new Error('AI_PROMPT_STALE_STYLE_WITHOUT_CURRENT_EVIDENCE');
     }
   }
+  if(String(selected?.trend_evidence||'').trim().length<45)throw new Error('AI_PROMPT_TREND_EVIDENCE_MISSING_DETAIL');
   return {candidate_count:shortlist.length,selected_index:selectedIndex,selected_score:totals[selectedIndex],evidence_window_days:Number(selected.evidence_window_days)};
 }
 
@@ -1053,7 +1095,7 @@ function pillarPrompt({pillar,research='',feedback='',performance='',mood='RANDO
 
 각 후보는 recency, try_desire, female_fit, shareability, instant_clarity, novelty, duplicate_distance를 각각 0~10점으로 냉정하게 평가한다. 한국의 20~40대 여성이 게시물을 보자마자 "내 사진으로 이거 해보고 싶다"고 느낄 가능성을 가장 중요하게 본다. recency와 try_desire는 2배, female_fit은 1.5배, 나머지는 1배로 계산한 가중 합계가 가장 높은 후보만 selected_index로 선택하고 완성된 candidate로 작성한다. 검색 근거가 약하거나 날짜를 확인할 수 없는 후보는 recency를 낮게 준다.
 
-사진 한 장에서 같은 인물의 여러 구도, 4컷·6컷·9컷 세트, photo dump, 같은 장소의 다양한 포즈, 여행·호텔·엘리베이터·공항·카페 사진 세트, 패션·헤어·메이크업 미리보기, 커플·친구 콘셉트, SNS 프로필 세트처럼 결과가 즉시 이해되는 포맷을 적극 활용한다. 멀티컷은 동일 인물과 얼굴 특징을 유지하면서 구도, 포즈, 행동, 거리감을 실제 촬영처럼 다양화한다. 같은 사진의 확대·크롭 반복은 금지한다.
+사진 한 장에서 같은 인물의 여러 구도, 2x2/3x2/3x3/4컷·6컷·9컷 세트, photo dump, 같은 장소의 다양한 포즈, 여행·호텔·엘리베이터·공항·카페 사진 세트, 패션·헤어·메이크업 미리보기, 커플·친구 콘셉트, SNS 프로필 세트처럼 결과가 즉시 이해되는 포맷을 적극 활용한다. 멀티컷은 동일 인물과 얼굴 특징을 유지하면서 구도, 포즈, 행동, 거리감을 실제 촬영처럼 다양화한다. 같은 사진의 확대·크롭 반복은 금지한다.
 
 완벽한 스튜디오 AI 화보보다 스마트폰 촬영, 자연스러운 플래시, 거울 반사, 약간 비대칭인 구도, 우연히 찍힌 자세, 현실적인 피부 질감과 표정처럼 Instagram·TikTok에서 실제 볼 법한 사진을 우선한다. 1970년대·1980년대·1990년대, vintage film, retro editorial, old Hollywood, 고전 영화풍, 시대극, generic cinematic portrait, 의미 없는 몽환 판타지는 최근 7일 안의 명확한 플랫폼 근거가 있을 때만 허용한다.
 
@@ -1067,7 +1109,10 @@ ${research}
 
 반드시 body와 reply_prompt를 완전히 분리한다. body는 Threads에 실제 게시되는 한국어 설명문이다. "사진 한 장으로 엘리베이터 인생샷 6장 만들기"처럼 입력 한 장과 최종 결과 포맷이 보자마자 이해되게 설명한다. 자연스러운 반말과 가벼운 이모지 1~2개를 사용한다. 영문 이미지 프롬프트 문장이나 영어 프롬프트 일부를 body에 절대 넣지 않는다. body에는 프롬프트 제공, 첫 댓글, 댓글 작성, DM 전송을 안내하거나 유도하는 CTA를 넣지 않고 순수 콘텐츠만 쓴다.
 
-reply_prompt는 하나의 완결된 영문 MASTER PROMPT로 쓴다. 선택한 포맷이 멀티컷이면 컷마다 같은 인물로 인식 가능하도록 정체성, 얼굴 특징, 의상·장소의 필요한 연속성을 유지하고 각 컷의 구도, 포즈, 행동, 거리감은 다르게 지시한다. 단순 확대·크롭 반복은 금지한다. subject/action, location/environment, wardrobe, composition, lighting, camera/lens, mood와 photographic style을 각각 핵심 정보 한 번만 넣고 같은 의미의 형용사·품질 표현·금지 지시를 반복하지 않는다. 다음 Identity Lock 의미는 축약하거나 희생하지 말고 정확히 한 번만 포함한다: "Use the attached reference image as the PRIMARY IDENTITY REFERENCE. Preserve the exact identity and recognizable facial characteristics. Never reinterpret, replace, beautify, idealize, or age-shift the person. Identity preservation overrides styling. Keep the full face and both eyes visible and unobstructed." 얼굴 가림 요소가 장면과 충돌하면 해당 요소만 제거한다. 자연스러운 신체·원근·반사를 유지하고 복제 인물이나 추가 신체를 금지한다. 영문 프롬프트 본문만 출력하며 설명, 번역, 제목, 따옴표, Markdown은 넣지 않는다.
+reply_prompt는 하나의 완결된 영문 MASTER PROMPT로 쓴다.  
+구성은 다음 순서를 한 번만 지키되 중복 설명은 최소화한다: Identity Anchor, Scene/Concept, Composition, Pose/Expression, Styling, Hair/Makeup, Environment, Lighting, Camera/Lens/Shooting Style, Texture/Realism, Negative Constraints.
+선택한 포맷이 멀티컷이면 컷마다 같은 인물로 인식 가능하도록 정체성, 얼굴 특징, 의상·장소의 필요한 연속성을 유지하고 각 컷의 구도, 포즈, 행동, 거리감은 다르게 지시한다. 단순 확대·크롭 반복은 금지한다. subject/action, location/environment, wardrobe, composition, lighting, camera/lens, mood와 photographic style을 각각 핵심 정보 한 번만 넣고 같은 의미의 형용사·품질 표현·금지 지시를 반복하지 않는다. 다음 Identity Lock 의미는 축약하거나 희생하지 말고 정확히 한 번만 포함한다: "Use the attached reference image as the PRIMARY IDENTITY REFERENCE. Preserve the exact identity and recognizable facial characteristics. Never reinterpret, replace, beautify, idealize, or age-shift the person. Identity preservation overrides styling. Keep the full face and both eyes visible and unobstructed."
+얼굴 가림 요소가 장면과 충돌하면 해당 요소만 제거한다. 자연스러운 신체·원근·반사를 유지하고 복제 인물이나 추가 신체를 금지한다. 영문 프롬프트 본문만 출력하며 설명, 번역, 제목, 따옴표, Markdown은 넣지 않는다.
 
 FINAL PROMPT MUST BE ${GENERATED_REPLY_PROMPT_MAX_CHARS} CHARACTERS OR FEWER INCLUDING SPACES. Write a complete, compact prompt. Never sacrifice identity-preservation requirements. Avoid redundant adjectives and repeated instructions.
 image_brief는 reply_prompt 결과 이미지의 구도와 시각적 매력을 보충하되 별도의 텍스트 중심 썸네일로 바꾸지 않는다. source_notes에는 선택 근거가 된 실제 검색 출처·플랫폼과 확인 시점을 1~3개만 간단히 적고, 확인하지 않은 링크나 수치를 만들지 않는다.`,
@@ -1078,7 +1123,7 @@ image_brief는 reply_prompt 결과 이미지의 구도와 시각적 매력을 �
   };
 
   const candidateSchema=`{"candidate":{"category":"${pillar}","topic":"...","topic_tag":"...","topic_tag_candidates":["...","...","..."],"hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reply_prompt":"AI_PROMPT/AI_TIP만 규칙에 맞게 작성, 나머지는 빈 문자열","reason":"...","image_brief":"...","source_notes":[],"score":{"stop":0,"save":0,"share":0,"comment":0,"follow":0,"novelty":0,"visual":0,"total":0}}}`;
-  const aiPromptSchema=`{"shortlist":[{"concept":"...","location":"...","situation":"...","composition":"...","mood":"...","use_case":"...","output_format":"1장/4컷/6컷/9컷 중 결과 형식","trend_evidence":"플랫폼·출처·확인 시점이 드러나는 최근 근거","evidence_window_days":7,"scores":{"recency":0,"try_desire":0,"female_fit":0,"shareability":0,"instant_clarity":0,"novelty":0,"duplicate_distance":0}}],"selected_index":0,"candidate":{"category":"AI_PROMPT","topic":"...","topic_tag":"...","topic_tag_candidates":["...","...","..."],"hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reply_prompt":"complete English MASTER PROMPT","reason":"...","image_brief":"...","source_notes":["실제 검색 근거 1","실제 검색 근거 2"],"score":{"stop":0,"save":0,"share":0,"comment":0,"follow":0,"novelty":0,"visual":0,"total":0}}}`;
+  const aiPromptSchema=`{"shortlist":[{"concept":"...","location":"...","situation":"...","composition":"...","mood":"...","use_case":"...","output_format":"1장/2x2/3x2/3x3/4컷/6컷/9컷","trend_evidence":"플랫폼·출처·확인 시점이 드러나는 최근 근거","evidence_window_days":7,"scores":{"recency":0,"try_desire":0,"female_fit":0,"shareability":0,"instant_clarity":0,"novelty":0,"duplicate_distance":0}}],"selected_index":0,"candidate":{"category":"AI_PROMPT","topic":"...","topic_tag":"...","topic_tag_candidates":["...","...","..."],"hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reply_prompt":"complete English MASTER PROMPT","reason":"...","image_brief":"...","source_notes":["실제 검색 근거 1","실제 검색 근거 2"],"score":{"stop":0,"save":0,"share":0,"comment":0,"follow":0,"novelty":0,"visual":0,"total":0}}}`;
   const aiTipSchema=`{"shortlist":[{"problem":"...","ai_use":"...","hook":"...","scores":{"hook_power":0,"real_life_usefulness":0,"novelty":0,"try_now_value":0,"save_value":0,"share_value":0,"specificity":0}}],"selected_index":0,"candidate":{"category":"AI_TIP","topic":"...","topic_tag":"...","topic_tag_candidates":["...","...","..."],"hook":"...","hook_candidates":["...","...","...","...","..."],"body":"...","reply_prompt":"역할: ...\\n입력 자료: ...\\n목표: ...\\n분석 절차: ...\\n출력 형식: ...\\n주의사항: ...","reason":"...","image_brief":"...","source_notes":[],"score":{"stop":0,"save":0,"share":0,"comment":0,"follow":0,"novelty":0,"visual":0,"total":0}}}`;
   return `${common}\n\n${rules[pillar]}\n\nJSON만 반환:\n${pillar==='AI_PROMPT'?aiPromptSchema:(pillar==='AI_TIP'?aiTipSchema:candidateSchema)}`;
 }
