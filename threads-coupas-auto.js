@@ -513,10 +513,18 @@ function syncModeControls(){
   if(intervalOptions)intervalOptions.hidden=!intervalMode;
 }
 async function runIntervalAutomatic({intervalMs,getNextFolder,process,wait,isStopped,onNoFolder}){
+  const failedFolders=new Set();
   while(!isStopped()){
-    const folder=await getNextFolder();
+    const folder=await getNextFolder(failedFolders);
     if(isStopped())break;
-    if(folder)await process(folder);
+    if(folder){
+      const succeeded=await process(folder);
+      if(succeeded===false){
+        // 상태 파일 저장 실패가 있어도 같은 자료를 이번 실행에서 무한 재시도하지 않는다.
+        failedFolders.add(folder.name);
+        continue;
+      }
+    }
     else if(onNoFolder)await onNoFolder();
     if(isStopped())break;
     if(!await wait(intervalMs))break;
@@ -546,17 +554,19 @@ async function start(){
         intervalMs,
         isStopped:()=>stopRequested,
         wait:waitForNext,
-        getNextFolder:async()=>{
+        getNextFolder:async failedFolders=>{
           await loadHistory();
           if(!historyReady)throw new Error('로컬 게시 이력을 확인할 수 없습니다. 폴더 쓰기 권한을 다시 연결해 주세요.');
           const folders=await listCandidateFolders();
-          return folders[0]||null;
+          return folders.find(folder=>!failedFolders.has(folder.name))||null;
         },
         process:async folder=>{
           setStatus('실행 중');$('coupasCurrent').textContent=folder.name;$('coupasCountdown').textContent='처리 중';$('coupasNextAt').textContent='—';
-          try{const result=await processFolder(folder);if(!result?.skipped)stats.success++;}
-          catch(error){stats.failed++;setMessage(`${folder.name}: ${friendlyError(error)}`,'error')}
+          let succeeded=false;
+          try{const result=await processFolder(folder);if(!result?.skipped){stats.success++;succeeded=true}}
+          catch(error){stats.failed++;setMessage(`${folder.name}: ${friendlyError(error)} · 다음 자료를 바로 확인합니다.`,'error')}
           stats.processed++;renderStats();
+          return succeeded;
         },
         onNoFolder:async()=>{
           setStatus('다음 자료 대기');$('coupasCurrent').textContent='—';setMessage('새 미게시 자료가 없습니다. 다음 간격에 다시 확인합니다.');
