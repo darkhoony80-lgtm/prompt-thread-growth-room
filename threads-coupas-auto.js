@@ -158,10 +158,11 @@ function setMessage(text,type=''){
 }
 function setStatus(text){if($('coupasStatus'))$('coupasStatus').textContent=text}
 function renderStats(){
-  $('coupasRequested').textContent=stats.requested;
+  const unlimited=stats.requested===null;
+  $('coupasRequested').textContent=unlimited?'무제한':stats.requested;
   $('coupasSuccess').textContent=stats.success;
   $('coupasFailed').textContent=stats.failed;
-  $('coupasRemaining').textContent=Math.max(0,stats.requested-stats.success);
+  $('coupasRemaining').textContent=unlimited?'—':Math.max(0,stats.requested-stats.success);
 }
 function renderHistory(){
   const box=$('coupasResults'),count=$('coupasHistoryCount');if(!box||!count)return;
@@ -180,11 +181,15 @@ async function listCandidateFolders(){
   for await(const [name,handle] of directoryHandle.entries()){
     if(handle.kind!=='directory')continue;
     const existing=history.find(row=>row.folder_name===name);
-    if(existing?.status==='published'||existing?.status==='failed'||PARTIAL_STATUSES.has(existing?.status)||existing?.status==='history_invalid')continue;
+    if(existing?.status==='published'||PARTIAL_STATUSES.has(existing?.status)||existing?.status==='history_invalid')continue;
+    if(existing?.status==='failed'&&!isLegacyMissingCoupangUrlFailure(existing))continue;
     output.push({name,handle});
   }
   output.sort((a,b)=>a.name.localeCompare(b.name,'ko-KR'));
   return output;
+}
+function isLegacyMissingCoupangUrlFailure(record){
+  return record?.status==='failed'&&String(record.error||'').trim()==='쿠팡 원본 링크 없음';
 }
 async function getRequiredFile(folder,name,errorCode){
   try{return await (await folder.getFileHandle(name)).getFile()}catch{throw new Error(errorCode)}
@@ -200,7 +205,6 @@ async function readJob(folderInfo){
   const videoName=String(data?.media?.video||'').trim();
   const imageNames=data?.media?.images;
   if(!rewritten)throw new Error('content.rewritten_text 없음');
-  if(!originalUrl)throw new Error('쿠팡 원본 링크 없음');
   if(!videoName)throw new Error('video.mp4 없음');
   if(!Array.isArray(imageNames))throw new Error('media.images 형식 오류');
   const video=await getRequiredFile(folderInfo.handle,videoName,'video.mp4 없음');
@@ -213,10 +217,11 @@ async function readJob(folderInfo){
     if(!/\.(?:jpe?g)$/i.test(file.name))throw new Error(`${safeName} 형식 오류`);
     images.push(file);
   }
-  return {jobId:String(data?.job_id||folderInfo.name).trim().slice(0,160),folderName:folderInfo.name,rewritten,originalUrl,productHint,video,images};
+  return {jobId:String(data?.job_id||folderInfo.name).trim().slice(0,160),folderName:folderInfo.name,rewritten,originalUrl,hasCoupangLink:Boolean(originalUrl),productHint,video,images};
 }
 
-function threadsText(value){
+function threadsText(value,hasCoupangLink){
+  if(!hasCoupangLink)return [...String(value||'')].slice(0,500).join('');
   const clean=String(value||'').replace(/\r\n?/g,'\n').replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
   if(clean.includes('쿠팡 파트너스 활동의 일환'))return [...clean].slice(0,500).join('');
   const available=500-[...DISCLOSURE].length-2;
@@ -234,7 +239,7 @@ async function publishParent(job){
   const media=[];
   media.push(await uploadMedia(job,job.video,'video',0));
   for(let index=0;index<job.images.length;index++)media.push(await uploadMedia(job,job.images[index],'image',index+1));
-  const response=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:threadsText(job.rewritten),media})});
+  const response=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:threadsText(job.rewritten,job.hasCoupangLink),media})});
   const body=await response.json().catch(()=>({}));
   if(!response.ok||!body.id)throw new Error(`Threads 본문 게시 실패: ${body.detail?.message||body.error||response.status}`);
   return String(body.id);
@@ -305,6 +310,18 @@ async function processFolder(folderInfo){
     retryCount=(Number(existing?.retry_count)||0)+1;
     if(existing?.status==='published')return {skipped:true};
     await saveRecord({...(existing||{}),job_id:job.jobId,folder_name:job.folderName,status:'processing',started_at:existing?.started_at||startedAt,completed_at:null,original_coupang_url:job.originalUrl,error:null,retry_count:retryCount},folderInfo.handle);
+
+    if(!job.hasCoupangLink){
+      $('coupasCurrent').textContent=`${job.folderName} · 링크 없는 본문 게시`;
+      const parentId=await publishParent(job);
+      const completed=await saveRecord({
+        ...(existing||{}),job_id:job.jobId,folder_name:job.folderName,started_at:existing?.started_at||startedAt,
+        completed_at:new Date().toISOString(),status:'published',product_name:job.productHint||job.jobId,
+        original_coupang_url:'',threads_post_id:parentId,threads_post_url:await permalink(parentId),
+        error:null,retry_count:retryCount
+      },folderInfo.handle);
+      return completed;
+    }
 
     const product=await resolveProduct(job,existing);
     $('coupasCurrent').textContent=`${job.folderName} · ${product.product_name}`;
@@ -413,10 +430,43 @@ async function waitForNext(ms){
   });
 }
 
+function selectedMode(){
+  return document.querySelector('input[name="coupasMode"]:checked')?.value||'immediate';
+}
+function selectedIntervalMs(){
+  const active=document.querySelector('[data-coupas-interval].on');
+  const minutes=Number(active?.dataset.coupasInterval||30);
+  return Math.max(1,minutes)*60_000;
+}
+function setRunControlsLocked(locked){
+  $('coupasConnectFolder').disabled=locked;
+  $('coupasRunCount').disabled=locked;
+  document.querySelectorAll('input[name="coupasMode"],[data-coupas-interval]').forEach(node=>node.disabled=locked);
+}
+function syncModeControls(){
+  const intervalMode=selectedMode()==='interval';
+  const countField=$('coupasRunCount');
+  const intervalOptions=$('coupasIntervalOptions');
+  if(countField)countField.closest('.coupas-field').hidden=intervalMode;
+  if(intervalOptions)intervalOptions.hidden=!intervalMode;
+}
+async function runIntervalAutomatic({intervalMs,getNextFolder,process,wait,isStopped,onNoFolder}){
+  while(!isStopped()){
+    const folder=await getNextFolder();
+    if(isStopped())break;
+    if(folder)await process(folder);
+    else if(onNoFolder)await onNoFolder();
+    if(isStopped())break;
+    if(!await wait(intervalMs))break;
+  }
+}
+
 async function start(){
   if(running)return;
-  const requested=Number($('coupasRunCount').value);
-  if(!Number.isInteger(requested)||requested<=0){setMessage('실행 개수는 1 이상의 정수로 입력해 주세요.','error');return}
+  const mode=selectedMode();
+  const intervalMode=mode==='interval';
+  const requested=intervalMode?null:Number($('coupasRunCount').value);
+  if(!intervalMode&&(!Number.isInteger(requested)||requested<=0)){setMessage('실행 개수는 1 이상의 정수로 입력해 주세요.','error');return}
   if(!window.showDirectoryPicker){setMessage('최신 Chrome 또는 Edge에서만 로컬 폴더를 연결할 수 있습니다.','error');return}
   if(!directoryHandle||await folderPermission(true)!=='granted'){setMessage('폴더 접근 권한이 필요합니다. 폴더 연결을 다시 눌러 주세요.','error');return}
   if(directoryHandle.name!==EXPECTED_FOLDER){setMessage(`${EXPECTED_FOLDER} 폴더를 정확히 연결해 주세요.`,'error');return}
@@ -424,10 +474,34 @@ async function start(){
   if(!historyReady){setMessage('로컬 게시 이력을 확인할 수 없습니다. 폴더 쓰기 권한을 다시 연결해 주세요.','error');return}
 
   running=true;stopRequested=false;stats={requested,success:0,failed:0,processed:0};renderStats();
-  $('coupasStart').disabled=true;$('coupasStop').disabled=false;setStatus('자료 확인 중');setMessage('미게시 하위 폴더를 확인하고 있습니다.');
-  const mode=document.querySelector('input[name="coupasMode"]:checked')?.value||'immediate';
+  $('coupasStart').disabled=true;$('coupasStop').disabled=false;setRunControlsLocked(true);setStatus('자료 확인 중');setMessage('미게시 하위 폴더를 확인하고 있습니다.');
   const started=Date.now(),deadline=started+60*60_000;
   try{
+    if(intervalMode){
+      const intervalMs=selectedIntervalMs();
+      await runIntervalAutomatic({
+        intervalMs,
+        isStopped:()=>stopRequested,
+        wait:waitForNext,
+        getNextFolder:async()=>{
+          await loadHistory();
+          if(!historyReady)throw new Error('로컬 게시 이력을 확인할 수 없습니다. 폴더 쓰기 권한을 다시 연결해 주세요.');
+          const folders=await listCandidateFolders();
+          return folders[0]||null;
+        },
+        process:async folder=>{
+          setStatus('실행 중');$('coupasCurrent').textContent=folder.name;$('coupasCountdown').textContent='처리 중';$('coupasNextAt').textContent='—';
+          try{const result=await processFolder(folder);if(!result?.skipped)stats.success++;}
+          catch(error){stats.failed++;setMessage(`${folder.name}: ${friendlyError(error)}`,'error')}
+          stats.processed++;renderStats();
+        },
+        onNoFolder:async()=>{
+          setStatus('다음 자료 대기');$('coupasCurrent').textContent='—';setMessage('새 미게시 자료가 없습니다. 다음 간격에 다시 확인합니다.');
+        }
+      });
+      if(stopRequested){setStatus('사용자 정지');setMessage('사용자 요청으로 자동발행을 정지했습니다.');}
+      return;
+    }
     const folders=await listCandidateFolders();
     const intervals=mode==='random'?randomIntervals(requested):[];
     let needsRandomWait=false;
@@ -449,7 +523,7 @@ async function start(){
     else if(stats.success<requested){setStatus('정상 종료');setMessage(`처리 가능한 폴더가 없어 종료했습니다. 성공 ${stats.success}개 · 실패 ${stats.failed}개`);}
     else{setStatus('완료');setMessage(`자동발행 작업이 완료되었습니다. 성공 ${stats.success}개 · 실패 ${stats.failed}개 · 총 소요시간 ${Math.ceil((Date.now()-started)/1000)}초`,'ok');}
   }catch(error){setStatus('실패');setMessage(error.message,'error')}
-  finally{running=false;cancelWait=null;$('coupasStart').disabled=false;$('coupasStop').disabled=true;$('coupasCurrent').textContent='—';$('coupasCountdown').textContent='—';$('coupasNextAt').textContent='—';await loadHistory()}
+  finally{running=false;cancelWait=null;$('coupasStart').disabled=false;$('coupasStop').disabled=true;setRunControlsLocked(false);syncModeControls();$('coupasCurrent').textContent='—';$('coupasCountdown').textContent='—';$('coupasNextAt').textContent='—';await loadHistory()}
 }
 function stop(){if(!running)return;stopRequested=true;if(cancelWait)cancelWait();setStatus('정지 요청');setMessage('현재 게시 작업이 끝나면 안전하게 정지합니다.')}
 
@@ -457,9 +531,19 @@ async function init(){
   $('coupasConnectFolder')?.addEventListener('click',connectFolder);
   $('coupasStart')?.addEventListener('click',start);
   $('coupasStop')?.addEventListener('click',stop);
+  document.querySelectorAll('input[name="coupasMode"]').forEach(node=>node.addEventListener('change',syncModeControls));
+  document.querySelectorAll('[data-coupas-interval]').forEach(button=>button.addEventListener('click',()=>{
+    if(running)return;
+    document.querySelectorAll('[data-coupas-interval]').forEach(node=>node.classList.remove('on'));
+    button.classList.add('on');
+  }));
   $('coupasResults')?.addEventListener('click',handleHistoryAction);
+  syncModeControls();
   await restoreHandle();
   await loadHistory();
 }
+if(window.__THREADS_COUPAS_TEST__)window.__threadsCoupasTestHooks={
+  runIntervalAutomatic,threadsText,isLegacyMissingCoupangUrlFailure,formatWait
+};
 init();
 })();

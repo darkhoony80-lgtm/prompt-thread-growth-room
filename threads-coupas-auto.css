@@ -3,6 +3,8 @@
 .coupas-field>label{font-weight:800}
 .coupas-field input[type="number"]{max-width:180px;background:#0b0e12;border:1px solid var(--l);border-radius:10px;color:white;padding:11px 12px}
 .coupas-folder-row,.coupas-radio-row,.coupas-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.coupas-interval-options{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.coupas-interval-options .btn.on{background:var(--a);color:#10120d;border-color:var(--a);font-weight:800}
 .coupas-folder-row span{min-width:0;word-break:break-all;color:#e9edf2}
 .coupas-radio-row label{border:1px solid var(--l);border-radius:10px;padding:10px 12px;background:#0d1116}
 .coupas-progress{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
