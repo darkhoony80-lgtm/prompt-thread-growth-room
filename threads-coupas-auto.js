@@ -189,14 +189,17 @@ async function listCandidateFolders(){
     if(handle.kind!=='directory')continue;
     const existing=history.find(row=>row.folder_name===name);
     if(existing?.status==='published'||PARTIAL_STATUSES.has(existing?.status)||existing?.status==='history_invalid')continue;
-    if(existing?.status==='failed'&&!isLegacyMissingCoupangUrlFailure(existing))continue;
+    if(existing?.status==='failed'&&!isLegacyMissingCoupangUrlFailure(existing)&&!isLegacyMissingVideoFailure(existing))continue;
     output.push({name,handle});
   }
   output.sort((a,b)=>a.name.localeCompare(b.name,'ko-KR'));
   return output;
 }
 function isLegacyMissingCoupangUrlFailure(record){
-  return record?.status==='failed'&&String(record.error||'').trim()==='쿠팡 원본 링크 없음';
+  return record?.status==='failed'&&!record.threads_post_id&&!record.threads_post_url&&!record.reply_id&&String(record.error||'').trim()==='쿠팡 원본 링크 없음';
+}
+function isLegacyMissingVideoFailure(record){
+  return record?.status==='failed'&&!record.threads_post_id&&!record.threads_post_url&&!record.reply_id&&String(record.error||'').trim()==='video.mp4 없음';
 }
 function isRecoverableFailure(record){
   if(record?.status!=='failed'||record.threads_post_id||record.threads_post_url||record.reply_id)return false;
@@ -258,12 +261,16 @@ async function readJob(folderInfo){
   const originalUrl=String(data?.content?.coupang_url||'').trim();
   const productHint=String(data?.content?.product_name||data?.content?.narration||data?.content?.original_text||'').trim().slice(0,160);
   const videoName=String(data?.media?.video||'').trim();
-  const imageNames=data?.media?.images;
+  const imageNames=data?.media?.images??[];
   if(!rewritten)throw new Error('content.rewritten_text 없음');
-  if(!videoName)throw new Error('video.mp4 없음');
   if(!Array.isArray(imageNames))throw new Error('media.images 형식 오류');
-  const video=await getRequiredFile(folderInfo.handle,videoName,'video.mp4 없음');
-  if(!/\.mp4$/i.test(video.name))throw new Error('video.mp4 형식 오류');
+  let video=null;
+  if(videoName){
+    if(!/\.mp4$/i.test(videoName))throw new Error('video.mp4 형식 오류');
+    try{video=await (await folderInfo.handle.getFileHandle(videoName)).getFile()}
+    catch(error){if(error?.name!=='NotFoundError')throw new Error(`동영상 파일 읽기 실패: ${error.message}`)}
+    if(video&&!/\.mp4$/i.test(video.name))throw new Error('video.mp4 형식 오류');
+  }
   const images=[];
   for(const name of imageNames){
     const safeName=String(name||'').trim();
@@ -292,7 +299,7 @@ async function uploadMedia(job,file,type,index){
 }
 async function publishParent(job){
   const media=[];
-  media.push(await uploadMedia(job,job.video,'video',0));
+  if(job.video)media.push(await uploadMedia(job,job.video,'video',0));
   for(let index=0;index<job.images.length;index++)media.push(await uploadMedia(job,job.images[index],'image',index+1));
   const response=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:threadsText(job.rewritten,job.hasCoupangLink),media})});
   const body=await response.json().catch(()=>({}));
