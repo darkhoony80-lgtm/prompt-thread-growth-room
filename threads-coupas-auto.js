@@ -141,6 +141,7 @@ async function renderFolderState(){
 }
 
 async function connectFolder(){
+  if(running||historyActionPending)return;
   if(!window.showDirectoryPicker){
     setMessage('이 브라우저는 로컬 폴더 연결을 지원하지 않습니다. 최신 Chrome 또는 Edge에서 열어 주세요.','error');return;
   }
@@ -165,11 +166,17 @@ function renderStats(){
   $('coupasRemaining').textContent=unlimited?'—':Math.max(0,stats.requested-stats.success);
 }
 function renderHistory(){
+  const recover=$('coupasRecoverFailed');
+  if(recover){
+    const eligible=history.filter(isRecoverableFailure).length;
+    recover.textContent=`인증·업로드 실패 → 대기 (${eligible}개 후보)`;
+    recover.disabled=running||historyActionPending||!eligible;
+  }
   const box=$('coupasResults'),count=$('coupasHistoryCount');if(!box||!count)return;
   count.textContent=`${history.length}개`;
   if(!history.length){box.innerHTML='<div class="card empty"><div><b>게시 이력 없음</b>완료 또는 실패한 작업이 여기에 표시됩니다.</div></div>';return}
   box.innerHTML=history.slice(0,100).map((row,index)=>{
-    const label=row.status==='published'?'성공':PARTIAL_STATUSES.has(row.status)?'2/2 재시도 필요':row.status==='failed'?'실패':row.status==='stopped'?'정지':row.status;
+    const label=row.status==='published'?'성공':PARTIAL_STATUSES.has(row.status)?'2/2 재시도 필요':row.status==='failed'?'실패':row.status==='pending'?'발행 대기':row.status==='stopped'?'정지':row.status;
     const link=row.threads_post_url?`<a href="${esc(row.threads_post_url)}" target="_blank" rel="noopener">Threads에서 보기 ↗</a>`:'';
     const actions=row.status==='failed'||PARTIAL_STATUSES.has(row.status)?`<button class="btn" data-coupas-action="retry" data-folder="${esc(row.folder_name||'')}">재시도</button><button class="btn coupas-delete" data-coupas-action="delete" data-folder="${esc(row.folder_name||'')}">폴더 삭제</button>`:'';
     return `<article class="post-card coupas-result"><div><div class="post-meta"><span>${index+1}. ${esc(label)}</span><span>${esc(row.folder_name||'')}</span><span>재시도 ${Number(row.retry_count)||0}</span></div><b>${esc(row.product_name||row.job_id||'')}</b>${row.error?`<p class="coupas-result-error">${esc(row.error)}</p>`:''}<div class="post-actions">${link}${actions}</div></div></article>`;
@@ -190,6 +197,54 @@ async function listCandidateFolders(){
 }
 function isLegacyMissingCoupangUrlFailure(record){
   return record?.status==='failed'&&String(record.error||'').trim()==='쿠팡 원본 링크 없음';
+}
+function isRecoverableFailure(record){
+  if(record?.status!=='failed'||record.threads_post_id||record.threads_post_url||record.reply_id)return false;
+  return /^(?:UNAUTHORIZED|운영실 관리자 인증이 필요합니다\.)$|^(?:Threads 미디어 업로드 실패:|CONTENT_MASTER_MEDIA_UPLOAD_FAILED\b|Vercel Blob:)/.test(String(record.error||'').trim());
+}
+async function recoverFailedFolders(){
+  if(running||historyActionPending)return;
+  historyActionPending=true;
+  $('coupasStart').disabled=true;
+  setRunControlsLocked(true);renderHistory();
+  let restored=0,skipped=0,failed=0;
+  try{
+    if(!directoryHandle||directoryHandle.name!==EXPECTED_FOLDER||await folderPermission(true)!=='granted')throw new Error('InstagramReels 폴더를 연결하고 쓰기 권한을 허용해 주세요.');
+    // 페이지를 열었을 때의 로그인 결과를 재사용하지 않고 현재 세션을 확인한다.
+    const response=await fetch('/api/content-router?action=admin_status',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}',cache:'no-store'});
+    const auth=await response.json();
+    if(!response.ok||auth.authenticated!==true)throw new Error('페이지를 새로고침하고 관리자 인증을 완료한 뒤 복구해 주세요.');
+    await loadHistory();
+    if(!historyReady)throw new Error('로컬 게시 이력을 확인할 수 없습니다.');
+    const candidates=history.filter(isRecoverableFailure);
+    if(!candidates.length){setMessage('복구 가능한 인증·업로드 실패 자료가 없습니다.');return}
+    if(!confirm(`${candidates.length}개 후보의 게시 이력을 다시 확인하여 미게시 자료만 발행 대기로 복구합니다.\n이미 게시됐거나 상태가 불명확한 자료는 제외합니다.\n파일은 삭제하지 않으며, 지금 게시하지 않습니다. 계속할까요?`))return;
+    for(const candidate of candidates){
+      try{
+        const name=String(candidate.folder_name||'');
+        if(!name||name==='.'||name==='..'||/[\\/]/.test(name)){skipped++;continue}
+        const handle=await directoryHandle.getDirectoryHandle(name);
+        const fileHandle=await handle.getFileHandle(STATUS_FILE);
+        const disk=JSON.parse(await (await fileHandle.getFile()).text());
+        const records=[candidate,disk,...localRecords().filter(row=>row.job_id===candidate.job_id||row.folder_name===name)];
+        // 최신 기록 하나만 믿지 않는다. 어느 저장소에든 게시 흔적/불명확한 상태가 있으면 보존한다.
+        if(records.some(row=>row.job_id!==candidate.job_id||!isRecoverableFailure(row))){skipped++;continue}
+        const next={...disk,folder_name:name,status:'pending',error:null,completed_at:null,updated_at:new Date().toISOString()};
+        // 디스크 저장이 실패하면 메모리/localStorage를 대기 상태로 바꾸지 않는다.
+        const writable=await fileHandle.createWritable();
+        try{await writable.write(JSON.stringify(next,null,2));await writable.close()}
+        catch(error){await writable.abort().catch(()=>{});throw error}
+        putLocalRecord(next);
+        restored++;
+      }catch{failed++}
+    }
+    setMessage(`대기 복구 ${restored}개 · 안전 제외 ${skipped}개 · 저장/확인 실패 ${failed}개. 실제 게시는 [자동발행 시작]을 눌러야 진행됩니다.`,failed?'error':'ok');
+  }catch(error){setMessage(`복구 중단: ${error.message}`,'error')}
+  finally{
+    historyActionPending=false;
+    $('coupasStart').disabled=false;setRunControlsLocked(false);syncModeControls();
+    await loadHistory();renderHistory();
+  }
 }
 async function getRequiredFile(folder,name,errorCode){
   try{return await (await folder.getFileHandle(name)).getFile()}catch{throw new Error(errorCode)}
@@ -462,7 +517,7 @@ async function runIntervalAutomatic({intervalMs,getNextFolder,process,wait,isSto
 }
 
 async function start(){
-  if(running)return;
+  if(running||historyActionPending)return;
   const mode=selectedMode();
   const intervalMode=mode==='interval';
   const requested=intervalMode?null:Number($('coupasRunCount').value);
@@ -473,6 +528,7 @@ async function start(){
   await loadHistory();
   if(!historyReady){setMessage('로컬 게시 이력을 확인할 수 없습니다. 폴더 쓰기 권한을 다시 연결해 주세요.','error');return}
 
+  if(running||historyActionPending)return;
   running=true;stopRequested=false;stats={requested,success:0,failed:0,processed:0};renderStats();
   $('coupasStart').disabled=true;$('coupasStop').disabled=false;setRunControlsLocked(true);setStatus('자료 확인 중');setMessage('미게시 하위 폴더를 확인하고 있습니다.');
   const started=Date.now(),deadline=started+60*60_000;
@@ -528,6 +584,14 @@ async function start(){
 function stop(){if(!running)return;stopRequested=true;if(cancelWait)cancelWait();setStatus('정지 요청');setMessage('현재 게시 작업이 끝나면 안전하게 정지합니다.')}
 
 async function init(){
+  const resultsHead=$('coupasHistoryCount')?.parentElement;
+  if(resultsHead&&!$('coupasRecoverFailed')){
+    const button=document.createElement('button');
+    button.id='coupasRecoverFailed';button.type='button';button.className='btn';button.disabled=true;
+    button.textContent='인증·업로드 실패 → 대기';
+    button.title='미게시 실패 자료만 복구합니다. 파일 삭제나 실제 게시는 하지 않습니다.';
+    button.addEventListener('click',recoverFailedFolders);resultsHead.appendChild(button);
+  }
   $('coupasConnectFolder')?.addEventListener('click',connectFolder);
   $('coupasStart')?.addEventListener('click',start);
   $('coupasStop')?.addEventListener('click',stop);
