@@ -26,7 +26,7 @@ let videoMergeRuntimePromise=null;
 let contentArchiveRootHandles={},contentArchiveRestorePromise=null;
 let aiPromptCustomRequest='';
 const videoMergeDrafts=new Map();
-function read(k,d=[]){try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}}
+function read(k,d=[]){try{return LocalMedia.restore(JSON.parse(localStorage.getItem(k)||JSON.stringify(d)))}catch{return d}}
 function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
 function masterRecords(){const value=read(CM,{});return value&&typeof value==='object'&&!Array.isArray(value)?value:{}}
 function mediaId(prefix='media'){return `${prefix}_${globalThis.crypto?.randomUUID?.()||`${Date.now()}_${Math.random().toString(36).slice(2)}`}`}
@@ -128,7 +128,7 @@ function syncDraft(i){
  const nextVideoPrompt=pillar==='AI_PROMPT'?videoPrompt(i):'';
  x.body=nextBody;x.topic_tag=nextTopicTag;if(oldTopicTag!==nextTopicTag)x.topic_tag_verified=false;if(aiThumbnail)x.reply_prompt=nextReply;
  if(pillar==='AI_PROMPT')x.video_prompt=nextVideoPrompt;
- if(x.final_image&&((aiThumbnail&&oldBody!==nextBody)||(pillar==='AI_PROMPT'&&oldReply!==nextReply)))x.thumbnail_dirty=true;
+ if((x.final_image||x.image_url)&&((aiThumbnail&&oldBody!==nextBody)||(pillar==='AI_PROMPT'&&oldReply!==nextReply)))x.thumbnail_dirty=true;
  const master=ensureMaster(i);
  if(master){
   master.master_body=nextBody;
@@ -406,7 +406,7 @@ async function loadContentArchive(i){
   const records=masterRecords();records[id]=loadedMaster;write(CM,records);saveDrafts();render();
   const mediaEntries=Array.isArray(manifest.master.media)?manifest.master.media:[];
   for(let index=0;index<mediaEntries.length;index++){
-   const entry=mediaEntries[index];setContentArchiveStatus(i,`저장 미디어 불러와 업로드 중… ${index+1}/${mediaEntries.length}`);
+   const entry=mediaEntries[index];setContentArchiveStatus(i,`저장 미디어 불러오는 중… ${index+1}/${mediaEntries.length}`);
    const raw=await (await directory.getFileHandle(entry.file_name)).getFile(),source=new File([raw],raw.name,{type:entry.mime_type||raw.type,lastModified:raw.lastModified}),file=await imageToJpeg(source),type=validateLocalMedia(file),duration=type==='video'?(Number(entry.duration)||await videoDuration(file)):0,blob=await uploadLocalMedia(file,i,type);
    loadedMaster.media.push(cleanMediaItem({id:mediaId('local'),type,source:entry.source||'upload',url:blob.url,previewUrl:blob.url,mime_type:file.type,size:file.size,duration},loadedMaster.media.length));
   }
@@ -577,12 +577,7 @@ async function imageToJpeg(file){
   return new File([blob],name,{type:'image/jpeg',lastModified:file.lastModified||Date.now()});
  }finally{URL.revokeObjectURL(url)}
 }
-async function uploadLocalMedia(file,i,type){
- const safe=String(file.name||`${type}-${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g,'-').slice(-100);
- const pathname=`content-master/${masterKey(i)}/${Date.now()}-${safe}`;
- const mod=await import('https://esm.sh/@vercel/blob@2.8.0/client?bundle');
- return mod.uploadPresigned(pathname,file,{access:'public',handleUploadUrl:'/api/content-router?action=media_upload',contentType:file.type,multipart:file.size>5*1024*1024});
-}
+async function uploadLocalMedia(file,i,type){return LocalMedia.local(file)}
 async function addLocalMedia(i,fileList){
  const files=Array.from(fileList||[]);if(!files.length)return;
  const status=document.getElementById('v3status');
@@ -591,7 +586,7 @@ async function addLocalMedia(i,fileList){
   try{
    if(status&&/^image\/(?:png|webp)$/.test(String(original?.type||'')))status.textContent=`${original.name} JPEG 변환 중…`;
    const file=await imageToJpeg(original),type=validateLocalMedia(file);
-   if(status)status.textContent=`${file.name} 업로드 중…`;
+   if(status)status.textContent=`${file.name} 로컬 보관 중…`;
    const duration=type==='video'?await videoDuration(file):0;
    const blob=await uploadLocalMedia(file,i,type);
    appendMasterMedia(i,{id:mediaId('upload'),type,source:'upload',url:blob.url,previewUrl:blob.url,mime_type:file.type,size:file.size,duration});
@@ -605,12 +600,12 @@ async function encodeVideoMerge(i){
  try{
   const progress={set textContent(value){setVideoMergeStatus(i,value)}};
   const file=await mergeVideoFiles(draft.files,progress,{bgmFile:draft.bgmFile,originalVolume:draft.originalVolume,bgmVolume:draft.bgmVolume}),duration=await videoDuration(file);
-  setVideoMergeStatus(i,`인코딩 완료 (${duration.toFixed(1)}초) · 업로드 중…`);
+  setVideoMergeStatus(i,`인코딩 완료 (${duration.toFixed(1)}초) · 로컬 보관 중…`);
   const blob=await uploadLocalMedia(file,i,'video');
   if(draft.sourceMediaIds?.length){const master=ensureMaster(i);master.media=(master.media||[]).filter(item=>!draft.sourceMediaIds.includes(item.id));saveMaster(i,master)}
   appendMasterMedia(i,{id:mediaId('upload'),type:'video',source:'upload',url:blob.url,previewUrl:blob.url,mime_type:file.type,size:file.size,duration});
   const count=draft.files.length;releaseVideoMergePreviews(draft);videoMergeDrafts.delete(masterKey(i));renderVideoMergeDraft(i);setVideoMergeStatus(i,`영상 ${count}개 인코딩 및 업로드 완료`);
- }catch(e){draft.encoding=false;draft.status='실패: '+String(e?.message||e||'알 수 없는 오류');renderVideoMergeDraft(i);setVideoMergeStatus(i,draft.status);alert('영상 인코딩 또는 업로드 실패: '+String(e?.message||e))}
+ }catch(e){draft.encoding=false;draft.status='실패: '+String(e?.message||e||'알 수 없는 오류');renderVideoMergeDraft(i);setVideoMergeStatus(i,draft.status);alert('영상 인코딩 또는 로컬 보관 실패: '+String(e?.message||e))}
 }
 function preview(i){const x=candidates[i],b=document.getElementById(`v3img-${i}`),src=x?.final_image||x?.image_url;if(!src){b.innerHTML='<span class="mut">이미지를 생성한 뒤 직접 확인하세요.</span>';return}b.innerHTML=`<div><img src="${src}" style="width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:11px;display:block"><p class="mut" style="margin:8px 2px 0">최종 썸네일 미리보기 · 확인 후 채택/게시</p></div>`}
 async function makeImage(i,redo=false){
@@ -625,7 +620,7 @@ async function makeImage(i,redo=false){
   x.image_url=null;
   x.thumbnail_hook=String(j.thumbnail_hook||'').trim();
   x.thumbnail_dirty=false;
-  const url=await upload(i);appendMasterMedia(i,{id:mediaId('ai'),type:'image',source:'ai',url,previewUrl:url,mime_type:'image/jpeg'});saveDrafts();if(box)box.textContent='AI 이미지가 공통 미디어에 추가되었습니다.';
+  const url=await localCandidateImage(i);appendMasterMedia(i,{id:mediaId('ai'),type:'image',source:'ai',url,previewUrl:url,mime_type:'image/jpeg'});saveDrafts();if(box)box.textContent='AI 이미지가 공통 미디어에 추가되었습니다.';
  }catch(e){if(box)box.textContent='이미지 생성 실패';alert('이미지 생성 실패: '+e.message)}
 }
 function copyText(i,kind){
@@ -685,8 +680,10 @@ async function generateInstagramSlide(index){
  const payload=state.candidate.category==='AI_TIP'
   ?{candidate:state.candidate,candidate_id:state.candidateId,plan:state.plan,slide,mode:'compose',cut_images:slide.cut_ids.map(id=>state.cutImages.find(item=>item?.cut_id===id)).filter(Boolean)}
   :{candidate:state.candidate,candidate_id:state.candidateId,plan:state.plan,slide,variation};
- const j=await instagramApi('instagram_carousel_image',payload);
+ if(payload.cut_images)payload.cut_images=await Promise.all(payload.cut_images.map(async cut=>({...cut,url:await LocalMedia.dataUrl(cut.url)})));
+ const j=await instagramApi('instagram_carousel_image',{...payload,local_only:true});
  if(state!==instagramCarousel)return;
+ j.url=(await LocalMedia.local(await (await fetch(j.data_url||j.url)).blob())).url;
  state.images[index]=j.url;
  appendMasterMedia(state.candidateIndex,{id:mediaId('ig-ai'),type:'image',source:'ai',url:j.url,previewUrl:j.url,mime_type:'image/jpeg'});
  persistInstagramCarousel(state);
@@ -696,8 +693,8 @@ async function generateAiTipCuts(state){
   if(state!==instagramCarousel)return;
   const cut=state.plan.cuts[index];if(state.cutImages[index]?.url)continue;
   state.status=`웹툰 컷 생성 중 ${index+1}/${state.plan.total_cuts}`;renderInstagramCarousel();
-  const j=await instagramApi('instagram_carousel_image',{candidate:state.candidate,candidate_id:state.candidateId,plan:state.plan,cut,mode:'cut',variation:1});
-  state.cutImages[index]={cut_id:j.cut_id,url:j.url};persistInstagramCarousel(state);
+  const j=await instagramApi('instagram_carousel_image',{candidate:state.candidate,candidate_id:state.candidateId,plan:state.plan,cut,mode:'cut',variation:1,local_only:true});
+  state.cutImages[index]={cut_id:j.cut_id,url:(await LocalMedia.local(await (await fetch(j.data_url||j.url)).blob())).url};persistInstagramCarousel(state);
  }
 }
 async function completeInstagramCarousel(state,createPlan=false){
@@ -760,7 +757,9 @@ async function publishInstagramCarousel(){
  if(!confirm(`${state.plan.slide_count}장의 캐러셀을 @voara.lab에 게시할까요?\n\n이 작업은 실제 Instagram 게시입니다.`))return;
  state.caption=caption;state.replyPrompt=replyPromptValue;instagramPublishing=true;state.recordStatus='publishing';state.status='Instagram 컨테이너 생성 및 게시 중…';persistInstagramCarousel(state);renderInstagramCarousel();
  try{
-  const j=await instagramApi('instagram_carousel_publish',{image_urls:state.images,caption:state.caption,request_id:state.requestId,content_id:state.candidateId,content_type:state.candidate.category,reply_prompt:state.replyPrompt});
+  const payload=await LocalMedia.prepare({_temp_job_id:'instagram-carousel:'+state.requestId,image_urls:state.images,caption:state.caption,request_id:state.requestId,content_id:state.candidateId,content_type:state.candidate.category,reply_prompt:state.replyPrompt});
+  const j=await instagramApi('instagram_carousel_publish',payload);
+  await LocalMedia.published(payload,'instagram',j.media_id).catch(console.error);
   state.published=true;state.mediaId=j.media_id;state.publishedAt=j.published_at||new Date().toISOString();state.recordStatus='published';
   state.promptStoreStatus=j.prompt_stored===true?'stored':j.prompt_stored===false?'failed':j.prompt_store_skipped?'skipped':null;
   state.promptStoreError=j.prompt_store_error||null;
@@ -802,7 +801,7 @@ async function publishFirstReply(parentId,text,mode='text'){
 function threadsAdapter(snapshot){
  const text=withPlatformBodyCta(snapshot.master_body,snapshot.content_type,'threads'),media=snapshot.media.map(({type,url})=>({type,url}));
  if(!text)throw new Error('Threads 본문을 입력해 주세요.');if(text.length>500)throw new Error(`Threads 본문은 500자 이하입니다. 현재 ${text.length}자입니다.`);if(media.length>PLATFORM_LIMITS.threads.maxMedia)throw new Error(`Threads 미디어는 최대 ${PLATFORM_LIMITS.threads.maxMedia}개입니다.`);
- return {text,media,topic_tag:snapshot.topic_tag,topic_tag_verified:snapshot.topic_tag_verified===true,reply_prompt:snapshot.content_type==='AI_PROMPT'?selectedDeliveryPrompt(snapshot):snapshot.reply_prompt||''};
+ return {_temp_job_id:'threads:'+snapshot.content_id,text,media,topic_tag:snapshot.topic_tag,topic_tag_verified:snapshot.topic_tag_verified===true,reply_prompt:snapshot.content_type==='AI_PROMPT'?selectedDeliveryPrompt(snapshot):snapshot.reply_prompt||''};
 }
 function instagramAdapter(snapshot){
  const caption=withPlatformBodyCta(snapshot.master_body,snapshot.content_type,'instagram'),allMedia=snapshot.media.map(m=>({type:m.type,url:m.url,mime_type:m.mime_type,duration:m.duration||0})),videos=allMedia.filter(item=>item.type==='video');
@@ -810,7 +809,7 @@ function instagramAdapter(snapshot){
  const media=snapshot.content_type==='AI_PROMPT'&&videos.length?videos:allMedia;
  if(!caption)throw new Error('Instagram 캡션을 입력해 주세요.');if(caption.length>2200)throw new Error(`Instagram 캡션은 2200자 이하입니다. 현재 ${caption.length}자입니다.`);if(!media.length)throw new Error('Instagram 게시에는 미디어가 필요합니다.');if(media.length>PLATFORM_LIMITS.instagram.maxMedia)throw new Error(`Instagram 미디어는 최대 ${PLATFORM_LIMITS.instagram.maxMedia}개입니다.`);
  for(const item of media){if(item.type==='image'&&item.mime_type&&item.mime_type!=='image/jpeg')throw new Error('Instagram 이미지 게시에는 JPEG 미디어만 사용할 수 있습니다.');if(item.type==='video'&&item.duration&&(item.duration<3||item.duration>900))throw new Error('Instagram 영상은 3초 이상 15분 이하여야 합니다.')}
- return {media,caption,request_id:instagramRequestId(),content_id:snapshot.content_id,content_type:snapshot.content_type,reply_prompt:snapshot.content_type==='AI_PROMPT'?String(snapshot.video_prompt||'').trim():snapshot.reply_prompt||'',omitted_images:snapshot.content_type==='AI_PROMPT'&&videos.length?allMedia.filter(item=>item.type==='image').length:0};
+ return {_temp_job_id:'instagram:'+snapshot.content_id,media,caption,request_id:instagramRequestId(),content_id:snapshot.content_id,content_type:snapshot.content_type,reply_prompt:snapshot.content_type==='AI_PROMPT'?String(snapshot.video_prompt||'').trim():snapshot.reply_prompt||'',omitted_images:snapshot.content_type==='AI_PROMPT'&&videos.length?allMedia.filter(item=>item.type==='image').length:0};
 }
 function facebookAdapter(snapshot){
  const message=String(snapshot.master_body||'').trim(),media=snapshot.media.map(m=>({type:m.type,url:m.url,mime_type:m.mime_type}));
@@ -821,10 +820,11 @@ function facebookAdapter(snapshot){
  if(videos.length>1)throw new Error('Facebook 영상 게시에는 영상 1개만 사용할 수 있습니다.');
  // Graph API Page 게시에서는 혼합 캐러셀을 만들지 않고 영상이 있으면 영상을 대표 미디어로 게시한다.
  const selected=videos.length?[videos[0]]:images;
- return {message,media:selected,reply_text:String(snapshot.reply_prompt||'').trim(),omitted_images:videos.length?images.length:0};
+ return {_temp_job_id:'facebook:'+snapshot.content_id,message,media:selected,reply_text:String(snapshot.reply_prompt||'').trim(),omitted_images:videos.length?images.length:0};
 }
-async function upload(i){const x=candidates[i];if(x.image_url&&!x.final_image)return x.image_url;if(!x.final_image)throw new Error('최종 이미지를 먼저 확인해 주세요.');const r=await fetch('/api/content-router?action=store-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidate_id:x.id,data_url:x.final_image,convert_jpeg:true})}),j=await r.json();if(!r.ok)throw new Error(apiError(j,'IMAGE_UPLOAD_FAILED'));x.image_url=j.url;return j.url}
-async function keep(i){const x=candidates[i];if(!x?.final_image&&!x?.image_url)return alert('먼저 이미지를 생성해서 최종 썸네일을 확인해 주세요.');try{syncDraft(i);if(x.thumbnail_dirty)return alert('이미지에 반영되는 내용을 수정했어요. 이미지 다시 생성을 눌러 최종 썸네일을 확인해 주세요.');const url=await upload(i),v={...x,image_url:url,kept_at:Date.now()};delete v.base_image;delete v.final_image;const a=read(Q);a.unshift(v);write(Q,a);fb(x,'LIKE');renderQueue();alert('이미지 포함 발행 대기 저장 완료 ✅')}catch(e){alert('저장 실패: '+e.message)}}
+async function localCandidateImage(i){const x=candidates[i];if(!x.final_image){if(x.image_url)return x.image_url;throw new Error('IMAGE_REQUIRED')}const raw=await (await fetch(x.final_image)).blob(),file=await imageToJpeg(new File([raw],'generated.jpg',{type:raw.type})),result=await LocalMedia.local(file);x.image_url=result.url;x.final_image=null;return result.url}
+async function upload(i){return LocalMedia.upload(await localCandidateImage(i))}
+async function keep(i){const x=candidates[i];if(!x?.final_image&&!x?.image_url)return alert('먼저 이미지를 생성해서 최종 썸네일을 확인해 주세요.');try{syncDraft(i);if(x.thumbnail_dirty)return alert('이미지에 반영되는 내용을 수정했어요. 이미지 다시 생성을 눌러 최종 썸네일을 확인해 주세요.');const url=await localCandidateImage(i),v={...x,image_url:url,kept_at:Date.now()};delete v.base_image;delete v.final_image;const a=read(Q);a.unshift(v);write(Q,a);fb(x,'LIKE');renderQueue();alert('이미지 포함 발행 대기 저장 완료 ✅')}catch(e){alert('저장 실패: '+e.message)}}
 async function now(i){
  const x=candidates[i];if(!x)return;
  try{
@@ -832,6 +832,7 @@ async function now(i){
   if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i])&&!payload.reply_prompt)return alert('댓글 및 답장 내용을 입력해 주세요.');
   if(!confirm(`Content Master snapshot 그대로 Threads에 게시할까요?\n\n${x.topic||x.category_label||''}`))return;
 
+  Object.assign(payload,await LocalMedia.prepare(payload));
   const r=await fetch('/api/threads/publish',{
    method:'POST',
    headers:{'Content-Type':'application/json'},
@@ -853,6 +854,7 @@ async function now(i){
    }
   }
 
+  await LocalMedia.published(payload,'threads',j.id).catch(console.error);
   fb(x,'PUBLISHED');
   const master=ensureMaster(i);master.status.threads='published';saveMaster(i,master);
   const follower_at_publish=await followerBaseline();const a=read(P);a.unshift({thread_id:j.id,category:x.category,topic:x.topic,topic_tag:payload.topic_tag,hook:x.hook,published_at:Date.now(),image_url:payload.media[0]?.url||null,media:payload.media,follower_at_publish});write(P,a.slice(0,100));
@@ -867,7 +869,8 @@ async function publishInstagramMaster(i){
   if(PILLARS[i]==='AI_TIP'&&!payload.reply_prompt)return alert('DM으로 보낼 댓글 및 답장 내용을 입력해 주세요.');
   const isReel=PILLARS[i]==='AI_PROMPT'&&payload.media.length===1&&payload.media[0].type==='video',omitted=payload.omitted_images?`\n사진 ${payload.omitted_images}장은 제외하고 영상만 게시합니다.`:'';
   if(!confirm(`현재 Content Master의 ${isReel?'영상 1개를 릴스로':`미디어 ${payload.media.length}개를`} @voara.lab에 게시할까요?${omitted}\n\n이 작업은 실제 Instagram 게시입니다.`))return;
-  instagramPublishing=true;const j=await instagramApi('instagram_carousel_publish',payload);
+  instagramPublishing=true;const prepared=await LocalMedia.prepare(payload),j=await instagramApi('instagram_carousel_publish',prepared);
+  await LocalMedia.published(prepared,'instagram',j.media_id).catch(console.error);
   const master=ensureMaster(i);master.status.instagram='published';saveMaster(i,master);
   alert(j.prompt_stored===false?'Instagram 게시 완료 / 프롬프트 저장 실패':'Instagram 게시 완료 ✅');
  }catch(e){alert('Instagram 게시 실패: '+e.message)}finally{instagramPublishing=false}
@@ -881,9 +884,11 @@ async function publishFacebookMaster(i){
   const mediaText=videoCount?`영상 ${videoCount}개와 `:(imageCount?`사진 ${imageCount}개와 `:'');
   const omitted=payload.omitted_images?`\n영상 게시를 위해 사진 ${payload.omitted_images}장은 Facebook에서 제외됩니다.`:'';
   if(!confirm(`Voara.lab Facebook 페이지에 ${mediaText}현재 본문을 게시할까요?${omitted}\n\n이 작업은 실제 Facebook 게시입니다.`))return;
+  Object.assign(payload,await LocalMedia.prepare(payload));
   const r=await fetch('/api/content-router?action=facebook_publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   const j=await r.json().catch(()=>({}));
   if(!r.ok)throw new Error(apiError(j,'FACEBOOK_PUBLISH_FAILED'));
+  await LocalMedia.published(payload,'facebook',j.post_id).catch(console.error);
   const master=ensureMaster(i);master.status.facebook='published';master.facebook_post_id=j.post_id;saveMaster(i,master);
   alert('Facebook 게시 완료 ✅');
  }catch(e){alert('Facebook 게시 실패: '+e.message)}
@@ -904,7 +909,7 @@ async function youtubeAdapter(snapshot){
  if(!tr.ok)throw new Error(apiError(tj,'YOUTUBE_TITLE_FAILED'));
  const title=String(tj.title||'').trim();
  if(!title)throw new Error('YOUTUBE_TITLE_EMPTY');
- return {video_url:videos[0].url,title,description,reply_text:String(snapshot.reply_prompt||'').trim(),...youtubeOptions()};
+ return {_temp_job_id:'youtube:'+snapshot.content_id,video_url:videos[0].url,title,description,reply_text:String(snapshot.reply_prompt||'').trim(),...youtubeOptions()};
 }
 async function publishYoutubeMaster(i){
  const x=candidates[i];if(!x)return;
@@ -912,8 +917,10 @@ async function publishYoutubeMaster(i){
   const snapshot=snapshotMaster(i),payload=await youtubeAdapter(snapshot);
   if(['AI_PROMPT','AI_TIP'].includes(PILLARS[i])&&!payload.reply_text)return alert('댓글 및 답장 내용을 입력해 주세요.');
   if(!confirm(`YouTube에 영상을 게시할까요?\n\n유료 프로모션: ${payload.paid_promotion?'예':'아니요'}\nAI 사용/합성 콘텐츠: ${payload.synthetic_media?'예':'아니요'}\n\n게시 후 첫 댓글과 새 댓글 답장에도 입력 내용을 사용합니다.`))return;
+  Object.assign(payload,await LocalMedia.prepare(payload));
   const r=await fetch('/api/content-router?action=youtube_publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(apiError(j,'YOUTUBE_PUBLISH_FAILED'));
+  await LocalMedia.published(payload,'youtube',j.video_id).catch(console.error);
   const master=ensureMaster(i);master.status.youtube='published';master.youtube_video_id=j.video_id;saveMaster(i,master);
   alert('YouTube 게시 완료 ✅'+(j.paid_promotion_applied===true?'\n유료 프로모션 적용 확인 ✅':j.paid_promotion_applied===false?'\n⚠️ 유료 프로모션 적용 확인 실패':'')+(j.synthetic_media_applied===true?'\nAI 사용 표시 적용 확인 ✅':'')+(j.first_comment_error?`\n첫 댓글 실패: ${j.first_comment_error}`:'\n첫 댓글 등록 완료 ✅'));
  }catch(e){alert('YouTube 게시 실패: '+e.message)}
@@ -947,7 +954,7 @@ function resetCard(i){
 }
 function no(i){resetCard(i)}
 function renderQueue(){const a=read(Q),n=document.getElementById('v3qcount'),b=document.getElementById('v3queue');if(n)n.textContent=a.length;if(!b)return;b.innerHTML=a.length?a.map((x,i)=>`<article class="card"><div style="display:grid;grid-template-columns:150px 1fr;gap:14px"><img src="${esc(x.image_url)}" style="width:150px;aspect-ratio:4/5;object-fit:cover;border-radius:10px"><div><span class="badge">${esc(CATS[x.category]||x.category_label)}</span><h3>${esc(x.topic||x.category_label||'')}</h3><div class="post-text">${esc(x.body)}</div><div style="margin-top:10px;display:flex;gap:8px"><button class="btn p" onclick="PostAuto.publishQueue(${i})">🚀 지금 게시</button><button class="btn" onclick="PostAuto.drop(${i})">제거</button></div></div></div></article>`).join(''):'<div class="card empty"><div><b>발행 대기 없음</b>이미지를 확인하고 👍한 게시물이 여기에 쌓입니다.</div></div>'}
-async function publishQueue(i){const a=read(Q),x=a[i];if(!x||!confirm(`"${x.topic||x.category_label||''}" 지금 게시할까요?`))return;const text=withPlatformBodyCta(x.body,x.category,'threads'),r=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,image_url:x.image_url,topic_tag:String(x.topic_tag||'').replace(/^#+/,'').trim(),topic_tag_verified:x.topic_tag_verified===true})}),j=await r.json();if(!r.ok)return alert('게시 실패: '+(j.detail||j.error));const follower_at_publish=await followerBaseline();const p=read(P);p.unshift({thread_id:j.id,category:x.category,topic:x.topic,topic_tag:String(x.topic_tag||'').replace(/^#+/,'').trim(),hook:x.hook,published_at:Date.now(),image_url:x.image_url,follower_at_publish});write(P,p.slice(0,100));fb(x,'PUBLISHED');a.splice(i,1);write(Q,a);renderQueue();alert('게시 완료 ✅')}
+async function publishQueue(i){const a=read(Q),x=a[i];if(!x||!confirm(`"${x.topic||x.category_label||''}" 지금 게시할까요?`))return;const prepared=await LocalMedia.prepare({_temp_job_id:'queue:'+x.id,image_url:x.image_url}),image_url=prepared.image_url,text=withPlatformBodyCta(x.body,x.category,'threads'),r=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,image_url,topic_tag:String(x.topic_tag||'').replace(/^#+/,'').trim(),topic_tag_verified:x.topic_tag_verified===true})}),j=await r.json();if(!r.ok)return alert('게시 실패: '+(j.detail||j.error));await LocalMedia.published(prepared,'threads',j.id).catch(console.error);const follower_at_publish=await followerBaseline();const p=read(P);p.unshift({thread_id:j.id,category:x.category,topic:x.topic,topic_tag:String(x.topic_tag||'').replace(/^#+/,'').trim(),hook:x.hook,published_at:Date.now(),image_url:x.image_url,follower_at_publish});write(P,p.slice(0,100));fb(x,'PUBLISHED');a.splice(i,1);write(Q,a);renderQueue();alert('게시 완료 ✅')}
 function drop(i){const a=read(Q);a.splice(i,1);write(Q,a);renderQueue()}
 function patchReplies(){
  const desc=document.querySelector('#replies .section p.mut');if(desc)desc.textContent='게시물 날짜 제한 없이 전체 원본 게시물의 댓글을 확인합니다. 미응답은 API에 무리 없이 순차 답장합니다.';
@@ -956,5 +963,6 @@ function patchReplies(){
  setTimeout(()=>{try{updateBatchButton()}catch{}},100);
 }
 window.PostAuto={generate:generatePillar,generateCustom:i=>generatePillar(i,'RANDOM',true),customPrompt:setAiPromptCustomRequest,image:i=>makeImage(i,false),reimage:i=>makeImage(i,true),keep,now,variant,no,reset:resetCard,drop,publishQueue,save:syncDraft,deliveryType:setPromptDeliveryType,chooseArchiveFolder:chooseContentArchiveFolder,saveArchive:saveContentArchive,loadArchive:loadContentArchive,addMedia:addLocalMedia,addMergeVideos:addVideoMergeFiles,addMergeBgm:addVideoMergeBgm,removeMergeBgm:removeVideoMergeBgm,mergeVolume:setVideoMergeVolume,moveMergeVideo:moveVideoMergeFile,removeMergeVideo:removeVideoMergeFile,cancelMergeVideos:cancelVideoMerge,encodeMergeVideos:encodeVideoMerge,removeMedia:removeMasterMedia,moveMedia:moveMasterMedia,instagram:openInstagramCarousel,instagramSelect:selectInstagramSlide,instagramCaption:setInstagramCaption,instagramReplyPrompt:setInstagramReplyPrompt,instagramClose:closeInstagramCarousel,instagramRegenerate:regenerateInstagramSlide,instagramRegenerateAll:regenerateInstagramCarousel,instagramPublish:publishInstagramCarousel,instagramMasterPublish:publishInstagramMaster,facebookPublish:publishFacebookMaster,youtubePublish:publishYoutubeMaster,copyText,instagramPromptStoreRetry:retryInstagramPromptStore};
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ensure);else ensure();
+async function startLocalMedia(){try{await LocalMedia.ready();ensure();LocalMedia.sweep().catch(console.error);setInterval(()=>LocalMedia.sweep().catch(console.error),300000);const button=document.createElement('button');button.className='btn';button.textContent='임시 미디어 검토 목록';button.onclick=()=>LocalMedia.exportReview().catch(error=>alert(error.message));document.querySelector('.top')?.append(button)}catch(error){console.error(error);alert('로컬 미디어 보관함을 열 수 없습니다. 브라우저 저장소 권한을 확인하고 새로고침하세요.')}}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',startLocalMedia);else startLocalMedia();
 })();

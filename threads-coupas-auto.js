@@ -289,21 +289,16 @@ function threadsText(value,hasCoupangLink){
   const available=500-[...DISCLOSURE].length-2;
   return `${[...clean].slice(0,Math.max(0,available)).join('').trim()}\n\n${DISCLOSURE}`;
 }
-async function uploadMedia(job,file,type,index){
-  const safeJob=String(job.jobId||job.folderName).replace(/[^a-zA-Z0-9_-]/g,'-').slice(0,80)||'job';
-  const safeName=String(file.name||`${type}-${index}`).replace(/[^a-zA-Z0-9._-]/g,'-').slice(-100);
-  const pathname=`content-master/coupas-${safeJob}/${Date.now()}-${index}-${safeName}`;
-  const mod=await import('https://esm.sh/@vercel/blob@2.8.0/client?bundle');
-  const result=await mod.uploadPresigned(pathname,file,{access:'public',handleUploadUrl:'/api/content-router?action=media_upload',contentType:file.type||(type==='video'?'video/mp4':'image/jpeg'),multipart:file.size>5*1024*1024});
-  return {type,url:result.url};
-}
+async function uploadMedia(job,file,type,index){const source=file.type?file:new File([file],file.name,{type:type==='video'?'video/mp4':'image/jpeg',lastModified:file.lastModified});const local=await LocalMedia.local(source);return {type,url:local.url}}
 async function publishParent(job){
   const media=[];
   if(job.video)media.push(await uploadMedia(job,job.video,'video',0));
   for(let index=0;index<job.images.length;index++)media.push(await uploadMedia(job,job.images[index],'image',index+1));
-  const response=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:threadsText(job.rewritten,job.hasCoupangLink),media})});
+  const payload=window.LocalMedia?await LocalMedia.prepare({_temp_job_id:'coupas:'+job.jobId,text:threadsText(job.rewritten,job.hasCoupangLink),media}):{text:threadsText(job.rewritten,job.hasCoupangLink),media};
+  const response=await fetch('/api/threads/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   const body=await response.json().catch(()=>({}));
   if(!response.ok||!body.id)throw new Error(`Threads 본문 게시 실패: ${body.detail?.message||body.error||response.status}`);
+  if(window.LocalMedia)await LocalMedia.published(payload,'threads',body.id).catch(console.error);
   return String(body.id);
 }
 async function permalink(id){

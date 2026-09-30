@@ -51,6 +51,8 @@ function send(res,status,body){
 }
 
 const ADMIN_SESSION_COOKIE='pgr_admin_session';
+// This release must not delete remote media before post-quota integration validation.
+const TEMP_MEDIA_CLEANUP_RELEASE_ENABLED=false;
 const ADMIN_SESSION_MAX_AGE=60*60*24*7;
 
 function adminToken(){return String(process.env.ADMIN_API_TOKEN||'').trim()}
@@ -1696,6 +1698,33 @@ async function actionMediaUpload(req,res){
   }
 }
 
+async function actionTemporaryMedia(req,res,action){
+  const origin=req.headers?.origin;
+  if(origin){try{if(new URL(origin).host!==req.headers.host)return send(res,403,{ok:false,error:'ORIGIN_MISMATCH'})}catch{return send(res,403,{ok:false,error:'ORIGIN_MISMATCH'})}}
+  try{
+    const {createTemporaryMediaService}=require('../lib/temp-media-cleanup.cjs');
+    const service=createTemporaryMediaService({
+      secret:adminToken,
+      enabled:()=>TEMP_MEDIA_CLEANUP_RELEASE_ENABLED&&process.env.TEMP_MEDIA_AUTO_CLEANUP==='1',
+      retentionHours:()=>process.env.TEMP_MEDIA_RETENTION_HOURS||24,
+      blob:{head:async url=>(await import('@vercel/blob')).head(url),del:async url=>(await import('@vercel/blob')).del(url)},
+      verifyPublication:async publication=>{
+        const fields='id,permalink,media_url,media_type,children{id,media_url,media_type}';
+        let media;
+        if(publication.platform==='threads'){
+          const session=await threadsCoupasSession(req,res);
+          media=await threadsCoupasGraph(`/${publication.post_id}?fields=${encodeURIComponent(fields)}`,session.accessToken);
+        }else{
+          const token=String(process.env.INSTAGRAM_ACCESS_TOKEN||'').trim();if(!token)throw new Error('INSTAGRAM_NOT_CONFIGURED');
+          media=await instagramGraph(token,`${publication.post_id}?fields=${encodeURIComponent(fields)}`);
+        }
+        return {id:media.id,permalink:media.permalink,urls:media.children?.data?.length?media.children.data.map(child=>child.media_url):[media.media_url]};
+      }
+    });
+    return send(res,200,{ok:true,...await service[action](req.body||{})});
+  }catch(error){return send(res,400,{ok:false,error:'TEMP_MEDIA_OPERATION_BLOCKED',detail:/^[A-Z_]+$/.test(error?.message||'')?error.message:'TEMP_MEDIA_CHECK_FAILED'})}
+}
+
 function instagramSource(candidate={}){
   const category=INSTAGRAM_CATEGORIES.includes(candidate?.category)
     ?candidate.category:'';
@@ -2456,6 +2485,7 @@ function aiTipTransitionLayer(page,rects){
 }
 
 async function fetchAiTipCutImage(value){
+  if(/^data:image\/jpeg;base64,/.test(String(value||''))){const buffer=Buffer.from(String(value).split(',')[1],'base64');if(!buffer.length||buffer.length>4_000_000)throw new Error('AI_TIP_CUT_SIZE_INVALID');return buffer}
   const url=instagramBlobUrl(value);
   if(!url)throw new Error('AI_TIP_CUT_URL_INVALID');
   const response=await fetch(url);
@@ -2517,6 +2547,7 @@ async function actionInstagramCarouselImage(req,res){
       // Gemini CUT은 4:5로 생성된다. 정사각형 cover 변환 시 원본 장면이 먼저 잘리므로
       // 4:5 비율을 그대로 보존한 제작용 CUT으로 저장한다.
       const jpeg=await sharp(Buffer.from(image.data,'base64')).rotate().resize(1024,1280,{fit:'contain',background:'#fffdf8',withoutEnlargement:false}).jpeg({quality:92,mozjpeg:true}).toBuffer();
+      if(req.body?.local_only===true)return send(res,200,{ok:true,mode,cut_id:typeof current!=='undefined'?current.cut_id:undefined,slide_number:slide?.number,data_url:`data:image/jpeg;base64,${jpeg.toString('base64')}`,mime_type:'image/jpeg'});
       const blob=await blobPut(`instagram-webtoon-cuts/${Date.now()}-${id}-${current.cut_id}.jpg`,jpeg,{access:'public',addRandomSuffix:true,contentType:'image/jpeg',cacheControlMaxAge:31536000});
       return send(res,200,{ok:true,mode:'cut',cut_id:current.cut_id,url:blob.url,mime_type:'image/jpeg'});
     }
@@ -2533,6 +2564,7 @@ async function actionInstagramCarouselImage(req,res){
       }
       const composed=await composeAiTipWebtoonPage(page,buffers);
       const jpeg=await applyAiImageCta(composed);
+      if(req.body?.local_only===true)return send(res,200,{ok:true,mode,cut_id:typeof current!=='undefined'?current.cut_id:undefined,slide_number:slide?.number,data_url:`data:image/jpeg;base64,${jpeg.toString('base64')}`,mime_type:'image/jpeg'});
       const blob=await blobPut(`instagram-carousel/${Date.now()}-${id}-slide-${page.number}.jpg`,jpeg,{access:'public',addRandomSuffix:true,contentType:'image/jpeg',cacheControlMaxAge:31536000});
       return send(res,200,{ok:true,mode:'compose',slide_number:page.number,url:blob.url,mime_type:'image/jpeg',layout_template:page.layout_template});
     }
@@ -2560,7 +2592,8 @@ async function actionInstagramCarouselImage(req,res){
       jpeg=await sharp(sourceBuffer).rotate().jpeg({quality:92,mozjpeg:true}).toBuffer();
     }
     if(jpeg.length>4_000_000)throw new Error('INSTAGRAM_CAROUSEL_IMAGE_TOO_LARGE');
-    const blob=await blobPut(
+    if(req.body?.local_only===true)return send(res,200,{ok:true,mode,cut_id:typeof current!=='undefined'?current.cut_id:undefined,slide_number:slide?.number,data_url:`data:image/jpeg;base64,${jpeg.toString('base64')}`,mime_type:'image/jpeg'});
+      const blob=await blobPut(
       `instagram-carousel/${Date.now()}-${id}-slide-${slide.number}.jpg`,
       jpeg,
       {access:'public',addRandomSuffix:true,contentType:'image/jpeg',cacheControlMaxAge:31536000}
@@ -3907,7 +3940,7 @@ async function handler(req,res){
   let rawBody=null;
   if(req.method==='POST'){
     try{
-      const maxBodyBytes=queryAction==='store-image'?5_500_000:1_000_000;
+      const maxBodyBytes=queryAction==='store-image'?5_500_000:queryAction==='instagram_carousel_image'?4_000_000:1_000_000;
       rawBody=await readRawRequest(req,maxBodyBytes);
       req.body=rawBody.length?JSON.parse(rawBody.toString('utf8')):{};
     }catch(error){
@@ -3917,6 +3950,7 @@ async function handler(req,res){
   // Meta must reach the webhook without our admin session. Its own verification/signature checks remain inside actionInstagramWebhook.
   if(queryAction==='instagram_webhook')return actionInstagramWebhook(req,res,rawBody);
   if(queryAction==='system_status')return actionSystemStatus(req,res);
+  if(queryAction==='temp_media_policy'&&req.method==='GET')return send(res,200,{ok:true,auto_cleanup_enabled:TEMP_MEDIA_CLEANUP_RELEASE_ENABLED&&process.env.TEMP_MEDIA_AUTO_CLEANUP==='1',release_enabled:TEMP_MEDIA_CLEANUP_RELEASE_ENABLED,environment_enabled:process.env.TEMP_MEDIA_AUTO_CLEANUP==='1',retention_hours:Number(process.env.TEMP_MEDIA_RETENTION_HOURS||24)});
 
   if(req.method!=='POST'){
     return send(res,405,{ok:false,error:'METHOD_NOT_ALLOWED'});
@@ -3946,6 +3980,9 @@ async function handler(req,res){
   if(action==='image')return actionImage(req,res);
   if(action==='store-image')return actionStoreImage(req,res);
   if(action==='media_upload')return actionMediaUpload(req,res);
+  if(action==='temp_media_intent')return actionTemporaryMedia(req,res,'intent');
+  if(action==='temp_media_complete')return actionTemporaryMedia(req,res,'complete');
+  if(action==='temp_media_cleanup')return actionTemporaryMedia(req,res,'cleanup');
   if(action==='variant')return actionVariant(req,res);
   if(action==='instagram_carousel_prepare')return actionInstagramCarouselPrepare(req,res);
   if(action==='instagram_carousel_image')return actionInstagramCarouselImage(req,res);
@@ -3969,7 +4006,7 @@ async function handler(req,res){
   return send(res,400,{
     ok:false,
     error:'UNKNOWN_CONTENT_ACTION',
-    allowed:['generate','image','store-image','media_upload','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish','facebook_publish','facebook_comment_sync','youtube_title','youtube_publish','instagram_prompt_store','instagram_prompt_lookup','supabase_status','coupas_resolve_product','coupas_threads_permalink','coupas_threads_reply_exists','ox_topics','ox_generate','ox_library_list','ox_library_get','ox_library_save','ox_library_status','ox_library_delete']
+    allowed:['generate','image','store-image','media_upload','temp_media_intent','temp_media_complete','temp_media_cleanup','variant','instagram_carousel_prepare','instagram_carousel_image','instagram_carousel_publish','facebook_publish','facebook_comment_sync','youtube_title','youtube_publish','instagram_prompt_store','instagram_prompt_lookup','supabase_status','coupas_resolve_product','coupas_threads_permalink','coupas_threads_reply_exists','ox_topics','ox_generate','ox_library_list','ox_library_get','ox_library_save','ox_library_status','ox_library_delete']
   });
 }
 
