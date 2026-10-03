@@ -66,7 +66,7 @@ async function ensureThreadsConnected(){
   const response=await fetch('/api/content-router?action=system_status',{cache:'no-store'});
   if(!response.ok)throw new Error(`Threads 연결 확인 실패: HTTP ${response.status}`);
   const status=await response.json();
-  if(status.threads!==true)throw new Error('이 브라우저에 Threads 계정이 연결되지 않았습니다. 설정에서 Threads를 연결한 뒤 다시 실행해 주세요.');
+  if(status.threads!==true)throw new Error('이 브라우저에 Threads 계정이 연결되지 않았습니다. 아래 버튼에서 연결한 뒤 다시 실행해 주세요.');
 }
 
 async function saveRecord(record,folderHandle){
@@ -179,6 +179,15 @@ async function connectFolder(){
 
 function setMessage(text,type=''){
   const node=$('coupasMessage');if(!node)return;node.textContent=text;node.className='mut '+(type==='error'?'coupas-result-error':type==='ok'?'positive':'');
+  let button=$('coupasConnectThreads');
+  if(type==='error'&&String(text).includes('이 브라우저에 Threads 계정이 연결되지 않았습니다')){
+    if(!button){
+      button=document.createElement('button');button.id='coupasConnectThreads';button.type='button';button.className='btn p';
+      button.textContent='이 브라우저에서 Threads 연결';button.onclick=()=>{location.href='/api/threads/oauth/start'};
+      node.after(button);
+    }
+    button.hidden=false;
+  }else if(button)button.hidden=true;
 }
 function setStatus(text){if($('coupasStatus'))$('coupasStatus').textContent=text}
 function renderStats(){
