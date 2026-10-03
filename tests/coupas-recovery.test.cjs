@@ -36,7 +36,7 @@ function harness(rows,{local=rows,authenticated=true,confirm=true,writeFailure='
 }
 test('only known pre-publication auth/upload errors are eligible',()=>{
   const h=harness([]);
-  for(const error of ['UNAUTHORIZED','운영실 관리자 인증이 필요합니다.','Vercel Blob: Failed to retrieve the presigned URL','CONTENT_MASTER_MEDIA_UPLOAD_FAILED','Threads 미디어 업로드 실패: upload failed'])assert.equal(h.api.isRecoverableFailure(row('a',error)),true,error);
+  for(const error of ['UNAUTHORIZED','THREADS_NOT_CONNECTED','Threads 본문 게시 실패: THREADS_NOT_CONNECTED','운영실 관리자 인증이 필요합니다.','Vercel Blob: Failed to retrieve the presigned URL','CONTENT_MASTER_MEDIA_UPLOAD_FAILED','Threads 미디어 업로드 실패: upload failed'])assert.equal(h.api.isRecoverableFailure(row('a',error)),true,error);
   for(const error of ['JSON 파싱 실패','Threads 본문 게시 실패: timeout','Threads 2/2 링크 게시 실패: UNAUTHORIZED','쿠팡 원본 링크 없음','NETWORK_ERROR'])assert.equal(h.api.isRecoverableFailure(row('a',error)),false,error);
   for(const extra of [{status:'published'},{status:'processing'},{status:'post_published_reply_failed'},{status:'post_published_link_pending'},{threads_post_id:'123'},{threads_post_url:'https://threads.com/post/123'},{reply_id:'456'}])assert.equal(h.api.isRecoverableFailure(row('a','UNAUTHORIZED',extra)),false);
 });

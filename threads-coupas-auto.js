@@ -1,6 +1,5 @@
 (()=>{
 const EXPECTED_FOLDER='InstagramReels';
-const EXPECTED_PATH='C:\\Users\\tjznf\\Downloads\\InstagramReels';
 const DB_NAME='prompt-thread-growth-room';
 const DB_STORE='directory-handles';
 const DB_KEY='threads-coupas-root';
@@ -62,6 +61,12 @@ async function adminApi(action,payload={}){
     error.code=body.error;error.body=body;throw error;
   }
   return body;
+}
+async function ensureThreadsConnected(){
+  const response=await fetch('/api/content-router?action=system_status',{cache:'no-store'});
+  if(!response.ok)throw new Error(`Threads 연결 확인 실패: HTTP ${response.status}`);
+  const status=await response.json();
+  if(status.threads!==true)throw new Error('이 브라우저에 Threads 계정이 연결되지 않았습니다. 설정에서 Threads를 연결한 뒤 다시 실행해 주세요.');
 }
 
 async function saveRecord(record,folderHandle){
@@ -130,14 +135,30 @@ async function folderPermission(request=false){
   if(state!=='granted'&&request)state=await directoryHandle.requestPermission(options);
   return state;
 }
+async function inspectFolder(handle){
+  const permission=await handle.queryPermission({mode:'readwrite'});
+  if(permission!=='granted')return {permission,count:0,sample:[]};
+  let count=0;
+  const sample=[];
+  for await(const [name,entry] of handle.entries()){
+    if(entry.kind!=='directory')continue;
+    count++;
+    if(sample.length<3)sample.push(name);
+  }
+  return {permission,count,sample};
+}
 async function renderFolderState(){
   const badge=$('coupasFolderBadge'),name=$('coupasFolderName');
-  if(!badge||!name)return;
-  if(!directoryHandle){badge.textContent='폴더 미연결';name.textContent=EXPECTED_PATH;return}
-  const permission=await folderPermission(false);
-  name.textContent=`${EXPECTED_PATH} · 선택됨: ${directoryHandle.name}`;
-  badge.textContent=permission==='granted'?'폴더 연결됨':'권한 확인 필요';
-  badge.className='badge '+(permission==='granted'?'positive':'review');
+  if(!badge||!name)return false;
+  if(!directoryHandle){badge.textContent='폴더 미연결';name.textContent='폴더를 선택해 주세요.';badge.className='badge review';return false}
+  name.textContent=`선택한 폴더: ${directoryHandle.name} · 전체 경로는 브라우저에서 확인할 수 없습니다.`;
+  if(directoryHandle.name!==EXPECTED_FOLDER){badge.textContent='다른 폴더 선택됨';badge.className='badge review';return false}
+  try{
+    const {permission,count,sample}=await inspectFolder(directoryHandle);
+    if(permission!=='granted'){badge.textContent='권한 확인 필요';badge.className='badge review';return false}
+    name.textContent=`선택한 폴더: ${directoryHandle.name} · 하위 폴더 ${count}개 읽기 확인${sample.length?` · 예: ${sample.join(', ')}`:''} · 전체 경로는 브라우저에서 확인할 수 없습니다.`;
+    badge.textContent='폴더 연결됨';badge.className='badge positive';return true;
+  }catch(error){badge.textContent='폴더 접근 실패';badge.className='badge review';setMessage(`선택한 폴더를 읽을 수 없습니다: ${error.message}`,'error');return false}
 }
 
 async function connectFolder(){
@@ -146,11 +167,13 @@ async function connectFolder(){
     setMessage('이 브라우저는 로컬 폴더 연결을 지원하지 않습니다. 최신 Chrome 또는 Edge에서 열어 주세요.','error');return;
   }
   try{
-    const handle=await window.showDirectoryPicker({id:'threads-coupas-source',mode:'readwrite',startIn:'downloads'});
+    const handle=await window.showDirectoryPicker({id:'threads-coupas-source',mode:'readwrite'});
     if(handle.name!==EXPECTED_FOLDER)throw new Error(`${EXPECTED_FOLDER} 폴더를 정확히 선택해 주세요.`);
-    directoryHandle=handle;await storeHandle(handle);await renderFolderState();
+    const inspection=await inspectFolder(handle);
+    if(inspection.permission!=='granted')throw new Error('선택한 폴더의 읽기/쓰기 권한을 허용해 주세요.');
+    await storeHandle(handle);directoryHandle=handle;await renderFolderState();
     await loadHistory();
-    setMessage('폴더가 연결되었습니다. 게시 이력은 각 작업 폴더에 로컬로 저장됩니다.');
+    setMessage(`선택한 ${handle.name} 폴더의 하위 폴더 ${inspection.count}개를 읽었습니다. 게시 이력은 각 작업 폴더에 로컬로 저장됩니다.`);
   }catch(error){if(error?.name!=='AbortError')setMessage(`폴더 접근 실패: ${error.message}`,'error')}
 }
 
@@ -203,7 +226,7 @@ function isLegacyMissingVideoFailure(record){
 }
 function isRecoverableFailure(record){
   if(record?.status!=='failed'||record.threads_post_id||record.threads_post_url||record.reply_id)return false;
-  return /^(?:UNAUTHORIZED|운영실 관리자 인증이 필요합니다\.)$|^(?:Threads 미디어 업로드 실패:|CONTENT_MASTER_MEDIA_UPLOAD_FAILED\b|Vercel Blob:)/.test(String(record.error||'').trim());
+  return /^(?:UNAUTHORIZED|THREADS_NOT_CONNECTED|Threads 본문 게시 실패: THREADS_NOT_CONNECTED|운영실 관리자 인증이 필요합니다\.)$|^(?:Threads 미디어 업로드 실패:|CONTENT_MASTER_MEDIA_UPLOAD_FAILED\b|Vercel Blob:)/.test(String(record.error||'').trim());
 }
 async function recoverFailedFolders(){
   if(running||historyActionPending)return;
@@ -427,6 +450,7 @@ async function retryFailedFolder(folderName){
   let ownsRun=false;
   try{
     const {record,handle}=await prepareFolderAction(folderName);
+    await ensureThreadsConnected();
     running=true;ownsRun=true;stats={requested:1,success:0,failed:0,processed:0};renderStats();renderHistory();
     $('coupasStart').disabled=true;$('coupasStop').disabled=true;setStatus('재시도 중');$('coupasCurrent').textContent=record.folder_name;setMessage(`${record.folder_name} 작업을 재시도하고 있습니다.`);
     try{
@@ -533,10 +557,14 @@ async function start(){
   const requested=intervalMode?null:Number($('coupasRunCount').value);
   if(!intervalMode&&(!Number.isInteger(requested)||requested<=0)){setMessage('실행 개수는 1 이상의 정수로 입력해 주세요.','error');return}
   if(!window.showDirectoryPicker){setMessage('최신 Chrome 또는 Edge에서만 로컬 폴더를 연결할 수 있습니다.','error');return}
-  if(!directoryHandle||await folderPermission(true)!=='granted'){setMessage('폴더 접근 권한이 필요합니다. 폴더 연결을 다시 눌러 주세요.','error');return}
+  let permission='denied';
+  try{permission=await folderPermission(true)}catch(error){setStatus('폴더 확인 필요');setMessage(`선택한 폴더의 권한을 확인할 수 없습니다: ${error.message}`,'error');return}
+  if(!directoryHandle||permission!=='granted'){setMessage('폴더 접근 권한이 필요합니다. 폴더 연결을 다시 눌러 주세요.','error');return}
   if(directoryHandle.name!==EXPECTED_FOLDER){setMessage(`${EXPECTED_FOLDER} 폴더를 정확히 연결해 주세요.`,'error');return}
-  await loadHistory();
+  if(!await renderFolderState()){setStatus('폴더 확인 필요');return}
+  try{await loadHistory()}catch(error){setStatus('폴더 확인 필요');setMessage(`선택한 폴더의 게시 이력을 읽을 수 없습니다: ${error.message}`,'error');return}
   if(!historyReady){setMessage('로컬 게시 이력을 확인할 수 없습니다. 폴더 쓰기 권한을 다시 연결해 주세요.','error');return}
+  try{await ensureThreadsConnected()}catch(error){setStatus('Threads 연결 필요');setMessage(error.message,'error');return}
 
   if(running||historyActionPending)return;
   running=true;stopRequested=false;stats={requested,success:0,failed:0,processed:0};renderStats();
@@ -616,7 +644,7 @@ async function init(){
   $('coupasResults')?.addEventListener('click',handleHistoryAction);
   syncModeControls();
   await restoreHandle();
-  await loadHistory();
+  try{await loadHistory()}catch(error){setMessage(`선택한 폴더의 게시 이력을 읽을 수 없습니다: ${error.message}`,'error')}
 }
 if(window.__THREADS_COUPAS_TEST__)window.__threadsCoupasTestHooks={
   runIntervalAutomatic,threadsText,isLegacyMissingCoupangUrlFailure,formatWait
