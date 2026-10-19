@@ -3279,8 +3279,8 @@ async function actionInstagramPromptLookup(req,res){
 }
 
 async function actionSupabaseStatus(req,res){
-  if(req.method!=='GET'){
-    res.setHeader('Allow','GET');
+  if(req.method!=='POST'){
+    res.setHeader('Allow','POST');
     return send(res,405,{ok:false,connected:false,error:'METHOD_NOT_ALLOWED'});
   }
   try{
@@ -3299,8 +3299,8 @@ async function actionSupabaseStatus(req,res){
 
 async function actionInstagramStatus(req,res){
   res.setHeader('Pragma','no-cache');
-  if(req.method!=='GET'){
-    res.setHeader('Allow','GET');
+  if(req.method!=='POST'){
+    res.setHeader('Allow','POST');
     return send(res,405,{ok:false,connected:false,error:'METHOD_NOT_ALLOWED'});
   }
 
