@@ -529,6 +529,7 @@ function selectedIntervalMs(){
   return Math.max(1,minutes)*60_000;
 }
 function setRunControlsLocked(locked){
+  window.CoupasShareSync?.setLocked(locked);
   $('coupasConnectFolder').disabled=locked;
   $('coupasRunCount').disabled=locked;
   document.querySelectorAll('input[name="coupasMode"],[data-coupas-interval]').forEach(node=>node.disabled=locked);
@@ -633,6 +634,12 @@ async function start(){
 function stop(){if(!running)return;stopRequested=true;if(cancelWait)cancelWait();setStatus('정지 요청');setMessage('현재 게시 작업이 끝나면 안전하게 정지합니다.')}
 
 async function init(){
+  window.CoupasShareSync?.mount({
+    anchor:$('coupasConnectFolder')?.closest('.coupas-field'),
+    getSource:()=>directoryHandle,
+    isBusy:()=>running||historyActionPending,
+    onBusy:busy=>{historyActionPending=busy;$('coupasStart').disabled=busy;setRunControlsLocked(busy);renderHistory()}
+  });
   const resultsHead=$('coupasHistoryCount')?.parentElement;
   if(resultsHead&&!$('coupasRecoverFailed')){
     const button=document.createElement('button');
