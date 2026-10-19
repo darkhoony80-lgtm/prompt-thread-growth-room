@@ -1,4 +1,4 @@
-import {decodeSession} from '../../lib-threads-session.js';
+import {getValidSession} from '../../lib-threads-session.js';
 
 const API='https://graph.threads.net/v1.0';
 const TARGET_POSTS=10;
@@ -136,7 +136,7 @@ async function collectReplyIds(token){
 
 export default async function handler(req,res){
   res.setHeader('Cache-Control','no-store');
-  const s=decodeSession(req);
+  const s=await getValidSession(req,res);
   if(!s?.accessToken)return res.status(401).json({ok:false,error:'THREADS_NOT_CONNECTED'});
 
   const me=await graph('/me?fields=id,username',s.accessToken);

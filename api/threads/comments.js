@@ -1,4 +1,4 @@
-import {decodeSession} from '../../lib-threads-session.js';
+import {getValidSession} from '../../lib-threads-session.js';
 
 const API='https://graph.threads.net/v1.0';
 const HISTORY_PAGE_SIZE=50;
@@ -72,7 +72,7 @@ async function collectPostReplies(postId,token){
 export default async function handler(req,res){
  res.setHeader('Cache-Control','no-store');
  if(req.method!=='GET')return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});
- const s=decodeSession(req);
+ const s=await getValidSession(req,res);
  if(!s?.accessToken)return res.status(401).json({ok:false,error:'THREADS_NOT_CONNECTED'});
 
  const seedIds=[...new Set(String(req.query.post_ids||'').split(',').map(x=>x.trim()).filter(Boolean))].slice(0,50);
