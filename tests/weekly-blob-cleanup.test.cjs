@@ -71,4 +71,18 @@ test('cron uses existing router and cannot bypass its separate bearer authentica
   await handler({method:'GET',query:{},headers:{}},res);
   assert.equal(res.statusCode,405);
 });
+test('publishing reuploads expired remote media from local original without head polling',async()=>{
+  const source=require('node:fs').readFileSync(require.resolve('../local-media.js'),'utf8');
+  const uploadSource=source.slice(source.indexOf('async function upload(url)'),source.indexOf('const payloadUrls='))
+    .replace("await import('https://esm.sh/@vercel/blob@2.8.0/client?bundle')",'mockModule');
+  for(const [uploadedAt,expectedUploads] of [[new Date(NOW-3600000).toISOString(),0],[new Date(NOW-RETENTION_MS).toISOString(),1],[new Date(NOW-RETENTION_MS+30000).toISOString(),1],[undefined,1]]){
+    let uploads=0;
+    const row={remote_url:'https://old.public.blob.vercel-storage.com/old.mp4',uploaded_at:uploadedAt,upload_state:'uploaded',mime:'video/mp4',size:1,file:Buffer.from('x')};
+    const upload=require('node:vm').runInNewContext('('+uploadSource+')',{
+      Date:class extends Date{static now(){return NOW}},inflight:new Map(),aliases:()=>({'blob:test':'id'}),locked:async(id,work)=>work(),get:async()=>row,owner:()=> 'owner',put:async()=>{},preview:()=>{},api:async()=>({pathname:'content-master/new.mp4',intent:'new-intent'}),
+      mockModule:{uploadPresigned:async()=>{uploads++;return {url:'https://new.public.blob.vercel-storage.com/new.mp4'}}}
+    });
+    const result=await upload('blob:test');assert.equal(uploads,expectedUploads);assert.equal(result,expectedUploads?'https://new.public.blob.vercel-storage.com/new.mp4':'https://old.public.blob.vercel-storage.com/old.mp4');
+  }
+});
 

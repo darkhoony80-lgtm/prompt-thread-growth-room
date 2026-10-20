@@ -17,7 +17,7 @@ function restore(value){if(typeof value==='string'){const id=aliases()[value];re
 async function local(file){const digest=await crypto.subtle.digest('SHA-256',await file.arrayBuffer()),id=Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join('');return locked(id,async()=>{let row=await get(id);if(!row){row={id,file,size:file.size,mime:file.type,created_at:new Date().toISOString(),publications:[]};await put(row)}return {url:preview(row),local_id:id}})}
 async function dataUrl(url){const row=await get(aliases()[url]);if(!row)return url;return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(row.file)})}
 async function upload(url){const id=aliases()[url];if(!id){if(/^blob:|^data:/i.test(url))throw new Error('LOCAL_ORIGINAL_MISSING');return url}if(inflight.has(id))return inflight.get(id);
- const work=async()=>{const row=await get(id);if(!row)throw new Error('LOCAL_ORIGINAL_MISSING');if(row.remote_url)return row.remote_url;
+ const work=async()=>{const row=await get(id);if(!row)throw new Error('LOCAL_ORIGINAL_MISSING');if(row.remote_url){const age=Date.now()-Date.parse(row.uploaded_at);if(age>=0&&age<7*24*60*60*1000-60000)return row.remote_url;row.remote_url=null;row.upload_state='expired'}
   if(row.upload_state==='pending')throw new Error('업로드 결과가 불확실합니다. 임시 미디어 검토 목록과 원격 파일을 확인한 뒤 재시도하세요.');
   row.owner=owner();const intent=await api('temp_media_intent',{sha:id,mime:row.mime,size:row.size});row.pathname=intent.pathname;row.intent=intent.intent;row.upload_state='pending';await put(row);
   const mod=await import('https://esm.sh/@vercel/blob@2.8.0/client?bundle');
@@ -35,3 +35,4 @@ async function reconcile(id,remoteUrl){const row=await get(id);if(!row||row.owne
 async function exportReview(){const rows=await review(),blob=new Blob([JSON.stringify({version:1,created_at:new Date().toISOString(),files:rows},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='temporary-media-review.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 root.LocalMedia={ready,restore,local,dataUrl,upload,prepare,published,review,reconcile,exportReview,sweep};
 })(window);
+
