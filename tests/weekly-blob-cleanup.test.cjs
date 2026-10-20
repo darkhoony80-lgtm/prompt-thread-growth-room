@@ -59,8 +59,16 @@ test('empty store succeeds and unknown delete errors are not reported as success
   assert.equal(r.statusCode,502);assert.equal(r.body.deleted,0);assert.equal(JSON.stringify(r.body).includes('private-provider-error'),false);
 });
 test('only the weekly cron is added, existing routes remain unchanged',()=>{
-  const config=require('../vercel.json');assert.deepEqual(config.crons,[{path:'/api/cron/blob-cleanup',schedule:'0 19 * * 6'}]);
+  const config=require('../vercel.json');assert.deepEqual(config.crons,[{path:'/api/content-router?action=weekly_blob_cleanup',schedule:'0 19 * * 6'}]);
   assert.equal(config.cleanUrls,true);assert.equal(config.rewrites.length,3);
   assert.equal(require('node:fs').readFileSync(require.resolve('../post-auto-v1.js'),'utf8').includes('LocalMedia.sweep('),false);
+});
+test('cron uses existing router and cannot bypass its separate bearer authentication',async()=>{
+  const handler=require('../api/content-router.js');
+  const res={setHeader(){},status(n){this.statusCode=n;return this},json(body){this.body=body;return this}};
+  await handler({method:'GET',query:{action:'weekly_blob_cleanup'},headers:{}},res);
+  assert.equal(res.statusCode,401);
+  await handler({method:'GET',query:{},headers:{}},res);
+  assert.equal(res.statusCode,405);
 });
 

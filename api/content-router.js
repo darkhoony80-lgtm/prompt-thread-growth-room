@@ -3937,6 +3937,7 @@ async function handler(req,res){
   res.setHeader('Cache-Control','no-store');
 
   const queryAction=String(req.query?.action||'').trim();
+  if(queryAction==='weekly_blob_cleanup')return require('../lib/weekly-blob-cleanup.cjs').createHandler()(req,res);
   let rawBody=null;
   if(req.method==='POST'){
     try{
@@ -4012,3 +4013,4 @@ async function handler(req,res){
 
 module.exports=handler;
 module.exports.config={api:{bodyParser:false}};
+
