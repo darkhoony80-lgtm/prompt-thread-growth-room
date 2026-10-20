@@ -35,4 +35,3 @@ async function reconcile(id,remoteUrl){const row=await get(id);if(!row||row.owne
 async function exportReview(){const rows=await review(),blob=new Blob([JSON.stringify({version:1,created_at:new Date().toISOString(),files:rows},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='temporary-media-review.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 root.LocalMedia={ready,restore,local,dataUrl,upload,prepare,published,review,reconcile,exportReview,sweep};
 })(window);
-

@@ -85,4 +85,3 @@ test('publishing reuploads expired remote media from local original without head
     const result=await upload('blob:test');assert.equal(uploads,expectedUploads);assert.equal(result,expectedUploads?'https://new.public.blob.vercel-storage.com/new.mp4':'https://old.public.blob.vercel-storage.com/old.mp4');
   }
 });
-
